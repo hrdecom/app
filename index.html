@@ -2,26 +2,76 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>HR Decom – Copywriting App</title>
+  <title>HR Decom — Copywriting</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
 
-  <div class="container">
-    <h1>Copywriting Assistant</h1>
+<div id="app">
 
-    <label for="prompt">Votre prompt :</label>
-    <textarea id="prompt" placeholder="Entrez votre demande de copywriting ici..."></textarea>
-
-    <button id="generate">Générer</button>
-
-    <h2>Résultat</h2>
-    <div id="result">
-      <em>Le texte généré apparaîtra ici.</em>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="brand">
+      <div class="logo">✧</div>
+      <div>
+        <h1>Copywriting Bijoux</h1>
+        <p class="subtitle">Image → Titre & Description (Claude)</p>
+      </div>
     </div>
-  </div>
+  </header>
 
-  <script src="popup.js"></script>
+  <!-- WORKSPACE -->
+  <section class="workspace">
+
+    <!-- LEFT: IMAGE UPLOAD -->
+    <div class="left">
+      <section class="uploader card">
+        <h2>Image du bijou</h2>
+        <div id="drop" class="drop">
+          <input id="imageInput" type="file" accept="image/*" />
+          <div id="preview" class="preview-in-drop hidden">
+            <button id="removeImage" class="remove-btn">×</button>
+            <img id="previewImg" />
+          </div>
+          <p id="dropPlaceholder">Cliquez ou déposez une image</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- RIGHT: ACTIONS + TITLE -->
+    <div class="right">
+
+      <section class="actions">
+        <button id="generateBtn" class="btn primary">Générer</button>
+        <button id="regenTitleBtn" class="btn ghost" disabled>Régénérer le titre</button>
+        <button id="regenDescBtn" class="btn ghost" disabled>Régénérer la description</button>
+      </section>
+
+      <section class="output">
+        <div class="bubble card">
+          <div class="bubble-head">
+            <h3>Titre</h3>
+          </div>
+          <pre id="titleText" class="mono"></pre>
+        </div>
+      </section>
+
+    </div>
+  </section>
+
+  <!-- DESCRIPTION -->
+  <section class="output">
+    <div class="bubble card">
+      <div class="bubble-head">
+        <h3>Description</h3>
+      </div>
+      <pre id="descText" class="mono"></pre>
+    </div>
+  </section>
+
+</div>
+
+<script src="popup.js"></script>
 </body>
 </html>
