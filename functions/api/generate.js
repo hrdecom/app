@@ -18,7 +18,7 @@ export async function onRequestPost({ request, env }) {
       });
     }
 
-    const model = env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20240620";
+    const model = env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929";
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
