@@ -14,7 +14,6 @@
     <button id="settingsBtn">⚙️ Paramètres</button>
   </header>
 
-  <!-- MODAL PARAMÈTRES -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
@@ -48,11 +47,9 @@
       </div>
 
       <div id="tab-blacklist" class="tab-content hidden">
-        <label>Importer CSV</label>
+        <label>Importer CSV (Recherche guillemets)</label>
         <input type="file" id="csvImport" accept=".csv" style="margin: 10px 0;"/>
-        <hr>
-        <label>Liste des noms exclus</label>
-        <textarea id="configBlacklist" rows="8"></textarea>
+        <textarea id="configBlacklist" rows="10" placeholder="Unity, Hope..."></textarea>
       </div>
 
       <div class="modal-footer">
@@ -73,7 +70,7 @@
         <div id="drop" class="drop">
           <input id="imageInput" type="file" accept="image/*"/>
           <div id="preview" class="preview hidden">
-            <button id="removeImage" class="modern-remove-btn" title="Supprimer">×</button>
+            <button id="removeImage" class="modern-remove-btn">×</button>
             <img id="previewImg"/>
           </div>
           <p id="dropPlaceholder">Cliquez ou déposez une image</p>
