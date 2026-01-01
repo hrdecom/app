@@ -3,85 +3,102 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>HR Decom — Copywriting Bijoux</title>
+  <title>HR Decom — Bijoux Pro</title>
   <link rel="stylesheet" href="app.css"/>
 </head>
 <body>
 
 <div id="app">
   <header class="header">
-    <div class="brand">
-      <div class="logo">✧</div>
-      <div>
-        <h1>Copywriting Bijoux</h1>
-        <p class="subtitle">Image → Titre & Description</p>
+    <div class="brand"><div class="logo">✧</div><h1>Copywriting Bijoux</h1></div>
+    <button id="settingsBtn">⚙️ Paramètres</button>
+  </header>
+
+  <!-- MODAL PARAMÈTRES -->
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Configuration</h2>
+        <button id="closeSettings">×</button>
+      </div>
+      <div class="tabs">
+        <button class="tab-link active" data-tab="tab-collections">Collections</button>
+        <button class="tab-link" data-tab="tab-prompts">Prompt IA</button>
+        <button class="tab-link" data-tab="tab-blacklist">Blacklist</button>
+      </div>
+      
+      <div id="tab-collections" class="tab-content">
+        <div id="collectionsList"></div>
+        <button id="addCollection" class="secondary" style="margin-top:10px">+ Ajouter une collection</button>
+      </div>
+
+      <div id="tab-prompts" class="tab-content hidden">
+        <label>Instruction système (Prompt)</label>
+        <textarea id="configPrompt" rows="12"></textarea>
+      </div>
+
+      <div id="tab-blacklist" class="tab-content hidden">
+        <label>Noms interdits (séparés par des virgules)</label>
+        <textarea id="configBlacklist" rows="12" placeholder="Unity, Hope..."></textarea>
+      </div>
+
+      <div class="modal-footer">
+        <button id="saveConfig" class="primary">Enregistrer</button>
       </div>
     </div>
-    <button id="settingsBtn" class="icon-btn">⚙️</button>
-  </header>
+  </div>
 
   <div id="loading" class="loading hidden">
     <div class="spinner"></div>
-    <div><strong>Génération en cours</strong><div id="timer">00:00</div></div>
+    <div><strong>Action en cours...</strong><div id="timer">00:00</div></div>
   </div>
 
   <section class="workspace">
     <div class="left">
       <section class="card">
-        <h2>Image du bijou</h2>
         <div id="drop" class="drop">
           <input id="imageInput" type="file" accept="image/*"/>
           <div id="preview" class="preview hidden">
-            <button id="removeImage" class="modern-remove-btn" title="Supprimer">×</button>
+            <button id="removeImage" class="modern-remove-btn">×</button>
             <img id="previewImg"/>
           </div>
-          <p id="dropPlaceholder">Cliquez ou déposez une image</p>
+          <p id="dropPlaceholder">Cliquez ou déposez l'image</p>
         </div>
       </section>
     </div>
 
     <div class="right">
       <section class="card">
-        <h2>Collection</h2>
-        <select id="collectionSelect">
-          <option value="">-- Aucune --</option>
-          <option value="Classique">Classique</option>
-          <option value="Moderne">Moderne</option>
-          <option value="Luxe">Luxe</option>
-        </select>
+        <label>Choisir la Collection</label>
+        <select id="collectionSelect"></select>
       </section>
 
       <section class="actions">
-        <button id="generateBtn" class="primary">Générer</button>
-        <button id="regenTitleBtn" disabled>Titre</button>
-        <button id="regenDescBtn" disabled>Description</button>
+        <button id="generateBtn" class="primary">Générer Tout</button>
+        <button id="regenTitleBtn" class="secondary" disabled>Régénérer Titre</button>
+        <button id="regenDescBtn" class="secondary" disabled>Régénérer Desc</button>
       </section>
 
-      <section class="card">
+      <div class="card">
         <div class="card-head"><h3>Titre</h3><button id="copyTitle">⌘C</button></div>
         <pre id="titleText"></pre>
-      </section>
+      </div>
 
-      <section class="card">
+      <div class="card">
         <div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div>
         <pre id="descText"></pre>
-      </section>
+      </div>
     </div>
   </section>
 
-  <!-- HISTORIQUE AVEC RECHERCHE ET PAGINATION -->
   <section class="card history-section">
     <div class="history-header">
       <h2>Historique</h2>
       <input type="text" id="historySearch" placeholder="Rechercher un titre..."/>
-      <span id="historyTotal" class="hint">Total: 0</span>
+      <span id="historyTotal"></span>
     </div>
-    
     <div id="historyList" class="history-list"></div>
-
-    <div id="pagination" class="pagination">
-      <!-- Boutons générés par JS -->
-    </div>
+    <div id="pagination" class="pagination"></div>
   </section>
 </div>
 
