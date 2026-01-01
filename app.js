@@ -53,38 +53,60 @@
     });
     $("configBlacklist").value = state.config.blacklist || "";
     
-    $("collectionsList").innerHTML = state.config.collections.map((c, i) => `
-      <div style="display:flex; gap:10px; margin-bottom:10px;">
-        <input type="text" value="${c.name}" onchange="state.config.collections[${i}].name=this.value" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:5px;">
-        <textarea onchange="state.config.collections[${i}].meaning=this.value" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:5px; font-size:12px;">${c.meaning}</textarea>
-        <button onclick="state.config.collections.splice(${i},1);renderConfigUI()" style="color:red; border:none; background:none;">×</button>
+    // Rendu des listes sans onchange direct (on lira les valeurs au moment du clic sur Enregistrer)
+    $("collectionsList").innerHTML = (state.config.collections || []).map((c, i) => `
+      <div class="config-row collections-item" style="display:flex; gap:10px; margin-bottom:10px;">
+        <input type="text" value="${c.name}" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;">
+        <textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${c.meaning}</textarea>
+        <button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>
       </div>`).join("");
 
-    $("styleButtonsEditor").innerHTML = state.config.headlineStyles.map((s, i) => `
-      <div style="display:flex; gap:10px; margin-bottom:10px;">
-        <input type="text" value="${s.name}" onchange="state.config.headlineStyles[${i}].name=this.value" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:5px;">
-        <textarea onchange="state.config.headlineStyles[${i}].prompt=this.value" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:5px; font-size:12px;">${s.prompt}</textarea>
-        <button onclick="state.config.headlineStyles.splice(${i},1);renderConfigUI()" style="color:red; border:none; background:none;">×</button>
+    $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `
+      <div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;">
+        <input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;">
+        <textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea>
+        <button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>
       </div>`).join("");
 
-    $("adStyleButtonsEditor").innerHTML = state.config.adStyles.map((s, i) => `
-      <div style="display:flex; gap:10px; margin-bottom:10px;">
-        <input type="text" value="${s.name}" onchange="state.config.adStyles[${i}].name=this.value" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:5px;">
-        <textarea onchange="state.config.adStyles[${i}].prompt=this.value" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:5px; font-size:12px;">${s.prompt}</textarea>
-        <button onclick="state.config.adStyles.splice(${i},1);renderConfigUI()" style="color:red; border:none; background:none;">×</button>
+    $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `
+      <div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;">
+        <input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;">
+        <textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea>
+        <button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>
       </div>`).join("");
 
-    $("collectionSelect").innerHTML = state.config.collections.map(c => `<option value="${c.name}">${c.name}</option>`).join("");
+    $("collectionSelect").innerHTML = (state.config.collections || []).map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     renderStyleSelectors();
   }
 
-  $("addCollection").onclick = () => { state.config.collections.push({name:"", meaning:""}); renderConfigUI(); };
-  $("addStyleBtn").onclick = () => { state.config.headlineStyles.push({name:"", prompt:""}); renderConfigUI(); };
-  $("addAdStyleBtn").onclick = () => { state.config.adStyles.push({name:"", prompt:""}); renderConfigUI(); };
+  // Ajouts dynamiques
+  $("addCollection").onclick = () => {
+    const div = document.createElement('div');
+    div.className = "config-row collections-item";
+    div.style = "display:flex; gap:10px; margin-bottom:10px;";
+    div.innerHTML = `<input type="text" value="" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`;
+    $("collectionsList").appendChild(div);
+  };
+
+  $("addStyleBtn").onclick = () => {
+    const div = document.createElement('div');
+    div.className = "config-row headline-style-item";
+    div.style = "display:flex; gap:10px; margin-bottom:10px;";
+    div.innerHTML = `<input type="text" value="" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`;
+    $("styleButtonsEditor").appendChild(div);
+  };
+
+  $("addAdStyleBtn").onclick = () => {
+    const div = document.createElement('div');
+    div.className = "config-row ad-style-item";
+    div.style = "display:flex; gap:10px; margin-bottom:10px;";
+    div.innerHTML = `<input type="text" value="" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`;
+    $("adStyleButtonsEditor").appendChild(div);
+  };
 
   function renderStyleSelectors() {
-    $("styleSelectorContainer").innerHTML = state.config.headlineStyles.map(s => `<div class="style-tag ${state.selHlStyles.includes(s.name) ? 'selected' : ''}" onclick="toggleStyle('hl', '${s.name}', this)">${s.name}</div>`).join("");
-    $("adStyleSelectorContainer").innerHTML = state.config.adStyles.map(s => `<div class="style-tag ${state.selAdStyles.includes(s.name) ? 'selected' : ''}" onclick="toggleStyle('ad', '${s.name}', this)">${s.name}</div>`).join("");
+    $("styleSelectorContainer").innerHTML = (state.config.headlineStyles || []).map(s => `<div class="style-tag ${state.selHlStyles.includes(s.name) ? 'selected' : ''}" onclick="toggleStyle('hl', '${s.name}', this)">${s.name}</div>`).join("");
+    $("adStyleSelectorContainer").innerHTML = (state.config.adStyles || []).map(s => `<div class="style-tag ${state.selAdStyles.includes(s.name) ? 'selected' : ''}" onclick="toggleStyle('ad', '${s.name}', this)">${s.name}</div>`).join("");
   }
 
   window.toggleStyle = (type, name, el) => {
@@ -113,7 +135,7 @@
           return fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, style: sPrompt + " " + (extra.userText || ""), styleLabel: sName }) }).then(r => r.json().then(d => ({ ...d, label: sName })));
         }));
         results.forEach(res => {
-          if (action === 'ad_copys') { state.sessionAds = [...(res.ad_copys || []).map(t => ({ text: t, style: res.label })), ...state.sessionAds]; state.adPage = 1; renderAds(); } 
+          if (action === 'ad_copys') { state.sessionAds = [...(res.ad_cop_ys || res.ad_copys || []).map(t => ({ text: t, style: res.label })), ...state.sessionAds]; state.adPage = 1; renderAds(); } 
           else { state.sessionHeadlines = [...(res.headlines || []).map(t => ({ text: t, style: res.label })), ...state.sessionHeadlines]; state.hlPage = 1; renderHeadlines(); }
         });
       } else {
@@ -134,12 +156,12 @@
           state.sessionHeadlines = [...(data.headlines || []).map(t => ({ text: t, style: 'Variante' })), ...state.sessionHeadlines];
           state.hlPage = 1; renderHeadlines();
         } else if (action.includes('ad_copys')) {
-          state.sessionAds = [...(data.ad_copys || []).map(t => ({ text: t, style: 'Variante' })), ...state.sessionAds];
+          state.sessionAds = [...(data.ad_cop_ys || data.ad_copys || []).map(t => ({ text: t, style: 'Variante' })), ...state.sessionAds];
           state.adPage = 1; renderAds();
         }
       }
       $("regenTitleBtn").disabled = $("regenDescBtn").disabled = false;
-    } catch(e) { alert(e.message); }
+    } catch(e) { alert("Erreur: " + e.message); }
     finally { stopLoading(); }
   }
 
@@ -175,19 +197,13 @@
 
   async function saveSelections(type) {
     if (!state.currentHistoryId) return;
-    const containerId = type === 'hl' ? 'headlinesResults' : 'adsResults';
-    const selected = []; document.querySelectorAll(`#${containerId} .selected .headline-text`).forEach(it => {
+    const selected = []; document.querySelectorAll(`#${type === 'hl' ? 'headlinesResults' : 'adsResults'} .selected .headline-text`).forEach(it => {
       const raw = it.innerText.split('\n'); selected.push(raw.length > 1 ? raw.slice(1).join('\n') : raw[0]);
     });
-    if (type === 'hl') {
-        state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...selected])];
-        await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, headlines: JSON.stringify(state.selectedHeadlines) }) });
-        renderSavedHl();
-    } else {
-        state.selectedAds = [...new Set([...state.selectedAds, ...selected])];
-        await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, ad_copys: JSON.stringify(state.selectedAds) }) });
-        renderSavedAds();
-    }
+    if (type === 'hl') state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...selected])];
+    else state.selectedAds = [...new Set([...state.selectedAds, ...selected])];
+    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type === 'hl' ? 'headlines' : 'ad_copys']: JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds) }) });
+    type === 'hl' ? renderSavedHl() : renderSavedAds();
     alert("Enregistré");
   }
 
@@ -209,11 +225,36 @@
   function init() {
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
+    
+    // LOGIQUE DE SAUVEGARDE AMELIORÉE (SCANNE LES ELEMENTS)
     $("saveConfig").onclick = async () => {
+      // 1. Lire les gros textareas
       ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys"].forEach(id => state.config[id] = $(id).value);
       state.config.blacklist = $("configBlacklist").value;
+
+      // 2. Scanner les listes dynamiques (Collections)
+      state.config.collections = Array.from(document.querySelectorAll('.collections-item')).map(row => ({
+        name: row.querySelector('.col-name').value,
+        meaning: row.querySelector('.col-meaning').value
+      }));
+
+      // 3. Scanner les listes dynamiques (Styles Headlines)
+      state.config.headlineStyles = Array.from(document.querySelectorAll('.headline-style-item')).map(row => ({
+        name: row.querySelector('.style-name').value,
+        prompt: row.querySelector('.style-prompt').value
+      }));
+
+      // 4. Scanner les listes dynamiques (Styles Ads)
+      state.config.adStyles = Array.from(document.querySelectorAll('.ad-style-item')).map(row => ({
+        name: row.querySelector('.ad-style-name').value,
+        prompt: row.querySelector('.ad-style-prompt').value
+      }));
+
+      // Envoyer à Cloudflare
       await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
-      alert("Config Sauvegardée"); $("settingsModal").classList.add("hidden"); renderConfigUI();
+      alert("Configuration Sauvegardée !");
+      $("settingsModal").classList.add("hidden");
+      renderConfigUI(); // Rafraîchir les menus
     };
 
     $("openHeadlinesBtn").onclick = () => { if(!state.currentHistoryId) return; $("headlinesModal").classList.remove("hidden"); renderSavedHl(); };
@@ -232,13 +273,14 @@
 
     $("sendHeadlineChat").onclick = () => apiCall('headlines', { userText: $("headlineStyleInput").value });
     $("sendAdChat").onclick = () => apiCall('ad_copys', { userText: $("adStyleInput").value });
+    
     $("genSimilarBtn").onclick = () => {
-        const s = []; document.querySelectorAll('#headlinesResults .selected .headline-text').forEach(it => s.push(it.innerText.split('\n')[1]));
-        apiCall('headlines_similar', { selectedForSimilar: s });
+        const sel = []; document.querySelectorAll('#headlinesResults .selected .headline-text').forEach(it => sel.push(it.innerText.split('\n')[1] || it.innerText));
+        apiCall('headlines_similar', { selectedForSimilar: sel });
     };
     $("genSimilarAdsBtn").onclick = () => {
-        const s = []; document.querySelectorAll('#adsResults .selected .headline-text').forEach(it => s.push(it.innerText.split('\n')[1]));
-        apiCall('ad_copys_similar', { selectedForSimilar: s });
+        const sel = []; document.querySelectorAll('#adsResults .selected .headline-text').forEach(it => sel.push(it.innerText.split('\n')[1] || it.innerText));
+        apiCall('ad_copys_similar', { selectedForSimilar: sel });
     };
 
     $("saveHeadlinesBtn").onclick = () => saveSelections('hl');
