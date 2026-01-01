@@ -15,7 +15,6 @@ export async function onRequest(context) {
     return new Response(JSON.stringify({ id: lastRowId }));
   }
 
-  // MÉTHODE POUR METTRE À JOUR UN PRODUIT EXISTANT (Regénération)
   if (request.method === "PATCH") {
     const { id, title, description } = await request.json();
     if (title) {
