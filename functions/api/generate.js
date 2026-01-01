@@ -8,19 +8,38 @@ export async function onRequestPost({ request, env }) {
     const collectionInfo = (config.collections || []).find(c => c.name === collection)?.meaning || "";
     const jsonSafeRule = "IMPORTANT: Return valid JSON. Escape double quotes with backslash (\\\"). Output ONLY JSON.";
 
-    let prompt = "";
-    const baseInstructions = `${config.promptSystem}\n${jsonSafeRule}\nCONTEXT: ${collectionInfo}\nTITLES: ${config.promptTitles}\nDESC: ${config.promptDesc}`;
+    const baseInstructions = `
+      ${config.promptSystem}
+      ${jsonSafeRule}
+      SPECIFIC COLLECTION CONTEXT (MANDATORY): ${collectionInfo}
+      TITLE FORMATTING RULES: ${config.promptTitles}
+      DESCRIPTION FORMATTING RULES: ${config.promptDesc}
+    `;
 
+    let prompt = "";
     if (action === "generate") {
-      prompt = `${baseInstructions}\nBLACKLIST: ${config.blacklist}\nHISTORY: ${JSON.stringify(historyNames)}\nTASK: Analyze image and output JSON: { "product_name": "...", "title": "...", "description": "..." }`;
+      prompt = `${baseInstructions}
+        BLACKLIST: ${config.blacklist}
+        HISTORY: ${JSON.stringify(historyNames)}
+        TASK: Analyze image and output JSON: { "product_name": "...", "title": "...", "description": "..." }`;
     } else if (action === "regen_title") {
-      prompt = `${baseInstructions}\nTASK: New product_name/title. Different from: "${currentTitle}". JSON: { "product_name": "...", "title": "..." }`;
+      prompt = `${baseInstructions}
+        TASK: Regenerate ONLY product_name and title. Different from: "${currentTitle}". Avoid names in history: ${JSON.stringify(historyNames)}.
+        Output ONLY JSON: { "product_name": "...", "title": "..." }`;
     } else if (action === "regen_desc") {
-      prompt = `${baseInstructions}\nTASK: New description. JSON: { "description": "..." }`;
+      prompt = `${baseInstructions}
+        TASK: Regenerate ONLY the description.
+        Output ONLY JSON: { "description": "..." }`;
     } else if (action === "headlines") {
-      prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}\nSTYLE: ${style}\nTASK: Generate 5 catchy hooks. JSON: { "headlines": ["...", "...", "...", "...", "..."] }`;
+      prompt = `${config.promptHeadlines}
+        ${jsonSafeRule}
+        CONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}
+        STYLE REQUEST: ${style}
+        Output ONLY JSON: { "headlines": ["...", "...", "...", "...", "..."] }`;
     } else if (action === "headlines_similar") {
-      prompt = `Viral Copywriting Expert. Based on these selected headlines: ${JSON.stringify(selectedForSimilar)}. Context Title: ${currentTitle}. TASK: 5 improved varied versions. English. JSON: { "headlines": ["...", "...", "...", "...", "..."] }`;
+      prompt = `Viral Copywriting Expert. Based on these selected headlines: ${JSON.stringify(selectedForSimilar)}.
+        And this product: ${currentTitle}.
+        TASK: Generate 5 NEW punchy variations. English. Output ONLY JSON: { "headlines": ["...", "..."] }`;
     }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -39,7 +58,9 @@ export async function onRequestPost({ request, env }) {
     const data = await anthropicRes.json();
     if (!anthropicRes.ok) return new Response(JSON.stringify({ error: data.error?.message }), { status: 500 });
     const text = data.content[0].text;
-    return new Response(text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1), { headers: { "Content-Type": "application/json" } });
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    return new Response(text.substring(start, end + 1), { headers: { "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });
   }
