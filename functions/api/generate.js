@@ -21,27 +21,7 @@ export async function onRequestPost({ request, env }) {
     } else if (action === "headlines") {
       prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}\nSTYLE: ${style}\nTASK: Generate 5 hooks. JSON: { "headlines": ["...", "..."] }`;
     } else if (action === "ad_copys") {
-      prompt = `${config.promptAdCopys}
-        ${jsonSafeRule}
-        DEFAULT LANGUAGE: English.
-        PRODUCT CONTEXT:
-        - Title: ${currentTitle}
-        - Description: ${currentDesc}
-        - Product URL: ${product_url || "(no url provided)"}
-        STYLE REQUEST: ${style}
-        
-        STRUCTURE REQUIREMENT:
-        1. Short engaging description based on style.
-        2. A newline.
-        3. EXACTLY these bullet points:
-           ✅ Hypoallergenic
-           ✅ Water and oxidation resistant
-           ✅ Made to last
-        4. A newline.
-        5. Call to action including the Product URL.
-        
-        TASK: Generate 3 variations of Ad Copys.
-        Output ONLY JSON: { "ad_copys": ["copy 1", "copy 2", "copy 3"] }`;
+      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nDEFAULT LANGUAGE: English.\nPRODUCT CONTEXT:\n- Title: ${currentTitle}\n- Description: ${currentDesc}\n- Product URL: ${product_url || "(no url provided)"}\nSTYLE REQUEST: ${style}\n\nSTRUCTURE:\n1. Hook/Description\n2. Newline\n3. ✅ Bullets\n4. Newline\n5. CTA + URL\n\nOutput ONLY JSON: { "ad_copys": ["...", "..."] }`;
     }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -60,7 +40,9 @@ export async function onRequestPost({ request, env }) {
     const data = await anthropicRes.json();
     if (!anthropicRes.ok) return new Response(JSON.stringify({ error: data.error?.message }), { status: 500 });
     const text = data.content[0].text;
-    return new Response(text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1), { headers: { "Content-Type": "application/json" } });
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    return new Response(text.substring(start, end + 1), { headers: { "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });
   }
