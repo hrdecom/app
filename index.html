@@ -14,7 +14,7 @@
     <button id="settingsBtn">⚙️ Paramètres</button>
   </header>
 
-  <!-- MODAL PARAMÈTRES (Le seul élément au design "Luxe") -->
+  <!-- MODAL PARAMÈTRES (Design Luxe) -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
@@ -26,30 +26,40 @@
         <button class="tab-link" data-tab="tab-prompts">Prompts IA</button>
         <button class="tab-link" data-tab="tab-blacklist">Blacklist / CSV</button>
       </div>
+      
       <div id="tab-collections" class="tab-content">
+        <p class="hint">Définissez vos collections et leur signification pour l'IA.</p>
         <div id="collectionsList"></div>
-        <button id="addCollection" class="secondary-btn">+ Ajouter une collection</button>
+        <button id="addCollection" class="secondary-btn" style="margin-top:10px">+ Ajouter une collection</button>
       </div>
+
       <div id="tab-prompts" class="tab-content hidden">
-        <label>Prompt Système (Instructions globales)</label>
-        <textarea id="promptSystem" rows="10"></textarea>
+        <label>Instruction système (Prompt d'origine)</label>
+        <textarea id="promptSystem" rows="15"></textarea>
       </div>
+
       <div id="tab-blacklist" class="tab-content hidden">
-        <label>Importer CSV (Noms ou Titres)</label>
-        <input type="file" id="csvImport" accept=".csv"/>
-        <textarea id="configBlacklist" rows="10" placeholder="Unity, Hope..."></textarea>
+        <label>Importer des noms via CSV (Format guillemets supporté)</label>
+        <input type="file" id="csvImport" accept=".csv" style="margin: 10px 0;"/>
+        <p id="csvStatus" class="hint">Les noms détectés s'ajouteront à la liste ci-dessous.</p>
+        <hr>
+        <label>Noms à ne pas réutiliser (Blacklist)</label>
+        <textarea id="configBlacklist" rows="8" placeholder="Unity, Hope, Destiny..."></textarea>
       </div>
+
       <div class="modal-footer">
         <button id="saveConfig" class="primary-btn">Enregistrer les réglages</button>
       </div>
     </div>
   </div>
 
+  <!-- LOADER (Masqué par défaut) -->
   <div id="loading" class="loading hidden">
     <div class="spinner"></div>
-    <div><strong>Génération...</strong><div id="timer">00:00</div></div>
+    <div><strong>Action en cours...</strong><div id="timer">00:00</div></div>
   </div>
 
+  <!-- WORKSPACE FIXE -->
   <section class="workspace">
     <div class="left">
       <section class="card">
@@ -67,18 +77,21 @@
 
     <div class="right">
       <section class="card">
-        <h2>Collection</h2>
+        <h2>Sélection Collection</h2>
         <select id="collectionSelect"></select>
       </section>
+
       <section class="actions">
-        <button id="generateBtn" class="primary-btn">Générer</button>
-        <button id="regenTitleBtn" disabled>Régénérer Titre</button>
-        <button id="regenDescBtn" disabled>Régénérer Desc</button>
+        <button id="generateBtn" class="primary-btn" disabled>Générer Tout</button>
+        <button id="regenTitleBtn" class="secondary-btn" disabled>Titre</button>
+        <button id="regenDescBtn" class="secondary-btn" disabled>Description</button>
       </section>
+
       <section class="card">
         <div class="card-head"><h3>Titre</h3><button id="copyTitle">⌘C</button></div>
         <pre id="titleText"></pre>
       </section>
+
       <section class="card">
         <div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div>
         <pre id="descText"></pre>
@@ -86,11 +99,14 @@
     </div>
   </section>
 
+  <!-- HISTORIQUE -->
   <section class="card history-section">
     <div class="history-header">
       <h2>Historique</h2>
-      <input type="text" id="historySearch" placeholder="Rechercher..."/>
-      <span id="historyTotal"></span>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <input type="text" id="historySearch" placeholder="Filtrer par titre..."/>
+        <span id="historyTotal" class="hint"></span>
+      </div>
     </div>
     <div id="historyList" class="history-list"></div>
     <div id="pagination" class="pagination"></div>
