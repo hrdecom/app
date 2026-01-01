@@ -24,15 +24,12 @@
     searchQuery: ""
   };
 
-  /* CONFIG */
   async function loadConfig() {
-    try {
-      const res = await fetch("/api/settings");
-      const data = await res.json();
-      const saved = data.find(i => i.id === 'full_config');
-      if (saved) state.config = JSON.parse(saved.value);
-      renderConfigUI();
-    } catch(e) {}
+    const res = await fetch("/api/settings");
+    const data = await res.json();
+    const saved = data.find(i => i.id === 'full_config');
+    if (saved) state.config = JSON.parse(saved.value);
+    renderConfigUI();
   }
 
   function renderConfigUI() {
@@ -40,7 +37,6 @@
     $("promptTitles").value = state.config.promptTitles || DEFAULTS.promptTitles;
     $("promptDesc").value = state.config.promptDesc || DEFAULTS.promptDesc;
     $("configBlacklist").value = state.config.blacklist || "";
-    
     $("collectionSelect").innerHTML = state.config.collections.map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     $("collectionsList").innerHTML = state.config.collections.map((c, i) => `
       <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
@@ -55,7 +51,6 @@
   window.removeCol = (i) => { state.config.collections.splice(i, 1); renderConfigUI(); };
   $("addCollection").onclick = () => { state.config.collections.push({name:"", meaning:""}); renderConfigUI(); };
 
-  /* CSV IMPORT */
   $("csvImport").onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -75,7 +70,6 @@
     $("configBlacklist").value = state.config.blacklist;
   };
 
-  /* IA ACTIONS */
   async function apiCall(action) {
     if (!state.imageBase64) return;
     $("loading").classList.remove("hidden");
@@ -84,17 +78,13 @@
       const res = await fetch("/api/generate", {
         method: "POST",
         body: JSON.stringify({
-          action,
-          image: state.imageBase64,
-          media_type: state.imageMime,
-          collection: $("collectionSelect").value,
-          config: state.config,
-          historyNames,
-          currentTitle: $("titleText").textContent
+          action, image: state.imageBase64, media_type: state.imageMime,
+          collection: $("collectionSelect").value, config: state.config,
+          historyNames, currentTitle: $("titleText").textContent
         })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.details || data.error || "Erreur inconnue");
+      if (!res.ok) throw new Error(data.error || "Erreur IA");
 
       if (action === 'generate') {
         $("titleText").textContent = data.title;
@@ -108,29 +98,22 @@
       
       $("regenTitleBtn").disabled = false;
       $("regenDescBtn").disabled = false;
-    } catch(e) { 
-      alert("Erreur: " + e.message); 
-    } finally { 
-      $("loading").classList.add("hidden"); 
-    }
+    } catch(e) { alert("Erreur: " + e.message); }
+    finally { $("loading").classList.add("hidden"); }
   }
 
-  /* INIT */
   function init() {
     $("loading").classList.add("hidden");
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
     window.onclick = (e) => { if (e.target == $("settingsModal")) $("settingsModal").classList.add("hidden"); };
-
     document.querySelectorAll(".tab-link").forEach(t => {
       t.onclick = () => {
         document.querySelectorAll(".tab-link").forEach(l => l.classList.remove("active"));
         document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
-        t.classList.add("active");
-        $(t.dataset.tab).classList.remove("hidden");
+        t.classList.add("active"); $(t.dataset.tab).classList.remove("hidden");
       };
     });
-
     $("drop").onclick = () => $("imageInput").click();
     $("imageInput").onchange = (e) => {
       const file = e.target.files[0];
@@ -140,64 +123,44 @@
         const b64 = ev.target.result;
         state.imageMime = b64.split(";")[0].split(":")[1] || "image/jpeg";
         state.imageBase64 = b64.split(",")[1];
-        $("previewImg").src = b64;
-        $("preview").classList.remove("hidden");
-        $("dropPlaceholder").style.display = "none";
-        $("generateBtn").disabled = false;
+        $("previewImg").src = b64; $("preview").classList.remove("hidden");
+        $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
       };
       reader.readAsDataURL(file);
     };
-
     $("removeImage").onclick = (e) => {
-      e.stopPropagation();
-      state.imageBase64 = null;
-      $("preview").classList.add("hidden");
-      $("dropPlaceholder").style.display = "block";
+      e.stopPropagation(); state.imageBase64 = null;
+      $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block";
       $("titleText").textContent = ""; $("descText").textContent = "";
-      $("generateBtn").disabled = true;
-      $("regenTitleBtn").disabled = true;
-      $("regenDescBtn").disabled = true;
+      $("generateBtn").disabled = true; $("regenTitleBtn").disabled = true; $("regenDescBtn").disabled = true;
     };
-
     $("generateBtn").onclick = () => apiCall('generate');
     $("regenTitleBtn").onclick = () => apiCall('regen_title');
     $("regenDescBtn").onclick = () => apiCall('regen_desc');
-
     $("saveConfig").onclick = async () => {
       state.config.promptSystem = $("promptSystem").value;
       state.config.promptTitles = $("promptTitles").value;
       state.config.promptDesc = $("promptDesc").value;
       state.config.blacklist = $("configBlacklist").value;
       await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
-      alert("Enregistré");
-      $("settingsModal").classList.add("hidden");
+      alert("Enregistré"); $("settingsModal").classList.add("hidden");
     };
-
     $("copyTitle").onclick = () => { navigator.clipboard.writeText($("titleText").textContent); alert("Titre copié"); };
     $("copyDesc").onclick = () => { navigator.clipboard.writeText($("descText").textContent); alert("Description copiée"); };
-
-    $("historySearch").oninput = (e) => {
-      state.searchQuery = e.target.value;
-      state.currentPage = 1;
-      renderHistoryUI();
-    };
-
+    $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
     loadConfig(); loadHistory();
   }
 
   async function loadHistory() {
-    try {
-      const res = await fetch("/api/history");
-      state.historyCache = await res.json();
-      renderHistoryUI();
-    } catch(e) {}
+    const res = await fetch("/api/history");
+    state.historyCache = await res.json();
+    renderHistoryUI();
   }
 
   function renderHistoryUI() {
     const filtered = state.historyCache.filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
     const start = (state.currentPage - 1) * state.pageSize;
     const paginated = filtered.slice(start, start + state.pageSize);
-    
     $("historyList").innerHTML = paginated.map(item => `
       <div class="history-item" onclick="restore(${item.id})">
         <img src="data:image/jpeg;base64,${item.image}" class="history-img">
@@ -205,7 +168,6 @@
         <button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button>
       </div>
     `).join("");
-    
     renderPagination(Math.ceil(filtered.length / state.pageSize));
   }
 
@@ -214,32 +176,25 @@
     if (total <= 1) return;
     for(let i=1; i<=total; i++) {
       const b = document.createElement("button");
-      b.textContent = i;
-      if(i === state.currentPage) b.className = "active";
-      b.onclick = () => { state.currentPage = i; renderHistoryUI(); };
-      p.appendChild(b);
+      b.textContent = i; if(i === state.currentPage) b.className = "active";
+      b.onclick = () => { state.currentPage = i; renderHistoryUI(); }; p.appendChild(b);
     }
   }
 
   window.restore = (id) => {
     const item = state.historyCache.find(i => i.id === id);
     if (!item) return;
-    $("titleText").textContent = item.title;
-    $("descText").textContent = item.description;
+    $("titleText").textContent = item.title; $("descText").textContent = item.description;
     $("previewImg").src = `data:image/jpeg;base64,${item.image}`;
-    state.imageBase64 = item.image;
-    $("preview").classList.remove("hidden");
-    $("dropPlaceholder").style.display = "none";
-    $("generateBtn").disabled = false;
-    $("regenTitleBtn").disabled = false;
-    $("regenDescBtn").disabled = false;
+    state.imageBase64 = item.image; $("preview").classList.remove("hidden");
+    $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
+    $("regenTitleBtn").disabled = false; $("regenDescBtn").disabled = false;
     window.scrollTo({top:0, behavior:'smooth'});
   };
 
   window.deleteItem = async (id) => {
     if (!confirm("Supprimer ?")) return;
-    await fetch(`/api/history?id=${id}`, { method: "DELETE" });
-    loadHistory();
+    await fetch(`/api/history?id=${id}`, { method: "DELETE" }); loadHistory();
   };
 
   init();
