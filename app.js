@@ -8,6 +8,7 @@
     imageInput: $("imageInput"),
     preview: $("preview"),
     previewImg: $("previewImg"),
+    removeImage: $("removeImage"),
     dropPlaceholder: $("dropPlaceholder"),
     generateBtn: $("generateBtn"),
     regenTitleBtn: $("regenTitleBtn"),
@@ -18,25 +19,29 @@
     copyDesc: $("copyDesc"),
     collectionSelect: $("collectionSelect"),
     historyList: $("historyList"),
-    refreshHistory: $("refreshHistory")
+    historySearch: $("historySearch"),
+    historyTotal: $("historyTotal"),
+    pagination: $("pagination")
   };
 
   let state = {
     imageBase64: null,
     imageMime: null,
     last: { title: "", description: "" },
-    currentHistoryId: null, // Pour le badge "Actuel"
-    historyCache: [], // Pour restaurer sans re-fetch
+    currentHistoryId: null,
+    historyCache: [],
+    currentPage: 1,
+    pageSize: 5,
+    searchQuery: "",
     timerInterval: null
   };
 
-  /* UI HELPERS */
   const show = (el) => el?.classList.remove("hidden");
   const hide = (el) => el?.classList.add("hidden");
 
   function startLoading() {
     show(els.loading);
-    let s = 0; els.timer.textContent = "00:00";
+    let s = 0;
     state.timerInterval = setInterval(() => {
       s++;
       els.timer.textContent = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
@@ -48,13 +53,11 @@
     hide(els.loading);
   }
 
-  // Met à jour les blocs Titre / Description et l'image principale
   function setMainUI(title, desc, imageB64 = null) {
     state.last.title = title || "";
     state.last.description = desc || "";
-    
-    if(els.titleText) els.titleText.textContent = state.last.title;
-    if(els.descText) els.descText.textContent = state.last.description;
+    els.titleText.textContent = state.last.title;
+    els.descText.textContent = state.last.description;
     
     if(imageB64) {
         state.imageBase64 = imageB64;
@@ -63,14 +66,25 @@
         els.dropPlaceholder.style.display = "none";
         els.generateBtn.disabled = false;
     }
-
     els.regenTitleBtn.disabled = !state.last.title;
     els.regenDescBtn.disabled = !state.last.description;
   }
 
-  /* API CALLS */
+  function clearSelection() {
+    state.imageBase64 = null;
+    state.currentHistoryId = null;
+    state.last = { title: "", description: "" };
+    els.previewImg.src = "";
+    hide(els.preview);
+    els.dropPlaceholder.style.display = "flex";
+    els.generateBtn.disabled = true;
+    setMainUI("", "");
+    renderHistoryUI();
+  }
+
+  /* API */
   async function onGenerate() {
-    if(!state.imageBase64) return alert("Image manquante");
+    if(!state.imageBase64) return;
     try {
       startLoading();
       const res = await fetch("/api/generate", {
@@ -86,90 +100,89 @@
       const data = await res.json();
       setMainUI(data.title, data.description);
       
-      // Sauvegarde DB
       await fetch("/api/history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: data.title,
-          description: data.description,
-          image: state.imageBase64
-        })
+        body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64 })
       });
-      
-      state.currentHistoryId = null; // C'est une nouvelle génération
       loadHistory();
-    } catch (e) { alert("Erreur: " + e.message); }
+    } catch (e) { alert(e.message); }
     finally { stopLoading(); }
   }
 
   async function loadHistory() {
     try {
       const res = await fetch("/api/history");
-      const items = await res.json();
-      state.historyCache = items;
-      renderHistoryUI(items);
-    } catch (e) { els.historyList.innerHTML = "Erreur chargement historique."; }
+      state.historyCache = await res.json();
+      renderHistoryUI();
+    } catch (e) { console.error(e); }
   }
 
-  function renderHistoryUI(items) {
-    if(!items.length) {
-        els.historyList.innerHTML = "<p class='hint'>Aucun historique.</p>";
-        return;
-    }
+  window.deleteItem = async (e, id) => {
+    e.stopPropagation();
+    if(!confirm("Supprimer définitivement ce produit de l'historique ?")) return;
+    try {
+        await fetch(`/api/history?id=${id}`, { method: "DELETE" });
+        if(state.currentHistoryId === id) clearSelection();
+        loadHistory();
+    } catch (e) { alert("Erreur suppression"); }
+  };
 
-    els.historyList.innerHTML = items.map(item => {
-        const isCurrent = state.currentHistoryId === item.id;
-        return `
-        <div class="history-item ${isCurrent ? 'is-current' : ''}" onclick="restoreFromHistory(${item.id})">
-          ${isCurrent ? '<span class="badge-actuel">ACTUEL</span>' : ''}
+  /* RENDU HISTORIQUE + FILTRE + PAGINATION */
+  function renderHistoryUI() {
+    const filtered = state.historyCache.filter(item => 
+        (item.title || "").toLowerCase().includes(state.searchQuery.toLowerCase())
+    );
+    
+    els.historyTotal.textContent = `Total: ${filtered.length}`;
+    
+    const totalPages = Math.ceil(filtered.length / state.pageSize);
+    if(state.currentPage > totalPages) state.currentPage = totalPages || 1;
+
+    const start = (state.currentPage - 1) * state.pageSize;
+    const paginated = filtered.slice(start, start + state.pageSize);
+
+    els.historyList.innerHTML = paginated.map(item => `
+        <div class="history-item ${state.currentHistoryId === item.id ? 'is-current' : ''}" onclick="restoreFromHistory(${item.id})">
+          ${state.currentHistoryId === item.id ? '<span class="badge-actuel">ACTUEL</span>' : ''}
           <img src="data:image/jpeg;base64,${item.image}" class="history-img">
           <div class="history-info">
             <h4>${item.title || "Sans titre"}</h4>
-            <p>${item.description || "Sans description"}</p>
             <div class="history-date">${item.timestamp}</div>
           </div>
-          <div class="history-btns">
-            <button onclick="event.stopPropagation(); copyText(this, \`${(item.title || "").replace(/`/g, "'")}\`)">Titre</button>
-            <button onclick="event.stopPropagation(); copyText(this, \`${(item.description || "").replace(/`/g, "'")}\`)">Desc</button>
-          </div>
+          <button class="delete-hist-btn" onclick="deleteItem(event, ${item.id})">🗑</button>
         </div>
-      `}).join("");
+    `).join("");
+
+    renderPagination(totalPages);
   }
 
-  /* FONCTIONS GLOBALES (Accessibles via onclick) */
+  function renderPagination(totalPages) {
+    els.pagination.innerHTML = "";
+    if(totalPages <= 1) return;
 
-  // Restaure un produit de l'historique vers le bloc principal
+    for(let i = 1; i <= totalPages; i++) {
+        const btn = document.createElement("button");
+        btn.textContent = i;
+        if(i === state.currentPage) btn.className = "active";
+        btn.onclick = () => { state.currentPage = i; renderHistoryUI(); };
+        els.pagination.appendChild(btn);
+    }
+  }
+
   window.restoreFromHistory = (id) => {
     const item = state.historyCache.find(i => i.id === id);
     if(!item) return;
-
     state.currentHistoryId = id;
     setMainUI(item.title, item.description, item.image);
-    renderHistoryUI(state.historyCache); // Refresh pour le badge
+    renderHistoryUI();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Système de copie robuste
-  window.copyText = (btn, txt) => {
-    if(!txt) return;
-    navigator.clipboard.writeText(txt).then(() => {
-        const oldText = btn.textContent;
-        btn.textContent = "Copié !";
-        btn.style.background = "#e6ffed";
-        setTimeout(() => {
-            btn.textContent = oldText;
-            btn.style.background = "";
-        }, 1500);
-    });
-  };
-
-  /* INITIALIZATION */
   function init() {
     els.generateBtn.addEventListener("click", onGenerate);
-    
+    els.removeImage.addEventListener("click", (e) => { e.stopPropagation(); clearSelection(); });
     els.drop.addEventListener("click", () => els.imageInput.click());
-    
     els.imageInput.addEventListener("change", (e) => {
         const file = e.target.files[0];
         if(!file) return;
@@ -177,18 +190,28 @@
         reader.onload = (ev) => {
             const b64 = ev.target.result;
             state.imageBase64 = b64.split(",")[1];
-            state.imageMime = b64.split(";")[0].split(":")[1];
             setMainUI("", "", state.imageBase64);
             state.currentHistoryId = null;
-            renderHistoryUI(state.historyCache);
+            renderHistoryUI();
         };
         reader.readAsDataURL(file);
     });
 
-    els.copyTitle.addEventListener("click", () => window.copyText(els.copyTitle, state.last.title));
-    els.copyDesc.addEventListener("click", () => window.copyText(els.copyDesc, state.last.description));
-    els.refreshHistory.addEventListener("click", loadHistory);
-    
+    els.historySearch.addEventListener("input", (e) => {
+        state.searchQuery = e.target.value;
+        state.currentPage = 1;
+        renderHistoryUI();
+    });
+
+    els.copyTitle.addEventListener("click", () => {
+        navigator.clipboard.writeText(state.last.title);
+        alert("Titre copié");
+    });
+    els.copyDesc.addEventListener("click", () => {
+        navigator.clipboard.writeText(state.last.description);
+        alert("Description copiée");
+    });
+
     loadHistory();
   }
 
