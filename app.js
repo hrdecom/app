@@ -3,8 +3,8 @@
 
   const DEFAULTS = {
     collections: [
-      { name: "Initial", meaning: "Jewelry featuring 26 letter variants. Titles must contain 'Initial'." },
-      { name: "Angel", meaning: "Jewelry with angelic shapes (wings, feathers)." }
+      { name: "Initial", meaning: "Jewelry featuring 26 letter variants." },
+      { name: "Angel", meaning: "Jewelry with angelic shapes." }
     ],
     promptSystem: "Senior luxury jewelry copywriter.",
     promptTitles: "TITLE: Adjustable {Collection} Ring \"{Name}\". NO hyphens.",
@@ -20,7 +20,7 @@
     config: JSON.parse(JSON.stringify(DEFAULTS)),
     currentPage: 1, pageSize: 5, searchQuery: "", currentHistoryId: null,
     timerInterval: null,
-    sessionHeadlines: [], sessionAds: [],
+    sessionHeadlines: [], sessionAds: [], // sessionAds stores {text, style}
     hlPage: 1, adPage: 1, hlPageSize: 12, adPageSize: 12,
     selHlStyles: [], selAdStyles: []
   };
@@ -53,7 +53,6 @@
     });
     $("configBlacklist").value = state.config.blacklist || "";
     
-    // Rendu des listes sans onchange direct (on lira les valeurs au moment du clic sur Enregistrer)
     $("collectionsList").innerHTML = (state.config.collections || []).map((c, i) => `
       <div class="config-row collections-item" style="display:flex; gap:10px; margin-bottom:10px;">
         <input type="text" value="${c.name}" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;">
@@ -79,30 +78,9 @@
     renderStyleSelectors();
   }
 
-  // Ajouts dynamiques
-  $("addCollection").onclick = () => {
-    const div = document.createElement('div');
-    div.className = "config-row collections-item";
-    div.style = "display:flex; gap:10px; margin-bottom:10px;";
-    div.innerHTML = `<input type="text" value="" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`;
-    $("collectionsList").appendChild(div);
-  };
-
-  $("addStyleBtn").onclick = () => {
-    const div = document.createElement('div');
-    div.className = "config-row headline-style-item";
-    div.style = "display:flex; gap:10px; margin-bottom:10px;";
-    div.innerHTML = `<input type="text" value="" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`;
-    $("styleButtonsEditor").appendChild(div);
-  };
-
-  $("addAdStyleBtn").onclick = () => {
-    const div = document.createElement('div');
-    div.className = "config-row ad-style-item";
-    div.style = "display:flex; gap:10px; margin-bottom:10px;";
-    div.innerHTML = `<input type="text" value="" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`;
-    $("adStyleButtonsEditor").appendChild(div);
-  };
+  $("addCollection").onclick = () => { renderConfigUI(); /* Triggers redraw and captures current */ const div = document.createElement('div'); div.className="config-row collections-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`; $("collectionsList").appendChild(div); };
+  $("addStyleBtn").onclick = () => { const div = document.createElement('div'); div.className="config-row headline-style-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`; $("styleButtonsEditor").appendChild(div); };
+  $("addAdStyleBtn").onclick = () => { const div = document.createElement('div'); div.className="config-row ad-style-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`; $("adStyleButtonsEditor").appendChild(div); };
 
   function renderStyleSelectors() {
     $("styleSelectorContainer").innerHTML = (state.config.headlineStyles || []).map(s => `<div class="style-tag ${state.selHlStyles.includes(s.name) ? 'selected' : ''}" onclick="toggleStyle('hl', '${s.name}', this)">${s.name}</div>`).join("");
@@ -127,21 +105,26 @@
         product_url: $("productUrlInput").value 
       };
 
-      if ((action === 'ad_copys' && state.selAdStyles.length > 0) || (action === 'headlines' && state.selHlStyles.length > 0)) {
-        const styles = action === 'ad_copys' ? state.selAdStyles : state.selHlStyles;
-        const configSource = action === 'ad_copys' ? state.config.adStyles : state.config.headlineStyles;
-        const results = await Promise.all(styles.map(sName => {
-          const sPrompt = configSource.find(x => x.name === sName)?.prompt;
+      // ADS: Parallel Simultaneous Generation
+      if (action === 'ad_copys' && state.selAdStyles.length > 0) {
+        const results = await Promise.all(state.selAdStyles.map(sName => {
+          const sPrompt = state.config.adStyles.find(x => x.name === sName)?.prompt;
           return fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, style: sPrompt + " " + (extra.userText || ""), styleLabel: sName }) }).then(r => r.json().then(d => ({ ...d, label: sName })));
         }));
         results.forEach(res => {
-          if (action === 'ad_copys') { state.sessionAds = [...(res.ad_cop_ys || res.ad_copys || []).map(t => ({ text: t, style: res.label })), ...state.sessionAds]; state.adPage = 1; renderAds(); } 
-          else { state.sessionHeadlines = [...(res.headlines || []).map(t => ({ text: t, style: res.label })), ...state.sessionHeadlines]; state.hlPage = 1; renderHeadlines(); }
+          state.sessionAds = [...(res.ad_copys || []).map(t => ({ text: t, style: res.label })), ...state.sessionAds];
         });
-      } else {
+        state.adPage = 1; renderAds();
+      } 
+      // HEADLINES: Single request with combined style (Original Request)
+      else {
+        if (action === 'headlines' && state.selHlStyles.length > 0) {
+            extra.style = state.selHlStyles.map(n => state.config.headlineStyles.find(s => s.name === n)?.prompt).join(" ") + " " + (extra.userText || "");
+        }
         const res = await fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, ...extra }) });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Erreur");
+        if (!res.ok) throw new Error(data.error || "Erreur IA");
+
         if (action === 'generate') {
           $("titleText").textContent = data.title; $("descText").textContent = data.description;
           const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name, product_url: $("productUrlInput").value }) });
@@ -153,10 +136,10 @@
           if (state.currentHistoryId) await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, title: $("titleText").textContent, description: $("descText").textContent }) });
           await loadHistory();
         } else if (action.includes('headlines')) {
-          state.sessionHeadlines = [...(data.headlines || []).map(t => ({ text: t, style: 'Variante' })), ...state.sessionHeadlines];
+          state.sessionHeadlines = [...(data.headlines || []), ...state.sessionHeadlines];
           state.hlPage = 1; renderHeadlines();
         } else if (action.includes('ad_copys')) {
-          state.sessionAds = [...(data.ad_cop_ys || data.ad_copys || []).map(t => ({ text: t, style: 'Variante' })), ...state.sessionAds];
+          state.sessionAds = [...(data.ad_copys || []).map(t => ({ text: t, style: 'Variante' })), ...state.sessionAds];
           state.adPage = 1; renderAds();
         }
       }
@@ -167,12 +150,21 @@
 
   const renderHeadlines = () => {
     const pag = state.sessionHeadlines.slice((state.hlPage-1)*12, state.hlPage*12);
-    $("headlinesResults").innerHTML = pag.map((item, i) => `<div class="headline-item" onclick="toggleItemSelect('hl', i, this)"><input type="checkbox"><div class="headline-text"><small>${item.style}</small><br>${item.text}</div></div>`).join("");
+    $("headlinesResults").innerHTML = pag.map((text, i) => `<div class="headline-item" onclick="toggleItemSelect('hl', i, this)"><input type="checkbox"><span class="headline-text">${text}</span></div>`).join("");
     renderPaginationLoc('hl');
   };
+
   const renderAds = () => {
     const pag = state.sessionAds.slice((state.adPage-1)*12, state.adPage*12);
-    $("adsResults").innerHTML = pag.map((item, i) => `<div class="headline-item" onclick="toggleItemSelect('ad', i, this)"><input type="checkbox"><div class="headline-text"><small>${item.style}</small><br><span style="white-space:pre-wrap;">${item.text}</span></div></div>`).join("");
+    let html = "", lastStyle = "";
+    pag.forEach((item, i) => {
+      if (item.style !== lastStyle) {
+        html += `<div style="margin: 10px 0 5px; font-size:11px; font-weight:bold; color:var(--apple-blue); border-bottom:1px solid #eee; padding-bottom:3px;">${item.style.toUpperCase()}</div>`;
+        lastStyle = item.style;
+      }
+      html += `<div class="headline-item" onclick="toggleItemSelect('ad', i, this)"><input type="checkbox"><div class="headline-text" style="white-space:pre-wrap;">${item.text}</div></div>`;
+    });
+    $("adsResults").innerHTML = html;
     renderPaginationLoc('ad');
   };
 
@@ -197,24 +189,45 @@
 
   async function saveSelections(type) {
     if (!state.currentHistoryId) return;
-    const selected = []; document.querySelectorAll(`#${type === 'hl' ? 'headlinesResults' : 'adsResults'} .selected .headline-text`).forEach(it => {
-      const raw = it.innerText.split('\n'); selected.push(raw.length > 1 ? raw.slice(1).join('\n') : raw[0]);
-    });
-    if (type === 'hl') state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...selected])];
-    else state.selectedAds = [...new Set([...state.selectedAds, ...selected])];
-    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type === 'hl' ? 'headlines' : 'ad_copys']: JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds) }) });
+    const selected = []; 
+    document.querySelectorAll(`#${type === 'hl' ? 'headlinesResults' : 'adsResults'} .selected .headline-text`).forEach(it => selected.push(it.innerText));
+    const key = type === 'hl' ? 'headlines' : 'ad_copys';
+    const targetState = type === 'hl' ? 'selectedHeadlines' : 'selectedAds';
+    state[targetState] = [...new Set([...state[targetState], ...selected])];
+    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [key]: JSON.stringify(state[targetState]) }) });
     type === 'hl' ? renderSavedHl() : renderSavedAds();
     alert("Enregistré");
   }
 
-  const renderSavedHl = () => { $("headlinesSavedList").innerHTML = state.selectedHeadlines.map((h, i) => `<div class="headline-item no-hover"><span class="headline-text">${h}</span><button class="icon-btn-small" onclick="deleteSaved('hl',${i})">×</button></div>`).join(""); };
+  const renderSavedHl = () => {
+    $("headlinesSavedList").innerHTML = (state.selectedHeadlines || []).map((h, i) => `
+      <div class="headline-item no-hover">
+        <span class="headline-text">${h}</span>
+        <div style="display:flex;gap:5px;">
+            <button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/'/g,"\\'")}\`)">📋</button>
+            <button class="icon-btn-small" style="color:red" onclick="deleteSaved('hl',${i})">×</button>
+        </div>
+      </div>`).join("");
+  };
+
   const renderSavedAds = () => {
-    $("adsSavedList").innerHTML = state.selectedAds.map((h, i) => `<div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;justify-content:space-between;width:100%"><strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong><button class="icon-btn-small" onclick="deleteSaved('ad',${i})">×</button></div><span class="headline-text" style="white-space:pre-wrap;">${h}</span></div>`).join("");
+    $("adsSavedList").innerHTML = (state.selectedAds || []).map((h, i) => `
+      <div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;">
+        <div style="display:flex;justify-content:space-between;width:100%"><strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong>
+            <div style="display:flex;gap:5px;">
+                <button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button>
+                <button class="icon-btn-small" style="color:red" onclick="deleteSaved('ad',${i})">×</button>
+            </div>
+        </div>
+        <span class="headline-text" style="white-space:pre-wrap;">${h}</span>
+      </div>`).join("");
     const n = $("titleText").textContent, u = $("productUrlInput").value;
-    $("adsDefaultInfoBlock").innerHTML = [`TITRE 1|${n}`, `TITRE 2|${n} - Offer`, `TITRE 3|Gift - ${n}`, `SUB|Free Shipping Today`, `URL|${u}`].map(x => {
-      const [l,v] = x.split('|'); return `<div class="ads-info-row"><span><span class="ads-info-label">${l}</span>${v}</span><button onclick="navigator.clipboard.writeText('${v.replace(/'/g,"\\'")}');alert('Copié')">📋</button></div>`;
+    $("adsDefaultInfoBlock").innerHTML = [`TITRE 1|${n}`, `TITRE 2|${n} - Special Offer`, `TITRE 3|Gift Idea - ${n}`, `SUB|Free Shipping Worldwide Today`, `URL|${u}`].map(x => {
+      const [l,v] = x.split('|'); return `<div class="ads-info-row"><span><span class="ads-info-label">${l}</span>${v}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${v.replace(/'/g,"\\'")}\`)">📋</button></div>`;
     }).join("");
   };
+
+  window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
 
   window.deleteSaved = async (type, i) => {
     const list = type === 'hl' ? state.selectedHeadlines : state.selectedAds; list.splice(i, 1);
@@ -225,36 +238,14 @@
   function init() {
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
-    
-    // LOGIQUE DE SAUVEGARDE AMELIORÉE (SCANNE LES ELEMENTS)
     $("saveConfig").onclick = async () => {
-      // 1. Lire les gros textareas
       ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys"].forEach(id => state.config[id] = $(id).value);
       state.config.blacklist = $("configBlacklist").value;
-
-      // 2. Scanner les listes dynamiques (Collections)
-      state.config.collections = Array.from(document.querySelectorAll('.collections-item')).map(row => ({
-        name: row.querySelector('.col-name').value,
-        meaning: row.querySelector('.col-meaning').value
-      }));
-
-      // 3. Scanner les listes dynamiques (Styles Headlines)
-      state.config.headlineStyles = Array.from(document.querySelectorAll('.headline-style-item')).map(row => ({
-        name: row.querySelector('.style-name').value,
-        prompt: row.querySelector('.style-prompt').value
-      }));
-
-      // 4. Scanner les listes dynamiques (Styles Ads)
-      state.config.adStyles = Array.from(document.querySelectorAll('.ad-style-item')).map(row => ({
-        name: row.querySelector('.ad-style-name').value,
-        prompt: row.querySelector('.ad-style-prompt').value
-      }));
-
-      // Envoyer à Cloudflare
+      state.config.collections = Array.from(document.querySelectorAll('.collections-item')).map(r => ({ name: r.querySelector('.col-name').value, meaning: r.querySelector('.col-meaning').value }));
+      state.config.headlineStyles = Array.from(document.querySelectorAll('.headline-style-item')).map(r => ({ name: r.querySelector('.style-name').value, prompt: r.querySelector('.style-prompt').value }));
+      state.config.adStyles = Array.from(document.querySelectorAll('.ad-style-item')).map(r => ({ name: r.querySelector('.ad-style-name').value, prompt: r.querySelector('.ad-style-prompt').value }));
       await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
-      alert("Configuration Sauvegardée !");
-      $("settingsModal").classList.add("hidden");
-      renderConfigUI(); // Rafraîchir les menus
+      alert("Enregistré"); $("settingsModal").classList.add("hidden"); renderConfigUI();
     };
 
     $("openHeadlinesBtn").onclick = () => { if(!state.currentHistoryId) return; $("headlinesModal").classList.remove("hidden"); renderSavedHl(); };
@@ -275,11 +266,11 @@
     $("sendAdChat").onclick = () => apiCall('ad_copys', { userText: $("adStyleInput").value });
     
     $("genSimilarBtn").onclick = () => {
-        const sel = []; document.querySelectorAll('#headlinesResults .selected .headline-text').forEach(it => sel.push(it.innerText.split('\n')[1] || it.innerText));
+        const sel = []; document.querySelectorAll('#headlinesResults .selected .headline-text').forEach(it => sel.push(it.innerText));
         apiCall('headlines_similar', { selectedForSimilar: sel });
     };
     $("genSimilarAdsBtn").onclick = () => {
-        const sel = []; document.querySelectorAll('#adsResults .selected .headline-text').forEach(it => sel.push(it.innerText.split('\n')[1] || it.innerText));
+        const sel = []; document.querySelectorAll('#adsResults .selected .headline-text').forEach(it => sel.push(it.innerText));
         apiCall('ad_copys_similar', { selectedForSimilar: sel });
     };
 
