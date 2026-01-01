@@ -8,22 +8,20 @@ export async function onRequest(context) {
   }
 
   if (request.method === "POST") {
-    const { title, description, image, product_name, headlines } = await request.json();
+    const { title, description, image, product_name, headlines, product_url, ad_copys } = await request.json();
     const result = await db.prepare(
-      "INSERT INTO history (title, description, image, product_name, headlines) VALUES (?, ?, ?, ?, ?)"
-    ).bind(title || "", description || "", image || "", product_name || "", headlines || "[]").run();
-    
-    return new Response(JSON.stringify({ id: result.meta.last_row_id }), {
-      headers: { "content-type": "application/json" }
-    });
+      "INSERT INTO history (title, description, image, product_name, headlines, product_url, ad_copys) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).bind(title || "", description || "", image || "", product_name || "", headlines || "[]", product_url || "", ad_copys || "[]").run();
+    return new Response(JSON.stringify({ id: result.meta.last_row_id }), { headers: { "content-type": "application/json" } });
   }
 
   if (request.method === "PATCH") {
-    const { id, title, description, headlines } = await request.json();
+    const { id, title, description, headlines, product_url, ad_copys } = await request.json();
     if (title) await db.prepare("UPDATE history SET title = ? WHERE id = ?").bind(title, id).run();
     if (description) await db.prepare("UPDATE history SET description = ? WHERE id = ?").bind(description, id).run();
     if (headlines) await db.prepare("UPDATE history SET headlines = ? WHERE id = ?").bind(headlines, id).run();
-    
+    if (product_url !== undefined) await db.prepare("UPDATE history SET product_url = ? WHERE id = ?").bind(product_url, id).run();
+    if (ad_copys) await db.prepare("UPDATE history SET ad_copys = ? WHERE id = ?").bind(ad_copys, id).run();
     return new Response(JSON.stringify({ success: true }));
   }
 
@@ -33,6 +31,5 @@ export async function onRequest(context) {
     await db.prepare("DELETE FROM history WHERE id = ?").bind(id).run();
     return new Response(JSON.stringify({ success: true }));
   }
-
   return new Response("Method not allowed", { status: 405 });
 }
