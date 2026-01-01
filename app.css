@@ -59,3 +59,20 @@ pre { white-space:pre-wrap; font-size:14px; background: #fff; padding: 12px; bor
 .pagination { display: flex; justify-content: center; gap: 5px; margin-top: 20px; }
 .pagination button { padding: 5px 10px; font-size: 13px; border-radius: 5px; }
 .pagination button.active { background: #000; color: #fff; border-color: #000; }
+
+/* ... conserver les styles précédents et ajouter ceci ... */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+.modal-content { background: #fff; width: 800px; max-height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
+.modal-header, .modal-footer { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+.modal-footer { border-top: 1px solid #eee; border-bottom: none; }
+.tab-content { padding: 20px; overflow-y: auto; flex: 1; }
+.tabs { display: flex; background: #f5f5f5; border-bottom: 1px solid #eee; }
+.tab-link { flex: 1; padding: 15px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; }
+.tab-link.active { border-bottom-color: #000; font-weight: bold; background: #fff; }
+
+.collection-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+.collection-row input { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
+.collection-row textarea { flex: 2; padding: 8px; border: 1px solid #ddd; border-radius: 6px; height: 40px; }
+
+textarea { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-family: monospace; resize: vertical; }
+.secondary { background: #f0f0f0; border-color: #ddd; color: #333; }
