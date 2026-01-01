@@ -26,11 +26,13 @@
 
   /* CONFIG */
   async function loadConfig() {
-    const res = await fetch("/api/settings");
-    const data = await res.json();
-    const saved = data.find(i => i.id === 'full_config');
-    if (saved) state.config = JSON.parse(saved.value);
-    renderConfigUI();
+    try {
+      const res = await fetch("/api/settings");
+      const data = await res.json();
+      const saved = data.find(i => i.id === 'full_config');
+      if (saved) state.config = JSON.parse(saved.value);
+      renderConfigUI();
+    } catch(e) {}
   }
 
   function renderConfigUI() {
@@ -41,7 +43,7 @@
     
     $("collectionSelect").innerHTML = state.config.collections.map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     $("collectionsList").innerHTML = state.config.collections.map((c, i) => `
-      <div style="display:flex; gap:10px; margin-bottom:10px;">
+      <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
         <input type="text" value="${c.name}" onchange="updateCol(${i}, 'name', this.value)" style="flex:1">
         <textarea onchange="updateCol(${i}, 'meaning', this.value)" style="flex:2; height:40px;">${c.meaning}</textarea>
         <button onclick="removeCol(${i})">×</button>
@@ -53,7 +55,7 @@
   window.removeCol = (i) => { state.config.collections.splice(i, 1); renderConfigUI(); };
   $("addCollection").onclick = () => { state.config.collections.push({name:"", meaning:""}); renderConfigUI(); };
 
-  /* CSV */
+  /* CSV IMPORT */
   $("csvImport").onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -91,9 +93,8 @@
           currentTitle: $("titleText").textContent
         })
       });
-      
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erreur serveur");
+      if (!res.ok) throw new Error(data.details || data.error || "Erreur inconnue");
 
       if (action === 'generate') {
         $("titleText").textContent = data.title;
@@ -185,9 +186,11 @@
   }
 
   async function loadHistory() {
-    const res = await fetch("/api/history");
-    state.historyCache = await res.json();
-    renderHistoryUI();
+    try {
+      const res = await fetch("/api/history");
+      state.historyCache = await res.json();
+      renderHistoryUI();
+    } catch(e) {}
   }
 
   function renderHistoryUI() {
@@ -228,6 +231,8 @@
     $("preview").classList.remove("hidden");
     $("dropPlaceholder").style.display = "none";
     $("generateBtn").disabled = false;
+    $("regenTitleBtn").disabled = false;
+    $("regenDescBtn").disabled = false;
     window.scrollTo({top:0, behavior:'smooth'});
   };
 
