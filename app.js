@@ -1,7 +1,6 @@
 (() => {
   const $ = (id) => document.getElementById(id);
 
-  // COLLECTIONS PAR DÉFAUT (Originales)
   const ORIG_COLLECTIONS = [
     { name: "Initial", meaning: "Jewelry featuring 26 letter variants. Titles must contain 'Initial'." },
     { name: "Projection", meaning: "Jewelry with a pendant holding a customizable image." },
@@ -15,7 +14,7 @@
 - "collection": one from allowed list
 - "name": a symbolic English name (1–2 words)
 - "title": Ring: Adjustable {Collection} Ring "{Name}". Others: {Collection} {Type} "{Name}". NO hyphens.
-- "description": English plain text. EXACTLY TWO paragraphs, each <=180 characters (including spaces). NO ellipses. Then bullet list starting with '- '.
+- "description": English plain text. EXACTLY TWO paragraphs, each <=180 characters (including spaces). NO ellipses "...". Rewrite to be concise. Then bullet list starting with '- '.
 
 Required bullets:
 - Materials: Stainless steel
@@ -29,15 +28,19 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
     historyCache: [],
     config: { promptSystem: ORIG_PROMPT, collections: ORIG_COLLECTIONS, blacklist: "" },
     currentPage: 1,
-    pageSize: 5
+    pageSize: 5,
+    searchQuery: ""
   };
 
+  /* CONFIGURATION */
   async function loadConfig() {
-    const res = await fetch("/api/settings");
-    const data = await res.json();
-    const saved = data.find(i => i.id === 'full_config');
-    if (saved) state.config = JSON.parse(saved.value);
-    renderConfigUI();
+    try {
+      const res = await fetch("/api/settings");
+      const data = await res.json();
+      const saved = data.find(i => i.id === 'full_config');
+      if (saved) state.config = JSON.parse(saved.value);
+      renderConfigUI();
+    } catch(e) { console.error("Config load error", e); }
   }
 
   function renderConfigUI() {
@@ -45,9 +48,9 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
     $("configBlacklist").value = state.config.blacklist;
     $("collectionSelect").innerHTML = state.config.collections.map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     $("collectionsList").innerHTML = state.config.collections.map((c, i) => `
-      <div style="display:flex; gap:10px; margin-bottom:10px;">
-        <input type="text" value="${c.name}" onchange="updateCol(${i}, 'name', this.value)" style="flex:1">
-        <textarea onchange="updateCol(${i}, 'meaning', this.value)" style="flex:2; height:40px;">${c.meaning}</textarea>
+      <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
+        <input type="text" value="${c.name}" onchange="updateCol(${i}, 'name', this.value)" style="flex:1; padding:5px;">
+        <textarea onchange="updateCol(${i}, 'meaning', this.value)" style="flex:2; height:40px; padding:5px;">${c.meaning}</textarea>
         <button onclick="removeCol(${i})">×</button>
       </div>
     `).join("");
@@ -57,7 +60,7 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
   window.removeCol = (i) => { state.config.collections.splice(i, 1); renderConfigUI(); };
   $("addCollection").onclick = () => { state.config.collections.push({name:"", meaning:""}); renderConfigUI(); };
 
-  /* CSV IMPORT LOGIC (From popup.js) */
+  /* CSV IMPORT (Logique popup.js) */
   $("csvImport").onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -65,7 +68,7 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
     const rows = text.split(/\r?\n/);
     let names = [];
     rows.forEach(row => {
-      const match = row.match(/"([^"]+)"/); // Cherche le texte entre guillemets
+      const match = row.match(/"([^"]+)"/);
       if (match) names.push(match[1]);
       else {
         const parts = row.split(",");
@@ -75,9 +78,10 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
     const currentList = state.config.blacklist.split(",").map(n => n.trim());
     state.config.blacklist = [...new Set([...currentList, ...names])].filter(n => n.length > 2).join(", ");
     $("configBlacklist").value = state.config.blacklist;
+    $("csvStatus").textContent = `${names.length} noms ajoutés.`;
   };
 
-  /* ACTIONS IA */
+  /* IA ACTIONS */
   async function apiCall(action) {
     if (!state.imageBase64) return;
     $("loading").classList.remove("hidden");
@@ -106,11 +110,15 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
       
       $("regenTitleBtn").disabled = false;
       $("regenDescBtn").disabled = false;
-    } catch(e) { alert("Erreur génération"); }
+    } catch(e) { alert("Erreur IA"); }
     finally { $("loading").classList.add("hidden"); }
   }
 
+  /* INIT */
   function init() {
+    // SÉCURITÉ : On s'assure que le loader est masqué au démarrage
+    $("loading").classList.add("hidden");
+
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
     window.onclick = (e) => { if (e.target == $("settingsModal")) $("settingsModal").classList.add("hidden"); };
@@ -145,34 +153,53 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
       $("preview").classList.add("hidden");
       $("dropPlaceholder").style.display = "flex";
       $("titleText").textContent = ""; $("descText").textContent = "";
+      $("generateBtn").disabled = true;
+      $("regenTitleBtn").disabled = true;
+      $("regenDescBtn").disabled = true;
     };
 
     $("generateBtn").onclick = () => apiCall('generate');
     $("regenTitleBtn").onclick = () => apiCall('regen_title');
     $("regenDescBtn").onclick = () => apiCall('regen_desc');
+
     $("saveConfig").onclick = async () => {
       state.config.promptSystem = $("promptSystem").value;
       state.config.blacklist = $("configBlacklist").value;
       await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
-      alert("Enregistré"); $("settingsModal").classList.add("hidden");
+      alert("Config sauvegardée");
+      $("settingsModal").classList.add("hidden");
     };
 
-    loadConfig(); loadHistory();
+    $("copyTitle").onclick = () => { navigator.clipboard.writeText($("titleText").textContent); alert("Titre copié"); };
+    $("copyDesc").onclick = () => { navigator.clipboard.writeText($("descText").textContent); alert("Description copiée"); };
+
+    $("historySearch").oninput = (e) => {
+      state.searchQuery = e.target.value;
+      renderHistoryUI();
+    };
+
+    loadConfig();
+    loadHistory();
   }
 
   async function loadHistory() {
-    const res = await fetch("/api/history");
-    state.historyCache = await res.json();
-    renderHistoryUI();
+    try {
+      const res = await fetch("/api/history");
+      state.historyCache = await res.json();
+      renderHistoryUI();
+    } catch(e) {}
   }
 
   function renderHistoryUI() {
+    const filtered = state.historyCache.filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
+    $("historyTotal").textContent = `Total: ${filtered.length}`;
     const start = (state.currentPage - 1) * state.pageSize;
-    const paginated = state.historyCache.slice(start, start + state.pageSize);
+    const paginated = filtered.slice(start, start + state.pageSize);
+    
     $("historyList").innerHTML = paginated.map(item => `
       <div class="history-item" onclick="restore(${item.id})">
         <img src="data:image/jpeg;base64,${item.image}" class="history-img">
-        <div style="flex:1"><h4>${item.title}</h4></div>
+        <div style="flex:1"><h4>${item.title || "Sans titre"}</h4></div>
         <button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button>
       </div>
     `).join("");
@@ -187,6 +214,16 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
     state.imageBase64 = item.image;
     $("preview").classList.remove("hidden");
     $("dropPlaceholder").style.display = "none";
+    $("generateBtn").disabled = false;
+    $("regenTitleBtn").disabled = false;
+    $("regenDescBtn").disabled = false;
+    window.scrollTo({top:0, behavior:'smooth'});
+  };
+
+  window.deleteItem = async (id) => {
+    if (!confirm("Supprimer ?")) return;
+    await fetch(`/api/history?id=${id}`, { method: "DELETE" });
+    loadHistory();
   };
 
   init();
