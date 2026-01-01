@@ -1,6 +1,6 @@
 // functions/api/generate.js
-// Web app backend (Cloudflare Pages Function)
-// Supports: generate, regen_title, regen_desc, translate_fr
+// Cloudflare Pages Function
+// Source de vérité des prompts (aligné extension v1.6.x)
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -21,10 +21,7 @@ export async function onRequestPost({ request, env }) {
 
     const apiKey = env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "Missing ANTHROPIC_API_KEY" }),
-        { status: 500 }
-      );
+      return new Response(JSON.stringify({ error: "Missing ANTHROPIC_API_KEY" }), { status: 500 });
     }
 
     const defaultModel = env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929";
@@ -35,10 +32,7 @@ export async function onRequestPost({ request, env }) {
         : defaultModel;
 
     if (!image) {
-      return new Response(
-        JSON.stringify({ error: "Image manquante." }),
-        { status: 400 }
-      );
+      return new Response(JSON.stringify({ error: "Image manquante." }), { status: 400 });
     }
 
     const mt =
@@ -47,137 +41,145 @@ export async function onRequestPost({ request, env }) {
         : "image/jpeg";
 
     /* ===============================
-       CONTEXT (COLLECTION / USED)
+       CONTEXT
     =============================== */
 
-    const colText = collection?.name
-      ? `Collection context:
-- Name: ${collection.name}
-- Description: ${collection.desc || ""}
-`
-      : "";
+    const colText = collection
+      ? `USER_SUGGESTED_COLLECTION=${collection}`
+      : "USER_SUGGESTED_COLLECTION=(none)";
 
     const usedText =
       Array.isArray(used) && used.length
-        ? `Avoid repeating these phrases or titles if possible:
-- ${used.slice(0, 80).join("\n- ")}
-`
+        ? `Avoid repeating these names or phrases (case-insensitive):
+${used.slice(0, 100).join(", ")}`
         : "";
 
     /* ===============================
-       PROMPTS
+       CORE PROMPTS (IDENTIQUES EXTENSION)
     =============================== */
 
     let instruction = "";
 
     if (action === "generate") {
       instruction = `
-You are an expert luxury jewelry copywriter.
+You are a senior luxury jewelry copywriter and vision-language expert.
+
+Analyze the jewelry image and return ONE SINGLE JSON object with EXACTLY these keys:
+- "type": one of Ring | Bracelet | Necklace | Earrings
+- "collection": a short collection name (1–2 words)
+- "name": a symbolic English name (1–2 words, NO generic product words)
+- "title": formatted EXACTLY as specified
+- "description": English plain text
 
 ${colText}
 ${usedText}
 
-From the product image, generate content with the EXACT following structure:
+TITLE FORMAT (NO hyphens):
+- Ring: Adjustable {Collection} Ring "{Name}"
+- Bracelet / Necklace / Earrings: {Collection} {Type} "{Name}"
 
-1) First paragraph:
-   - 2–3 sentences describing the design, materials, and emotional meaning.
+DESCRIPTION FORMAT (STRICT):
+- EXACTLY two paragraphs
+- Each paragraph MUST be ≤180 characters (including spaces)
+- NO ellipses "..."
+- Clear line break between paragraphs
+- Then bullet list, each line starting with "- "
 
-2) Second paragraph:
-   - 1–2 sentences about usage, gifting, or lifestyle context.
+MANDATORY BULLETS (always include):
+- Materials: Stainless steel
+- Hypoallergenic
+- Water and oxidation resistant
 
-3) Then a bullet list:
-   - 4–6 bullet points
-   - Each bullet MUST start with "- "
-   - Short, clear product features (materials, comfort, resistance, size, etc.)
+TYPE-SPECIFIC BULLETS:
+- Ring:
+  - Size: Adjustable
+  - No green fingers
+- Bracelet:
+  - Bracelet Size: 16+5cm (adjustable) / (6.3 in x 2in)
+- Necklace:
+  - Clasp: Lobster clasp
+  - Length: 46 cm + 5 cm adjustable (18.1 in + 2in)
 
-Rules:
+IMPORTANT RULES:
+- Do NOT mention letters, initials, or names visible in the image.
+- Use expressions like "initial motif" or "your chosen name".
 - Premium but accessible tone.
-- Clear line breaks between paragraphs.
-- Do NOT add headings or titles in the description.
+- If a paragraph exceeds 180 characters, rewrite it until compliant BEFORE responding.
 
-Also generate:
-- ONE concise English product title (max 8 words).
-
-Return ONLY valid JSON (no markdown, no commentary):
-{
-  "title": "...",
-  "description": "..."
-}
+Return ONLY valid JSON (no markdown, no commentary).
 `;
-    } else if (action === "regen_title") {
+    }
+
+    else if (action === "regen_title") {
       instruction = `
-You are an expert luxury jewelry copywriter.
-
-${colText}
-${usedText}
-
-Regenerate ONLY a new improved English product title based on the image.
+Generate a DIFFERENT symbolic English NAME and a TITLE for the SAME jewelry.
 
 Rules:
-- Max 8 words
-- Premium, elegant tone
+- Name: 1–2 words, symbolic, NO generic jewelry terms
+- Keep same type and collection
+- NO hyphens
+- Premium tone
 
-Return ONLY valid JSON:
-{ "title": "..." }
+Return ONLY JSON:
+{ "name": "...", "title": "..." }
 `;
-    } else if (action === "regen_desc") {
+    }
+
+    else if (action === "regen_desc") {
       instruction = `
-You are an expert luxury jewelry copywriter.
+Regenerate ONLY the DESCRIPTION for the SAME jewelry.
 
-${colText}
-${usedText}
+Rules:
+- EXACTLY two paragraphs
+- Each paragraph ≤180 characters
+- NO ellipses
+- Then bullet list EXACTLY as specified previously
+- Keep tone and meaning but vary wording
 
-Regenerate ONLY a new improved English product description based on the image.
-
-Use the EXACT structure:
-- Paragraph 1: design & emotion (2–3 sentences)
-- Paragraph 2: usage / gifting (1–2 sentences)
-- Bullet list (4–6 items, starting with "- ")
-
-Return ONLY valid JSON:
+Return ONLY JSON:
 { "description": "..." }
 `;
-    } else if (action === "translate_fr") {
+    }
+
+    else if (action === "translate_fr") {
       const t = current?.title || "";
       const d = current?.description || "";
 
       instruction = `
-You are an expert French e-commerce copywriter.
+You are an expert French luxury e-commerce copywriter.
 
-Task:
-- Translate the following English product content into French.
-- Produce a Shopify-ready HTML block.
+Translate the following English product content into French.
 
-Input English title:
+INPUT TITLE:
 ${t}
 
-Input English description:
+INPUT DESCRIPTION:
 ${d}
 
 Rules:
-- Natural, premium French (not literal).
-- Keep the same structure.
-- Output valid HTML ONLY (no markdown).
+- Natural premium French (not literal)
+- Keep EXACT same structure
+- Paragraphs → <p>
+- Bullets → <ul><li>
+- NO markdown
 
 Return ONLY valid JSON:
-{
-  "html": "<h4>...</h4><p>...</p><p>...</p><ul><li>...</li></ul>"
-}
+{ "html": "<p>...</p><p>...</p><ul><li>...</li></ul>" }
 `;
-    } else {
-      return new Response(
-        JSON.stringify({ error: "Action inconnue." }),
-        { status: 400 }
-      );
+    }
+
+    else {
+      return new Response(JSON.stringify({ error: "Action inconnue." }), { status: 400 });
     }
 
     /* ===============================
-       ANTHROPIC API CALL
+       ANTHROPIC CALL
     =============================== */
 
     const payload = {
       model: chosenModel,
-      max_tokens: 900,
+      max_tokens: 1200,
+      temperature: 0.4,
       messages: [
         {
           role: "user",
@@ -199,18 +201,15 @@ Return ONLY valid JSON:
       ]
     };
 
-    const anthropicRes = await fetch(
-      "https://api.anthropic.com/v1/messages",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01"
-        },
-        body: JSON.stringify(payload)
-      }
-    );
+    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify(payload)
+    });
 
     const data = await anthropicRes.json();
 
@@ -234,10 +233,7 @@ Return ONLY valid JSON:
 
     if (start < 0 || end < 0) {
       return new Response(
-        JSON.stringify({
-          error: "Réponse non-JSON du modèle",
-          raw: text
-        }),
+        JSON.stringify({ error: "Réponse non-JSON du modèle", raw: text }),
         { status: 500 }
       );
     }
@@ -250,10 +246,7 @@ Return ONLY valid JSON:
 
   } catch (e) {
     return new Response(
-      JSON.stringify({
-        error: "Erreur serveur.",
-        details: String(e)
-      }),
+      JSON.stringify({ error: "Erreur serveur.", details: String(e) }),
       { status: 500 }
     );
   }
