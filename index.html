@@ -27,26 +27,25 @@
       
       <div id="tab-collections" class="tab-content">
         <div id="collectionsList"></div>
-        <button id="addCollection" class="secondary-btn">+ Ajouter collection</button>
+        <button id="addCollection" class="secondary-btn" style="margin-top:10px">+ Ajouter collection</button>
       </div>
 
       <div id="tab-prompts" class="tab-content hidden">
-        <div class="prompt-segment"><label>Rôle Système</label><textarea id="promptSystem" rows="3"></textarea></div>
-        <div class="prompt-segment"><label>Règles Titres</label><textarea id="promptTitles" rows="3"></textarea></div>
+        <div class="prompt-segment"><label>Rôle Système</label><textarea id="promptSystem" rows="4"></textarea></div>
+        <div class="prompt-segment"><label>Règles Titres</label><textarea id="promptTitles" rows="4"></textarea></div>
         <div class="prompt-segment"><label>Règles Descriptions</label><textarea id="promptDesc" rows="4"></textarea></div>
       </div>
 
       <div id="tab-headlines-config" class="tab-content hidden">
         <label>Prompt Principal Headlines</label>
-        <textarea id="promptHeadlines" rows="4" style="margin-bottom:20px;"></textarea>
+        <textarea id="promptHeadlines" rows="6" style="margin-bottom:20px;"></textarea>
         <label>Boutons de Styles (Automatiques)</label>
         <div id="styleButtonsEditor"></div>
         <button id="addStyleBtn" class="secondary-btn">+ Ajouter un style</button>
       </div>
 
       <div id="tab-blacklist" class="tab-content hidden">
-        <input type="file" id="csvImport" accept=".csv" style="display:block; margin-bottom:10px;"/>
-        <textarea id="configBlacklist" rows="10"></textarea>
+        <textarea id="configBlacklist" rows="12" placeholder="Unity, Hope..."></textarea>
       </div>
       <div class="modal-footer"><button id="saveConfig" class="primary-btn">Enregistrer tout</button></div>
     </div>
@@ -62,9 +61,7 @@
       </div>
       
       <div id="tab-gen-headlines" class="tab-content">
-        <div class="style-selector" id="styleSelectorContainer">
-            <!-- Boutons de style injectés par JS -->
-        </div>
+        <div class="style-selector" id="styleSelectorContainer"></div>
         <div id="headlinesResults" class="headlines-results"></div>
         
         <div class="headlines-actions hidden" id="similarActions">
@@ -72,7 +69,7 @@
         </div>
 
         <div class="chat-bar">
-            <input type="text" id="headlineStyleInput" placeholder="Précisez votre demande (optionnel)..."/>
+            <input type="text" id="headlineStyleInput" placeholder="Précisez votre demande..."/>
             <button id="sendHeadlineChat">↑</button>
         </div>
       </div>
@@ -81,15 +78,13 @@
         <div id="headlinesSavedList" class="headlines-results"></div>
       </div>
 
-      <div class="modal-footer">
-        <button id="saveHeadlinesBtn" class="primary-btn">Enregistrer les sélections</button>
-      </div>
+      <div class="modal-footer"><button id="saveHeadlinesBtn" class="primary-btn">Enregistrer les sélections</button></div>
     </div>
   </div>
 
   <div id="loading" class="loading hidden">
     <div class="spinner"></div>
-    <div><strong>Génération en cours...</strong><div id="timer">00:00</div></div>
+    <div><strong>Action en cours...</strong><div id="timer">00:00</div></div>
   </div>
 
   <section class="workspace">
@@ -123,7 +118,7 @@
       <section class="card">
         <div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div>
         <pre id="descText"></pre>
-        <button id="openHeadlinesBtn" class="secondary-btn" style="margin-top:15px; width:100%; font-weight:600;">🎬 Headlines Vidéos</button>
+        <button id="openHeadlinesBtn" class="secondary-btn" style="margin-top:15px; width:100%;">🎬 Headlines Vidéos</button>
       </section>
     </div>
   </section>
