@@ -24,26 +24,22 @@
         <button class="tab-link" data-tab="tab-headlines-config">Headlines</button>
         <button class="tab-link" data-tab="tab-blacklist">Blacklist</button>
       </div>
-      
       <div id="tab-collections" class="tab-content">
         <div id="collectionsList"></div>
         <button id="addCollection" class="secondary-btn">+ Ajouter collection</button>
       </div>
-
       <div id="tab-prompts" class="tab-content hidden">
         <div class="prompt-segment"><label>Rôle Système</label><textarea id="promptSystem" rows="4"></textarea></div>
         <div class="prompt-segment"><label>Règles Titres</label><textarea id="promptTitles" rows="4"></textarea></div>
         <div class="prompt-segment"><label>Règles Descriptions</label><textarea id="promptDesc" rows="4"></textarea></div>
       </div>
-
       <div id="tab-headlines-config" class="tab-content hidden">
         <label>Prompt Principal Headlines</label>
-        <textarea id="promptHeadlines" rows="6" style="margin-bottom:20px;"></textarea>
-        <label>Boutons de Styles (Automatiques)</label>
+        <textarea id="promptHeadlines" rows="6" style="margin-bottom:15px;"></textarea>
+        <label>Boutons de Styles</label>
         <div id="styleButtonsEditor"></div>
         <button id="addStyleBtn" class="secondary-btn">+ Ajouter un style</button>
       </div>
-
       <div id="tab-blacklist" class="tab-content hidden">
         <textarea id="configBlacklist" rows="12" placeholder="Unity, Hope..."></textarea>
       </div>
@@ -51,9 +47,9 @@
     </div>
   </div>
 
-  <!-- MODAL HEADLINES -->
+  <!-- MODAL HEADLINES (APPLE STYLE) -->
   <div id="headlinesModal" class="modal hidden">
-    <div class="modal-content apple-modal">
+    <div class="modal-content">
       <div class="modal-header"><h2>Headlines Vidéos</h2><button id="closeHeadlines" class="close-btn">×</button></div>
       <div class="tabs">
         <button class="tab-link active" data-tab="tab-gen-headlines">Générer</button>
@@ -64,21 +60,25 @@
         <div class="style-selector" id="styleSelectorContainer"></div>
         <div id="headlinesResults" class="headlines-results"></div>
         
-        <!-- PAGINATION LOCALE HEADLINES -->
-        <div id="headlinesLocalPagination" class="pagination" style="margin-bottom:20px;"></div>
-        
-        <div class="headlines-actions hidden" id="similarActions">
-            <button id="genSimilarBtn" class="secondary-btn" style="width:100%; border-color: var(--apple-blue); color: var(--apple-blue);">✨ Générer des versions similaires améliorées</button>
-        </div>
-
-        <div class="chat-bar">
-            <input type="text" id="headlineStyleInput" placeholder="Précisez votre demande..."/>
-            <button id="sendHeadlineChat">↑</button>
+        <!-- Actions & Pagination groupées -->
+        <div id="headlinesActionGroup" class="headlines-actions-wrapper">
+            <div class="headlines-actions hidden" id="similarActions">
+                <button id="genSimilarBtn" class="secondary-btn" style="width:100%; border-color: var(--apple-blue); color: var(--apple-blue);">✨ Générer des versions similaires améliorées</button>
+            </div>
+            <div id="headlinesLocalPagination" class="pagination"></div>
         </div>
       </div>
 
       <div id="tab-saved-headlines" class="tab-content hidden">
         <div id="headlinesSavedList" class="headlines-results"></div>
+      </div>
+
+      <!-- Barre de chat fixe en bas -->
+      <div class="chat-container">
+          <div class="chat-bar">
+              <input type="text" id="headlineStyleInput" placeholder="Précisez votre demande..."/>
+              <button id="sendHeadlineChat">↑</button>
+          </div>
       </div>
 
       <div class="modal-footer"><button id="saveHeadlinesBtn" class="primary-btn">Enregistrer les sélections</button></div>
@@ -101,7 +101,6 @@
           <p id="dropPlaceholder">Cliquez ou déposez une image</p>
         </div>
     </div>
-
     <div class="right">
       <section class="card">
         <label>Collection</label>
@@ -112,12 +111,10 @@
           <button id="regenDescBtn" class="secondary-btn" disabled>Description</button>
         </div>
       </section>
-
       <section class="card">
         <div class="card-head"><h3>Titre</h3><button id="copyTitle">⌘C</button></div>
         <pre id="titleText"></pre>
       </section>
-
       <section class="card">
         <div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div>
         <pre id="descText"></pre>
