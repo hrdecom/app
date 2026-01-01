@@ -18,9 +18,9 @@ export async function onRequestPost({ request, env }) {
     } else if (action === "regen_desc") {
       prompt = `${baseInstructions}\nTASK: New description. JSON: { "description": "..." }`;
     } else if (action === "headlines") {
-      prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}\nSTYLE: ${style}\nTASK: Generate 5 hooks. JSON: { "headlines": ["...", "..."] }`;
+      prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}\nSTYLE: ${style}\nTASK: Generate 5 catchy hooks. JSON: { "headlines": ["...", "...", "...", "...", "..."] }`;
     } else if (action === "headlines_similar") {
-      prompt = `Viral Copywriting Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Context: ${currentTitle}. TASK: 5 improved varied versions. English. JSON: { "headlines": ["...", "..."] }`;
+      prompt = `Viral Copywriting Expert. Based on these selected headlines: ${JSON.stringify(selectedForSimilar)}. Context Title: ${currentTitle}. TASK: 5 improved varied versions. English. JSON: { "headlines": ["...", "...", "...", "...", "..."] }`;
     }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
