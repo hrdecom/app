@@ -56,6 +56,7 @@
     $("promptDesc").value = state.config.promptDesc || DEFAULTS.promptDesc;
     $("promptHeadlines").value = state.config.promptHeadlines || DEFAULTS.promptHeadlines;
     $("configBlacklist").value = state.config.blacklist || "";
+    
     $("collectionsList").innerHTML = state.config.collections.map((c, i) => `
       <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
         <input type="text" value="${c.name}" onchange="updateCol(${i}, 'name', this.value)" style="flex:1">
@@ -95,13 +96,14 @@
     if (!state.imageBase64) return;
     startLoading();
     try {
+      const historyNames = state.historyCache.map(h => h.product_name).filter(Boolean);
       const res = await fetch("/api/generate", {
         method: "POST",
         body: JSON.stringify({
           action, image: state.imageBase64, media_type: state.imageMime,
           collection: $("collectionSelect").value, config: state.config,
-          historyNames: state.historyCache.map(h => h.product_name).filter(Boolean),
-          currentTitle: $("titleText").textContent, currentDesc: $("descText").textContent, ...extra
+          historyNames, currentTitle: $("titleText").textContent, 
+          currentDesc: $("descText").textContent, ...extra
         })
       });
       const data = await res.json();
@@ -114,14 +116,22 @@
         const hData = await hRes.json();
         state.currentHistoryId = hData.id;
         state.selectedHeadlines = []; state.sessionGeneratedHeadlines = [];
+        
+        // Enable regen buttons
+        $("regenTitleBtn").disabled = false;
+        $("regenDescBtn").disabled = false;
         await loadHistory();
       } else if (action === 'regen_title' || action === 'regen_desc') {
         if (action === 'regen_title') $("titleText").textContent = data.title;
         else $("descText").textContent = data.description;
+        
         if (state.currentHistoryId) {
           await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, title: $("titleText").textContent, description: $("descText").textContent }) });
           await loadHistory();
         }
+        // Re-enable
+        $("regenTitleBtn").disabled = false;
+        $("regenDescBtn").disabled = false;
       } else if (action === 'headlines' || action === 'headlines_similar') {
         state.sessionGeneratedHeadlines = [...(data.headlines || []), ...state.sessionGeneratedHeadlines];
         state.headlinesPage = 1;
@@ -150,8 +160,7 @@
     if (total <= 1) return;
     for (let i = 1; i <= total; i++) {
         const btn = document.createElement("button");
-        btn.textContent = i;
-        if (i === state.headlinesPage) btn.className = "active";
+        btn.textContent = i; if (i === state.headlinesPage) btn.className = "active";
         btn.onclick = () => { state.headlinesPage = i; renderHeadlinesResults(); };
         container.appendChild(btn);
     }
@@ -242,14 +251,18 @@
         state.imageBase64 = ev.target.result.split(",")[1];
         $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden");
         $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
-        state.currentHistoryId = null; state.selectedHeadlines = []; state.sessionGeneratedHeadlines = []; renderHistoryUI();
+        state.currentHistoryId = null; state.selectedHeadlines = []; state.sessionGeneratedHeadlines = [];
+        $("titleText").textContent = ""; $("descText").textContent = "";
+        $("regenTitleBtn").disabled = true; $("regenDescBtn").disabled = true;
+        renderHistoryUI();
       };
       reader.readAsDataURL(file);
     };
 
     $("removeImage").onclick = (e) => {
-      e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null; state.sessionGeneratedHeadlines = [];
-      $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block"; $("generateBtn").disabled = true;
+      e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null;
+      $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block";
+      $("generateBtn").disabled = true; $("regenTitleBtn").disabled = true; $("regenDescBtn").disabled = true;
     };
 
     $("saveConfig").onclick = async () => {
@@ -299,6 +312,7 @@
     $("previewImg").src = `data:image/jpeg;base64,${item.image}`;
     state.imageBase64 = item.image; $("preview").classList.remove("hidden");
     $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
+    $("regenTitleBtn").disabled = false; $("regenDescBtn").disabled = false;
     renderHistoryUI(); window.scrollTo({top:0, behavior:'smooth'});
   };
 
