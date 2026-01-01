@@ -9,45 +9,18 @@ export async function onRequestPost({ request, env }) {
     const jsonSafeRule = "IMPORTANT: Return valid JSON. Escape double quotes with backslash (\\\"). Output ONLY JSON.";
 
     let prompt = "";
-    
-    // Actions de base (Gen / Regen)
-    if (action === "generate" || action === "regen_title" || action === "regen_desc") {
-      const baseInstructions = `${config.promptSystem}\n${jsonSafeRule}\nCONTEXT: ${collectionInfo}\nTITLES: ${config.promptTitles}\nDESC: ${config.promptDesc}`;
-      
-      if (action === "generate") {
-        prompt = `${baseInstructions}\nBLACKLIST: ${config.blacklist}\nHISTORY: ${JSON.stringify(historyNames)}\nTASK: Analyze image and output JSON: { "product_name": "...", "title": "...", "description": "..." }`;
-      } else if (action === "regen_title") {
-        prompt = `${baseInstructions}\nTASK: New product_name/title. Different from: "${currentTitle}". JSON: { "product_name": "...", "title": "..." }`;
-      } else if (action === "regen_desc") {
-        prompt = `${baseInstructions}\nTASK: New description. JSON: { "description": "..." }`;
-      }
-    } 
-    
-    // NOUVELLE ACTION : HEADLINES
-    else if (action === "headlines") {
-      prompt = `${config.promptHeadlines}
-        ${jsonSafeRule}
-        DEFAULT LANGUAGE: English.
-        
-        PRODUCT CONTEXT:
-        - Title: ${currentTitle}
-        - Description: ${currentDesc}
-        
-        USER STYLE REQUEST: ${style}
-        
-        TASK: Based on the jewelry image and the context above, generate 5 viral hooks/headlines.
-        Output ONLY JSON: { "headlines": ["...", "...", "...", "...", "..."] }`;
-    }
+    const baseInstructions = `${config.promptSystem}\n${jsonSafeRule}\nCONTEXT: ${collectionInfo}\nTITLES: ${config.promptTitles}\nDESC: ${config.promptDesc}`;
 
-    // NOUVELLE ACTION : SIMILAIRES
-    else if (action === "headlines_similar") {
-      prompt = `You are a viral copywriting expert. 
-        Based on these selected headlines: ${JSON.stringify(selectedForSimilar)}.
-        And this product context: "${currentTitle}".
-        
-        TASK: Generate 5 NEW versions that are similar in tone but improved, more punchy or slightly varied.
-        LANGUAGE: English.
-        Output ONLY JSON: { "headlines": ["...", "...", "...", "...", "..."] }`;
+    if (action === "generate") {
+      prompt = `${baseInstructions}\nBLACKLIST: ${config.blacklist}\nHISTORY: ${JSON.stringify(historyNames)}\nTASK: Analyze image and output JSON: { "product_name": "...", "title": "...", "description": "..." }`;
+    } else if (action === "regen_title") {
+      prompt = `${baseInstructions}\nTASK: New product_name/title. Different from: "${currentTitle}". JSON: { "product_name": "...", "title": "..." }`;
+    } else if (action === "regen_desc") {
+      prompt = `${baseInstructions}\nTASK: New description. JSON: { "description": "..." }`;
+    } else if (action === "headlines") {
+      prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}\nSTYLE: ${style}\nTASK: Generate 5 hooks. JSON: { "headlines": ["...", "..."] }`;
+    } else if (action === "headlines_similar") {
+      prompt = `Viral Copywriting Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Context: ${currentTitle}. TASK: 5 improved varied versions. English. JSON: { "headlines": ["...", "..."] }`;
     }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
