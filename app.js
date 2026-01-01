@@ -10,10 +10,14 @@
     promptTitles: "TITLE FORMAT: Ring: Adjustable {Collection} Ring \"{Name}\". Others: {Collection} {Type} \"{Name}\". Symbolic name must be 1-2 words. NO hyphens.",
     promptDesc: "DESCRIPTION: Exactly TWO paragraphs. Each paragraph MUST be 180 characters or LESS. NO ellipses \"...\". Tone: Luxury.",
     promptHeadlines: "You are a Viral TikTok & Reels Strategist specialized in high-end jewelry UGC. Your goal is to stop the scroll in the first 1.5 seconds.",
+    promptAdCopys: "You are a Facebook Ads expert for luxury jewelry. Write engaging ad copies that drive sales.",
     headlineStyles: [
-        { name: "Symbolique", prompt: "Use a deep symbolic and emotional tone related to the product concept." },
-        { name: "POV", prompt: "Write from the perspective of someone receiving this as a gift." },
-        { name: "Généraliste", prompt: "Broad, catchy hooks for a wide audience." }
+        { name: "Symbolique", prompt: "Use a deep symbolic tone." },
+        { name: "POV", prompt: "Write from a gift perspective." }
+    ],
+    adStyles: [
+        { name: "Cadeau", prompt: "Focus on the emotion of gifting." },
+        { name: "Luxe", prompt: "Focus on the premium materials and elegance." }
     ]
   };
 
@@ -21,33 +25,28 @@
     imageBase64: null, imageMime: "image/jpeg", historyCache: [],
     config: JSON.parse(JSON.stringify(DEFAULTS)),
     currentPage: 1, pageSize: 5, searchQuery: "", currentHistoryId: null,
-    timerInterval: null,
-    sessionGeneratedHeadlines: [], headlinesPage: 1, headlinesPageSize: 5,
-    selectedHeadlines: [], selectedStyleButtons: []
+    sessionHeadlines: [], sessionAds: [],
+    selectedHeadlines: [], selectedAds: [],
+    selHlStyles: [], selAdStyles: [],
+    hlPage: 1, adPage: 1
   };
 
-  /* TIMER */
   function startLoading() {
     let s = 0; $("timer").textContent = "00:00";
-    if (state.timerInterval) clearInterval(state.timerInterval);
     state.timerInterval = setInterval(() => {
       s++; const mm = String(Math.floor(s/60)).padStart(2,"0"); const ss = String(s%60).padStart(2,"0");
       $("timer").textContent = `${mm}:${ss}`;
     }, 1000);
     $("loading").classList.remove("hidden");
   }
-  function stopLoading() { clearInterval(state.timerInterval); state.timerInterval = null; $("loading").classList.add("hidden"); }
+  function stopLoading() { clearInterval(state.timerInterval); $("loading").classList.add("hidden"); }
 
-  /* CONFIG */
   async function loadConfig() {
     const res = await fetch("/api/settings");
     const data = await res.json();
     const saved = data.find(i => i.id === 'full_config');
-    if (saved) {
-        state.config = JSON.parse(saved.value);
-        if (!state.config.headlineStyles) state.config.headlineStyles = DEFAULTS.headlineStyles;
-    }
-    renderConfigUI(); renderStyleSelector();
+    if (saved) state.config = JSON.parse(saved.value);
+    renderConfigUI();
   }
 
   function renderConfigUI() {
@@ -55,55 +54,73 @@
     $("promptTitles").value = state.config.promptTitles || DEFAULTS.promptTitles;
     $("promptDesc").value = state.config.promptDesc || DEFAULTS.promptDesc;
     $("promptHeadlines").value = state.config.promptHeadlines || DEFAULTS.promptHeadlines;
+    $("promptAdCopys").value = state.config.promptAdCopys || DEFAULTS.promptAdCopys;
     $("configBlacklist").value = state.config.blacklist || "";
     
     $("collectionsList").innerHTML = state.config.collections.map((c, i) => `
-      <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
+      <div style="display:flex; gap:10px; margin-bottom:10px;">
         <input type="text" value="${c.name}" onchange="updateCol(${i}, 'name', this.value)" style="flex:1">
-        <textarea onchange="updateCol(${i}, 'meaning', this.value)" style="flex:2; height:40px;">${c.meaning}</textarea>
+        <textarea onchange="updateCol(${i}, 'meaning', this.value)" style="flex:2; height:45px;">${c.meaning}</textarea>
         <button onclick="removeCol(${i})">×</button>
       </div>`).join("");
-    $("styleButtonsEditor").innerHTML = state.config.headlineStyles.map((s, i) => `
-      <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
+
+    $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || DEFAULTS.headlineStyles).map((s, i) => `
+      <div style="display:flex; gap:5px; margin-bottom:10px;">
         <input type="text" value="${s.name}" onchange="updateStyleBtn(${i}, 'name', this.value)" style="flex:1">
-        <textarea onchange="updateStyleBtn(${i}, 'prompt', this.value)" style="flex:3; height:40px;">${s.prompt}</textarea>
+        <input type="text" value="${s.prompt}" onchange="updateStyleBtn(${i}, 'prompt', this.value)" style="flex:3">
         <button onclick="removeStyleBtn(${i})">×</button>
       </div>`).join("");
+
+    $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || DEFAULTS.adStyles).map((s, i) => `
+      <div style="display:flex; gap:5px; margin-bottom:10px;">
+        <input type="text" value="${s.name}" onchange="updateAdStyleBtn(${i}, 'name', this.value)" style="flex:1">
+        <input type="text" value="${s.prompt}" onchange="updateAdStyleBtn(${i}, 'prompt', this.value)" style="flex:3">
+        <button onclick="removeAdStyleBtn(${i})">×</button>
+      </div>`).join("");
+    
     $("collectionSelect").innerHTML = state.config.collections.map(c => `<option value="${c.name}">${c.name}</option>`).join("");
+    renderStyleSelectors();
   }
 
   window.updateCol = (i, f, v) => state.config.collections[i][f] = v;
   window.removeCol = (i) => { state.config.collections.splice(i, 1); renderConfigUI(); };
   $("addCollection").onclick = () => { state.config.collections.push({name:"", meaning:""}); renderConfigUI(); };
+  
   window.updateStyleBtn = (i, f, v) => state.config.headlineStyles[i][f] = v;
   window.removeStyleBtn = (i) => { state.config.headlineStyles.splice(i, 1); renderConfigUI(); };
-  $("addStyleBtn").onclick = () => { state.config.headlineStyles.push({name:"Nouveau Style", prompt:""}); renderConfigUI(); };
+  $("addStyleBtn").onclick = () => { state.config.headlineStyles.push({name:"", prompt:""}); renderConfigUI(); };
 
-  /* HEADLINES UI */
-  function renderStyleSelector() {
-    $("styleSelectorContainer").innerHTML = state.config.headlineStyles.map(s => `
-        <div class="style-tag ${state.selectedStyleButtons.includes(s.name) ? 'selected' : ''}" 
-             onclick="toggleStyleButton('${s.name}', this)">${s.name}</div>`).join("");
+  window.updateAdStyleBtn = (i, f, v) => state.config.adStyles[i][f] = v;
+  window.removeAdStyleBtn = (i) => { state.config.adStyles.splice(i, 1); renderConfigUI(); };
+  $("addAdStyleBtn").onclick = () => { state.config.adStyles.push({name:"", prompt:""}); renderConfigUI(); };
+
+  function renderStyleSelectors() {
+    $("styleSelectorContainer").innerHTML = (state.config.headlineStyles || []).map(s => `
+        <div class="style-tag ${state.selHlStyles.includes(s.name) ? 'selected' : ''}" onclick="toggleStyle('hl', '${s.name}', this)">${s.name}</div>`).join("");
+    $("adStyleSelectorContainer").innerHTML = (state.config.adStyles || []).map(s => `
+        <div class="style-tag ${state.selAdStyles.includes(s.name) ? 'selected' : ''}" onclick="toggleStyle('ad', '${s.name}', this)">${s.name}</div>`).join("");
   }
-  window.toggleStyleButton = (name, el) => {
-    if (state.selectedStyleButtons.includes(name)) state.selectedStyleButtons = state.selectedStyleButtons.filter(n => n !== name);
-    else state.selectedStyleButtons.push(name);
+
+  window.toggleStyle = (type, name, el) => {
+    let list = (type === 'hl') ? state.selHlStyles : state.selAdStyles;
+    if (list.includes(name)) list.splice(list.indexOf(name), 1);
+    else list.push(name);
     el.classList.toggle('selected');
   };
 
-  /* API */
   async function apiCall(action, extra = {}) {
     if (!state.imageBase64) return;
     startLoading();
     try {
-      const historyNames = state.historyCache.map(h => h.product_name).filter(Boolean);
       const res = await fetch("/api/generate", {
         method: "POST",
         body: JSON.stringify({
           action, image: state.imageBase64, media_type: state.imageMime,
           collection: $("collectionSelect").value, config: state.config,
-          historyNames, currentTitle: $("titleText").textContent, 
-          currentDesc: $("descText").textContent, ...extra
+          historyNames: state.historyCache.map(h => h.product_name),
+          currentTitle: $("titleText").textContent, 
+          currentDesc: $("descText").textContent,
+          product_url: $("productUrlInput").value, ...extra
         })
       });
       const data = await res.json();
@@ -112,76 +129,89 @@
       if (action === 'generate') {
         $("titleText").textContent = data.title;
         $("descText").textContent = data.description;
-        const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name }) });
+        const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name, product_url: $("productUrlInput").value }) });
         const hData = await hRes.json();
         state.currentHistoryId = hData.id;
-        state.selectedHeadlines = []; state.sessionGeneratedHeadlines = [];
-        
-        // Enable regen buttons
-        $("regenTitleBtn").disabled = false;
-        $("regenDescBtn").disabled = false;
+        state.selectedHeadlines = []; state.selectedAds = []; state.sessionHeadlines = []; state.sessionAds = [];
         await loadHistory();
       } else if (action === 'regen_title' || action === 'regen_desc') {
         if (action === 'regen_title') $("titleText").textContent = data.title;
         else $("descText").textContent = data.description;
-        
-        if (state.currentHistoryId) {
-          await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, title: $("titleText").textContent, description: $("descText").textContent }) });
-          await loadHistory();
-        }
-        // Re-enable
-        $("regenTitleBtn").disabled = false;
-        $("regenDescBtn").disabled = false;
+        if (state.currentHistoryId) await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, title: $("titleText").textContent, description: $("descText").textContent }) });
+        await loadHistory();
       } else if (action === 'headlines' || action === 'headlines_similar') {
-        state.sessionGeneratedHeadlines = [...(data.headlines || []), ...state.sessionGeneratedHeadlines];
-        state.headlinesPage = 1;
-        renderHeadlinesResults();
-        $("similarActions").classList.add("hidden"); 
+        state.sessionHeadlines = [...(data.headlines || []), ...state.sessionHeadlines];
+        state.hlPage = 1; renderHeadlines();
+      } else if (action === 'ad_copys') {
+        state.sessionAds = [...(data.ad_copys || []), ...state.sessionAds];
+        state.adPage = 1; renderAds();
       }
     } catch(e) { alert("Erreur: " + e.message); }
     finally { stopLoading(); }
   }
 
-  function renderHeadlinesResults() {
-    const start = (state.headlinesPage - 1) * state.headlinesPageSize;
-    const paginated = state.sessionGeneratedHeadlines.slice(start, start + state.headlinesPageSize);
+  /* RENDER HEADLINES */
+  function renderHeadlines() {
+    const start = (state.hlPage - 1) * 5;
+    const paginated = state.sessionHeadlines.slice(start, start + 5);
     $("headlinesResults").innerHTML = paginated.map((h, i) => `
-        <div class="headline-item" onclick="toggleHlSelect(${start + i}, this)">
-            <input type="checkbox" id="chk-${start + i}">
+        <div class="headline-item" onclick="toggleItemSelect('hl', ${start+i}, this)">
+            <input type="checkbox" id="chk-hl-${start+i}">
             <span class="headline-text">${h}</span>
         </div>`).join("");
-    renderHeadlinesPagination();
+    renderLocalPagination('hl');
   }
 
-  function renderHeadlinesPagination() {
-    const total = Math.ceil(state.sessionGeneratedHeadlines.length / state.headlinesPageSize);
-    const container = $("headlinesLocalPagination");
+  /* RENDER ADS */
+  function renderAds() {
+    const start = (state.adPage - 1) * 5;
+    const paginated = state.sessionAds.slice(start, start + 5);
+    $("adsResults").innerHTML = paginated.map((h, i) => `
+        <div class="headline-item" onclick="toggleItemSelect('ad', ${start+i}, this)">
+            <input type="checkbox" id="chk-ad-${start+i}">
+            <span class="headline-text">${h}</span>
+        </div>`).join("");
+    renderLocalPagination('ad');
+  }
+
+  window.toggleItemSelect = (type, idx, el) => {
+    const cb = el.querySelector('input');
+    cb.checked = !cb.checked;
+    el.classList.toggle('selected', cb.checked);
+    if(type === 'hl') $("similarActions").classList.toggle('hidden', !document.querySelectorAll('#headlinesResults .selected').length);
+  };
+
+  function renderLocalPagination(type) {
+    const list = (type === 'hl') ? state.sessionHeadlines : state.sessionAds;
+    const container = (type === 'hl') ? $("headlinesLocalPagination") : $("adsLocalPagination");
+    const total = Math.ceil(list.length / 5);
     container.innerHTML = "";
     if (total <= 1) return;
     for (let i = 1; i <= total; i++) {
-        const btn = document.createElement("button");
-        btn.textContent = i; if (i === state.headlinesPage) btn.className = "active";
-        btn.onclick = () => { state.headlinesPage = i; renderHeadlinesResults(); };
+        const btn = document.createElement("button"); btn.textContent = i;
+        if (i === (type === 'hl' ? state.hlPage : state.adPage)) btn.className = "active";
+        btn.onclick = () => { if(type === 'hl') state.hlPage = i; else state.adPage = i; type === 'hl' ? renderHeadlines() : renderAds(); };
         container.appendChild(btn);
     }
   }
 
-  window.toggleHlSelect = (idx, el) => {
-    const cb = el.querySelector('input');
-    cb.checked = !cb.checked;
-    el.classList.toggle('selected', cb.checked);
-    const anyChecked = Array.from(document.querySelectorAll('.headline-item.selected')).length > 0;
-    $("similarActions").classList.toggle('hidden', !anyChecked);
-  };
-
-  async function saveSelectedHeadlines() {
+  async function saveSelections(type) {
     if (!state.currentHistoryId) return;
+    const isHl = type === 'hl';
+    const list = isHl ? state.sessionHeadlines : state.sessionAds;
+    const containerId = isHl ? 'headlinesResults' : 'adsResults';
     const selected = [];
-    document.querySelectorAll('.headline-item.selected .headline-text').forEach(it => selected.push(it.textContent));
-    if (selected.length === 0) return alert("Sélectionnez au moins une headline.");
-    state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...selected])];
-    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, headlines: JSON.stringify(state.selectedHeadlines) }) });
-    renderSavedHeadlines();
+    document.querySelectorAll(`#${containerId} .selected .headline-text`).forEach(it => selected.push(it.textContent));
+    
+    if (isHl) {
+        state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...selected])];
+        await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, headlines: JSON.stringify(state.selectedHeadlines) }) });
+        renderSavedHeadlines();
+    } else {
+        state.selectedAds = [...new Set([...state.selectedAds, ...selected])];
+        await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, ad_copys: JSON.stringify(state.selectedAds) }) });
+        renderSavedAds();
+    }
     alert("Enregistré !");
   }
 
@@ -189,18 +219,46 @@
     $("headlinesSavedList").innerHTML = state.selectedHeadlines.map((h, i) => `
         <div class="headline-item no-hover">
             <span class="headline-text">${h}</span>
-            <div style="display:flex; gap:5px;">
-                <button class="icon-btn-small" onclick="copyHl('${h.replace(/'/g,"\\'")}')">📋</button>
-                <button class="icon-btn-small delete-hl" onclick="deleteSavedHl(${i})">×</button>
-            </div>
+            <button class="icon-btn-small delete-hl" onclick="deleteSaved('hl', ${i})">×</button>
         </div>`).join("");
   }
 
-  window.deleteSavedHl = async (index) => {
-    if(!confirm("Supprimer cette headline ?")) return;
-    state.selectedHeadlines.splice(index, 1);
-    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, headlines: JSON.stringify(state.selectedHeadlines) }) });
-    renderSavedHeadlines();
+  function renderSavedAds() {
+    $("adsSavedList").innerHTML = state.selectedAds.map((h, i) => `
+        <div class="headline-item no-hover" style="flex-direction:column; align-items:flex-start;">
+            <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
+                <strong style="font-size:10px; color:var(--apple-blue);">PRIMARY TEXT ${i+1}</strong>
+                <div style="display:flex; gap:10px;">
+                    <button class="icon-btn-small" onclick="copyHl('${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}')">📋</button>
+                    <button class="icon-btn-small delete-hl" onclick="deleteSaved('ad', ${i})">×</button>
+                </div>
+            </div>
+            <span class="headline-text" style="white-space:pre-wrap;">${h}</span>
+        </div>`).join("");
+    
+    const name = $("titleText").textContent;
+    const url = $("productUrlInput").value;
+    $("adsDefaultInfoBlock").innerHTML = `
+        <div class="ads-info-row"><span style="flex:1"><span class="ads-info-label">TITRE 1</span>${name}</span><button onclick="copyHl('${name.replace(/'/g,"\\'")}')">📋</button></div>
+        <div class="ads-info-row"><span style="flex:1"><span class="ads-info-label">TITRE 2</span>${name} - Special Offer</span><button onclick="copyHl('${name.replace(/'/g,"\\'")} - Special Offer')">📋</button></div>
+        <div class="ads-info-row"><span style="flex:1"><span class="ads-info-label">TITRE 3</span>Gift Idea - ${name}</span><button onclick="copyHl('Gift Idea - ${name.replace(/'/g,"\\'")}')">📋</button></div>
+        <div class="ads-info-row"><span style="flex:1"><span class="ads-info-label">TITRE 4</span>${name} - Valentine's Day Gift Idea</span><button onclick="copyHl('${name.replace(/'/g,"\\'")} - Valentine's Day Gift Idea')">📋</button></div>
+        <div class="ads-info-row"><span style="flex:1"><span class="ads-info-label">SUB</span>Free Shipping Worldwide Today</span><button onclick="copyHl('Free Shipping Worldwide Today')">📋</button></div>
+        <div class="ads-info-row"><span style="flex:1"><span class="ads-info-label">URL</span>${url}</span><button onclick="copyHl('${url}')">📋</button></div>
+    `;
+  }
+
+  window.deleteSaved = async (type, index) => {
+    if(!confirm("Supprimer ?")) return;
+    if(type === 'hl') {
+        state.selectedHeadlines.splice(index, 1);
+        await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, headlines: JSON.stringify(state.selectedHeadlines) }) });
+        renderSavedHeadlines();
+    } else {
+        state.selectedAds.splice(index, 1);
+        await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, ad_copys: JSON.stringify(state.selectedAds) }) });
+        renderSavedAds();
+    }
   };
 
   window.copyHl = (t) => { navigator.clipboard.writeText(t); alert("Copié"); };
@@ -209,15 +267,15 @@
     $("loading").classList.add("hidden");
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
-    $("openHeadlinesBtn").onclick = () => {
-        if(!state.currentHistoryId) return alert("Générez un produit d'abord.");
-        $("headlinesModal").classList.remove("hidden"); renderSavedHeadlines();
-    };
+    
+    $("openHeadlinesBtn").onclick = () => { if(!state.currentHistoryId) return; $("headlinesModal").classList.remove("hidden"); renderSavedHeadlines(); };
     $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
+    
+    $("openAdsBtn").onclick = () => { if(!state.currentHistoryId) return; $("adsModal").classList.remove("hidden"); renderSavedAds(); };
+    $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
 
     window.onclick = (e) => { 
-        if (e.target == $("settingsModal")) $("settingsModal").classList.add("hidden");
-        if (e.target == $("headlinesModal")) $("headlinesModal").classList.add("hidden");
+        if (e.target.classList.contains('modal')) e.target.classList.add("hidden");
     };
 
     document.querySelectorAll(".tab-link").forEach(btn => {
@@ -230,14 +288,27 @@
     });
 
     $("sendHeadlineChat").onclick = () => {
-        const stylePrompts = (state.selectedStyleButtons || []).map(n => state.config.headlineStyles.find(s => s.name === n)?.prompt).filter(Boolean).join(" ");
-        apiCall('headlines', { style: stylePrompts + " " + $("headlineStyleInput").value });
+        const style = state.selHlStyles.map(n => state.config.headlineStyles.find(s => s.name === n)?.prompt).join(" ");
+        apiCall('headlines', { style: style + " " + $("headlineStyleInput").value });
     };
+
+    $("sendAdChat").onclick = () => {
+        const style = state.selAdStyles.map(n => state.config.adStyles.find(s => s.name === n)?.prompt).join(" ");
+        apiCall('ad_copys', { style: style + " " + $("adStyleInput").value });
+    };
+
     $("genSimilarBtn").onclick = () => {
-        const selected = []; document.querySelectorAll('.headline-item.selected .headline-text').forEach(it => selected.push(it.textContent));
+        const selected = []; document.querySelectorAll('#headlinesResults .selected .headline-text').forEach(it => selected.push(it.textContent));
         apiCall('headlines_similar', { selectedForSimilar: selected });
     };
-    $("saveHeadlinesBtn").onclick = saveSelectedHeadlines;
+
+    $("saveHeadlinesBtn").onclick = () => saveSelections('hl');
+    $("saveAdsBtn").onclick = () => saveSelections('ad');
+    
+    $("productUrlInput").onchange = async () => {
+        if(state.currentHistoryId) await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, product_url: $("productUrlInput").value }) });
+    };
+
     $("generateBtn").onclick = () => apiCall('generate');
     $("regenTitleBtn").onclick = () => apiCall('regen_title');
     $("regenDescBtn").onclick = () => apiCall('regen_desc');
@@ -251,10 +322,7 @@
         state.imageBase64 = ev.target.result.split(",")[1];
         $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden");
         $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
-        state.currentHistoryId = null; state.selectedHeadlines = []; state.sessionGeneratedHeadlines = [];
-        $("titleText").textContent = ""; $("descText").textContent = "";
-        $("regenTitleBtn").disabled = true; $("regenDescBtn").disabled = true;
-        renderHistoryUI();
+        state.currentHistoryId = null; state.sessionHeadlines = []; state.sessionAds = []; $("productUrlInput").value = "";
       };
       reader.readAsDataURL(file);
     };
@@ -262,15 +330,15 @@
     $("removeImage").onclick = (e) => {
       e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null;
       $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block";
-      $("generateBtn").disabled = true; $("regenTitleBtn").disabled = true; $("regenDescBtn").disabled = true;
+      $("generateBtn").disabled = true;
     };
 
     $("saveConfig").onclick = async () => {
       state.config.promptSystem = $("promptSystem").value; state.config.promptTitles = $("promptTitles").value;
       state.config.promptDesc = $("promptDesc").value; state.config.promptHeadlines = $("promptHeadlines").value;
-      state.config.blacklist = $("configBlacklist").value;
+      state.config.promptAdCopys = $("promptAdCopys").value; state.config.blacklist = $("configBlacklist").value;
       await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
-      alert("Enregistré"); $("settingsModal").classList.add("hidden"); renderConfigUI(); renderStyleSelector();
+      alert("Enregistré"); $("settingsModal").classList.add("hidden"); renderConfigUI();
     };
 
     $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
@@ -283,15 +351,15 @@
 
   function renderHistoryUI() {
     const filtered = state.historyCache.filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
-    const start = (state.currentPage - 1) * state.pageSize;
-    const paginated = filtered.slice(start, start + state.pageSize);
+    const start = (state.currentPage - 1) * 5;
+    const paginated = filtered.slice(start, start + 5);
     $("historyList").innerHTML = paginated.map(item => `
       <div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})">
         <img src="data:image/jpeg;base64,${item.image}" class="history-img">
         <div style="flex:1"><h4>${item.title || "Sans titre"}</h4></div>
         <button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button>
       </div>`).join("");
-    renderPagination(Math.ceil(filtered.length / state.pageSize));
+    renderPagination(Math.ceil(filtered.length / 5));
   }
 
   function renderPagination(total) {
@@ -307,12 +375,12 @@
     const item = state.historyCache.find(i => i.id === id); if(!item) return;
     state.currentHistoryId = id; 
     state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : [];
-    state.sessionGeneratedHeadlines = [];
+    state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
     $("titleText").textContent = item.title; $("descText").textContent = item.description;
+    $("productUrlInput").value = item.product_url || "";
     $("previewImg").src = `data:image/jpeg;base64,${item.image}`;
     state.imageBase64 = item.image; $("preview").classList.remove("hidden");
     $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
-    $("regenTitleBtn").disabled = false; $("regenDescBtn").disabled = false;
     renderHistoryUI(); window.scrollTo({top:0, behavior:'smooth'});
   };
 
