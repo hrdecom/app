@@ -1,7 +1,6 @@
 (() => {
   const $ = (id) => document.getElementById(id);
 
-  // PROMPTS D'ORIGINE STRICTS
   const DEFAULTS = {
     collections: [
       { name: "Initial", meaning: "Jewelry featuring 26 letter variants. Titles must contain 'Initial'." },
@@ -12,24 +11,17 @@
     ],
     promptSystem: "You are a senior luxury jewelry copywriter. Analyze the image and return a valid JSON object.",
     promptTitles: "TITLE FORMAT: Ring: Adjustable {Collection} Ring \"{Name}\". Others: {Collection} {Type} \"{Name}\". Symbolic name must be 1-2 words. NO hyphens.",
-    promptDesc: "DESCRIPTION: Exactly TWO paragraphs. Each paragraph MUST be 180 characters or LESS. NO ellipses \"...\". Tone: Luxury. Then bullet list: Materials: Stainless steel, Hypoallergenic, Water resistant. Ring: Adjustable, No green fingers. Bracelet: Size 16+5cm. Necklace: Length 46+5cm."
+    promptDesc: "DESCRIPTION: Exactly TWO paragraphs. Each paragraph MUST be 180 characters or LESS. NO ellipses \"...\". Tone: Luxury. Bullet list: Materials: Stainless steel, Hypoallergenic, Water resistant. Ring: Adjustable. Bracelet: 16+5cm. Necklace: 46+5cm."
   };
 
   let state = {
     imageBase64: null,
     imageMime: "image/jpeg",
     historyCache: [],
-    config: { 
-      promptSystem: DEFAULTS.promptSystem, 
-      promptTitles: DEFAULTS.promptTitles, 
-      promptDesc: DEFAULTS.promptDesc, 
-      collections: DEFAULTS.collections, 
-      blacklist: "" 
-    },
+    config: { ...DEFAULTS, blacklist: "" },
     currentPage: 1,
     pageSize: 5,
-    searchQuery: "",
-    currentHistoryId: null
+    searchQuery: ""
   };
 
   /* CONFIG */
@@ -42,14 +34,14 @@
   }
 
   function renderConfigUI() {
-    $("promptSystem").value = state.config.promptSystem;
-    $("promptTitles").value = state.config.promptTitles;
-    $("promptDesc").value = state.config.promptDesc;
-    $("configBlacklist").value = state.config.blacklist;
+    $("promptSystem").value = state.config.promptSystem || DEFAULTS.promptSystem;
+    $("promptTitles").value = state.config.promptTitles || DEFAULTS.promptTitles;
+    $("promptDesc").value = state.config.promptDesc || DEFAULTS.promptDesc;
+    $("configBlacklist").value = state.config.blacklist || "";
     
     $("collectionSelect").innerHTML = state.config.collections.map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     $("collectionsList").innerHTML = state.config.collections.map((c, i) => `
-      <div style="display:flex; gap:5px; margin-bottom:10px;">
+      <div style="display:flex; gap:10px; margin-bottom:10px;">
         <input type="text" value="${c.name}" onchange="updateCol(${i}, 'name', this.value)" style="flex:1">
         <textarea onchange="updateCol(${i}, 'meaning', this.value)" style="flex:2; height:40px;">${c.meaning}</textarea>
         <button onclick="removeCol(${i})">×</button>
@@ -79,14 +71,13 @@
     const currentList = state.config.blacklist.split(",").map(n => n.trim());
     state.config.blacklist = [...new Set([...currentList, ...names])].filter(n => n.length > 2).join(", ");
     $("configBlacklist").value = state.config.blacklist;
-    alert(`${names.length} noms ajoutés à la blacklist.`);
   };
 
-  /* IA CALLS */
+  /* IA ACTIONS */
   async function apiCall(action) {
     if (!state.imageBase64) return;
     $("loading").classList.remove("hidden");
-    const historyNames = state.historyCache.slice(0, 50).map(h => h.product_name);
+    const historyNames = state.historyCache.slice(0, 50).map(h => h.product_name).filter(Boolean);
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -100,28 +91,27 @@
           currentTitle: $("titleText").textContent
         })
       });
-      const data = await res.json();
       
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur serveur");
+
       if (action === 'generate') {
         $("titleText").textContent = data.title;
         $("descText").textContent = data.description;
         await fetch("/api/history", { method: "POST", body: JSON.stringify({ 
-          title: data.title, 
-          description: data.description, 
-          image: state.imageBase64, 
-          product_name: data.product_name 
+          title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name 
         }) });
         loadHistory();
-      } else if (action === 'regen_title') {
-        $("titleText").textContent = data.title;
-      } else if (action === 'regen_desc') {
-        $("descText").textContent = data.description;
-      }
+      } else if (action === 'regen_title') $("titleText").textContent = data.title;
+      else if (action === 'regen_desc') $("descText").textContent = data.description;
       
       $("regenTitleBtn").disabled = false;
       $("regenDescBtn").disabled = false;
-    } catch(e) { alert("Erreur IA: Vérifiez votre clé ou votre connexion."); }
-    finally { $("loading").classList.add("hidden"); }
+    } catch(e) { 
+      alert("Erreur: " + e.message); 
+    } finally { 
+      $("loading").classList.add("hidden"); 
+    }
   }
 
   /* INIT */
@@ -131,12 +121,12 @@
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
     window.onclick = (e) => { if (e.target == $("settingsModal")) $("settingsModal").classList.add("hidden"); };
 
-    document.querySelectorAll(".tab-link").forEach(btn => {
-      btn.onclick = () => {
-        document.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-link").forEach(t => {
+      t.onclick = () => {
+        document.querySelectorAll(".tab-link").forEach(l => l.classList.remove("active"));
         document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
-        btn.classList.add("active");
-        $(btn.dataset.tab).classList.remove("hidden");
+        t.classList.add("active");
+        $(t.dataset.tab).classList.remove("hidden");
       };
     });
 
@@ -178,30 +168,30 @@
       state.config.promptDesc = $("promptDesc").value;
       state.config.blacklist = $("configBlacklist").value;
       await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
-      alert("Configuration sauvegardée.");
+      alert("Enregistré");
       $("settingsModal").classList.add("hidden");
     };
 
     $("copyTitle").onclick = () => { navigator.clipboard.writeText($("titleText").textContent); alert("Titre copié"); };
     $("copyDesc").onclick = () => { navigator.clipboard.writeText($("descText").textContent); alert("Description copiée"); };
 
-    $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
+    $("historySearch").oninput = (e) => {
+      state.searchQuery = e.target.value;
+      state.currentPage = 1;
+      renderHistoryUI();
+    };
 
     loadConfig(); loadHistory();
   }
 
   async function loadHistory() {
-    try {
-      const res = await fetch("/api/history");
-      state.historyCache = await res.json();
-      renderHistoryUI();
-    } catch(e) {}
+    const res = await fetch("/api/history");
+    state.historyCache = await res.json();
+    renderHistoryUI();
   }
 
   function renderHistoryUI() {
     const filtered = state.historyCache.filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
-    $("historyTotal").textContent = `Total: ${filtered.length}`;
-    
     const start = (state.currentPage - 1) * state.pageSize;
     const paginated = filtered.slice(start, start + state.pageSize);
     
@@ -212,14 +202,14 @@
         <button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button>
       </div>
     `).join("");
-
+    
     renderPagination(Math.ceil(filtered.length / state.pageSize));
   }
 
-  function renderPagination(totalPages) {
+  function renderPagination(total) {
     const p = $("pagination"); p.innerHTML = "";
-    if (totalPages <= 1) return;
-    for(let i=1; i<=totalPages; i++) {
+    if (total <= 1) return;
+    for(let i=1; i<=total; i++) {
       const b = document.createElement("button");
       b.textContent = i;
       if(i === state.currentPage) b.className = "active";
@@ -238,8 +228,6 @@
     $("preview").classList.remove("hidden");
     $("dropPlaceholder").style.display = "none";
     $("generateBtn").disabled = false;
-    $("regenTitleBtn").disabled = false;
-    $("regenDescBtn").disabled = false;
     window.scrollTo({top:0, behavior:'smooth'});
   };
 
