@@ -6,35 +6,43 @@ body { background: var(--bg); margin: 0; padding: 40px 0; display: flex; justify
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .workspace { display: flex; gap: 24px; align-items: flex-start; }
 .left, .right { flex: 1; }
+
 .card { background: #fafafa; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); position: relative; }
 .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 
 /* IMAGE PLEIN BLOC FIXE */
 .drop { border: 2px dashed #ccc; border-radius: 12px; padding: 10px; text-align: center; cursor: pointer; position: relative; height: 500px; display: flex; align-items: center; justify-content: center; background: #fff; overflow: hidden; }
+.drop input { display: none; }
 .preview { position: absolute; inset: 0; background: #fff; display: flex; align-items: center; justify-content: center; z-index: 5; }
 .preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .modern-remove-btn { position: absolute; top: 15px; right: 15px; background: #fff; border: 1px solid #ddd; border-radius: 50%; width: 35px; height: 35px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; font-size: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
 
-button { padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-weight: 500; }
+button { padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-weight: 500; transition: 0.1s; }
 button.primary-btn { background: var(--primary); color: #fff; border: none; }
+button.secondary-btn { background: #fff; color: #333; }
 button:disabled { opacity: 0.3; cursor: not-allowed; }
-.actions { display: flex; gap: 12px; }
 
 pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid var(--border); min-height: 50px; font-size: 14px; margin: 0; }
 
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .modal-content { background: #fff; width: 850px; max-height: 90vh; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; }
 .modal-header, .modal-footer { padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.modal-footer { border-top: 1px solid var(--border); border-bottom: none; }
+.close-btn { background: none; border: none; font-size: 30px; cursor: pointer; color: #999; }
+
 .tabs { display: flex; background: #f9f9f9; border-bottom: 1px solid var(--border); }
-.tab-link { flex: 1; padding: 15px; border: none; cursor: pointer; }
+.tab-link { flex: 1; padding: 15px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; }
 .tab-link.active { background: #fff; border-bottom: 2px solid var(--primary); font-weight: bold; }
+
 .tab-content { padding: 20px; overflow-y: auto; flex: 1; }
 .prompt-segment { margin-bottom: 15px; }
 .prompt-segment label { font-weight: bold; font-size: 13px; display: block; margin-bottom: 5px; }
 textarea { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 12px; }
 
 .history-item { display: flex; gap: 15px; background: #fff; border: 1px solid var(--border); padding: 10px; border-radius: 12px; align-items: center; margin-bottom: 10px; cursor: pointer; }
+.history-item.active-history { border: 2px solid var(--primary); background: #f0f7ff; }
 .history-img { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; }
+
 .pagination { display: flex; justify-content: center; gap: 5px; margin-top: 15px; }
 .pagination button.active { background: var(--primary); color: #fff; }
 
@@ -42,4 +50,3 @@ textarea { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 10p
 .spinner { width: 32px; height: 32px; border: 3px solid #eee; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .hidden { display: none !important; }
-.active-history { border: 2px solid #000 !important; background: #fff !important; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
