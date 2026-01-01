@@ -47,20 +47,20 @@
       </div>
 
       <div id="tab-blacklist" class="tab-content hidden">
-        <label>Importer CSV (Recherche guillemets)</label>
+        <label>Importer CSV (Noms entre guillemets)</label>
         <input type="file" id="csvImport" accept=".csv" style="margin: 10px 0;"/>
-        <textarea id="configBlacklist" rows="10" placeholder="Unity, Hope..."></textarea>
+        <textarea id="configBlacklist" rows="8"></textarea>
       </div>
 
       <div class="modal-footer">
-        <button id="saveConfig" class="primary-btn">Enregistrer tout</button>
+        <button id="saveConfig" class="primary-btn">Enregistrer</button>
       </div>
     </div>
   </div>
 
   <div id="loading" class="loading hidden">
     <div class="spinner"></div>
-    <div><strong>Génération en cours...</strong><div id="timer">00:00</div></div>
+    <div><strong>Génération...</strong><div id="timer">00:00</div></div>
   </div>
 
   <section class="workspace">
