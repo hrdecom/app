@@ -2,15 +2,14 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HR Decom — Copywriting App</title>
-  <link rel="stylesheet" href="app.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HR Decom — Copywriting Bijoux</title>
+  <link rel="stylesheet" href="app.css"/>
 </head>
 <body>
 
 <div id="app">
 
-  <!-- HEADER -->
   <header class="header">
     <div class="brand">
       <div class="logo">✧</div>
@@ -22,15 +21,24 @@
     <button id="settingsBtn" class="icon-btn">⚙️</button>
   </header>
 
+  <!-- LOADING -->
+  <div id="loading" class="loading hidden">
+    <div class="spinner"></div>
+    <div>
+      <strong>Génération en cours</strong>
+      <div id="timer">00:00</div>
+    </div>
+  </div>
+
   <!-- SETTINGS -->
   <section id="settings" class="settings hidden">
     <h2>Paramètres</h2>
 
     <label>Clé de sauvegarde</label>
-    <input id="persistKey" placeholder="ex: hrdecom_v1" />
+    <input id="persistKey" placeholder="ex: hrdecom_v1"/>
 
     <label>CSV “déjà utilisé”</label>
-    <input id="csvFile" type="file" accept=".csv" />
+    <input id="csvFile" type="file" accept=".csv"/>
     <p id="csvInfo" class="hint">Aucun CSV importé.</p>
 
     <div class="actions-row">
@@ -39,45 +47,23 @@
       <button id="exportTemplate">Exporter (Titre+Desc)</button>
       <button id="exportBlocklist">Exporter “déjà utilisé”</button>
     </div>
-
-    <h2>Collections</h2>
-    <textarea id="collectionsEditor" rows="5"
-      placeholder="Une collection par ligne : Nom | Description"></textarea>
-
-    <input id="newCollection" placeholder="Nom" />
-    <textarea id="newCollectionDesc" rows="3"
-      placeholder="Description (style, mood, cible…)"></textarea>
-
-    <div class="actions-row">
-      <button id="addCollection">Ajouter</button>
-      <button id="resetCollections">Réinitialiser</button>
-      <button id="saveCollections">Sauvegarder</button>
-    </div>
   </section>
 
-  <!-- WORKSPACE -->
   <section class="workspace">
 
     <!-- LEFT -->
     <div class="left">
-
       <section class="card">
         <h2>Image du bijou</h2>
         <div id="drop" class="drop">
-          <input id="imageInput" type="file" accept="image/*" />
+          <input id="imageInput" type="file" accept="image/*"/>
           <div id="preview" class="preview hidden">
             <button id="removeImage" class="remove-btn">×</button>
-            <img id="previewImg" />
+            <img id="previewImg"/>
           </div>
           <p id="dropPlaceholder">Cliquez ou déposez une image</p>
         </div>
       </section>
-
-      <section class="card">
-        <h2>Historique</h2>
-        <div id="historyList"></div>
-      </section>
-
     </div>
 
     <!-- RIGHT -->
@@ -95,7 +81,6 @@
         <button id="regenDescBtn" disabled>Régénérer la description</button>
       </section>
 
-      <!-- TITRE -->
       <section class="card">
         <div class="card-head">
           <h3>Titre</h3>
@@ -104,7 +89,6 @@
         <pre id="titleText"></pre>
       </section>
 
-      <!-- DESCRIPTION SOUS LE TITRE -->
       <section class="card">
         <div class="card-head">
           <h3>Description</h3>
