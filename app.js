@@ -85,7 +85,6 @@
           historyNames, currentTitle: $("titleText").textContent
         })
       });
-      
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur IA");
 
@@ -98,7 +97,6 @@
         const hData = await hRes.json();
         state.currentHistoryId = hData.id;
 
-        // Blacklist Auto
         if (data.product_name) {
           let bList = state.config.blacklist.split(",").map(n => n.trim()).filter(n => n);
           if (!bList.includes(data.product_name)) {
@@ -110,7 +108,6 @@
         }
         await loadHistory();
       } else {
-        // RÉGÉNÉRATION : On conserve l'ID et on met à jour le serveur
         if (action === 'regen_title') $("titleText").textContent = data.title;
         if (action === 'regen_desc') $("descText").textContent = data.description;
 
@@ -133,9 +130,8 @@
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
     window.onclick = (e) => { if (e.target == $("settingsModal")) $("settingsModal").classList.add("hidden"); };
 
-    // FIX ONGLETS : Clicable de nouveau
     document.querySelectorAll(".tab-link").forEach(btn => {
-      btn.onclick = (e) => {
+      btn.onclick = () => {
         document.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active"));
         document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
         btn.classList.add("active");
@@ -149,12 +145,11 @@
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
-        const b64 = ev.target.result;
-        state.imageMime = b64.split(";")[0].split(":")[1] || "image/jpeg";
-        state.imageBase64 = b64.split(",")[1];
-        $("previewImg").src = b64; $("preview").classList.remove("hidden");
+        state.imageMime = ev.target.result.split(";")[0].split(":")[1] || "image/jpeg";
+        state.imageBase64 = ev.target.result.split(",")[1];
+        $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden");
         $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
-        state.currentHistoryId = null; // Nouveau produit
+        state.currentHistoryId = null; 
         $("titleText").textContent = ""; $("descText").textContent = "";
         renderHistoryUI();
       };
@@ -228,8 +223,7 @@
     state.imageBase64 = item.image; $("preview").classList.remove("hidden");
     $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
     $("regenTitleBtn").disabled = false; $("regenDescBtn").disabled = false;
-    renderHistoryUI();
-    window.scrollTo({top:0, behavior:'smooth'});
+    renderHistoryUI(); window.scrollTo({top:0, behavior:'smooth'});
   };
 
   window.deleteItem = async (id) => {
