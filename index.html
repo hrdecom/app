@@ -69,15 +69,17 @@
       <div id="tab-gen-headlines" class="tab-content">
         <div class="style-selector" id="styleSelectorContainer"></div>
         <div id="headlinesResults" class="headlines-results"></div>
-        <div id="headlinesLocalPagination" class="pagination"></div>
-        <div id="headlinesActionsGroup" class="headlines-actions hidden">
-            <button id="genSimilarBtn" class="secondary-btn" style="width:100%; color: var(--apple-blue);">✨ Générer versions similaires</button>
+        <div class="headlines-actions-wrapper">
+            <div class="headlines-actions hidden" id="similarActions">
+                <button id="genSimilarBtn" class="secondary-btn" style="width:100%; color: var(--apple-blue);">✨ Générer versions similaires</button>
+            </div>
+            <div id="headlinesLocalPagination" class="pagination"></div>
         </div>
       </div>
       <div id="tab-saved-headlines" class="tab-content hidden">
         <div id="headlinesSavedList" class="headlines-results"></div>
       </div>
-      <div class="chat-container"><div class="chat-bar"><input type="text" id="headlineStyleInput" placeholder="Précisez votre demande..."/><button id="sendHeadlineChat">↑</button></div></div>
+      <div class="chat-container"><div class="chat-bar"><input type="text" id="headlineStyleInput" placeholder="Style... (optionnel)"/><button id="sendHeadlineChat">↑</button></div></div>
       <div class="modal-footer"><button id="saveHeadlinesBtn" class="primary-btn">Enregistrer les sélections</button></div>
     </div>
   </div>
@@ -93,13 +95,19 @@
       <div id="tab-gen-ads" class="tab-content">
         <div class="style-selector" id="adStyleSelectorContainer"></div>
         <div id="adsResults" class="headlines-results"></div>
-        <div id="adsLocalPagination" class="pagination"></div>
+        
+        <div class="headlines-actions-wrapper">
+            <div class="headlines-actions hidden" id="similarAdsActions">
+                <button id="genSimilarAdsBtn" class="secondary-btn" style="width:100%; color: var(--apple-blue);">✨ Générer versions similaires améliorées</button>
+            </div>
+            <div id="adsLocalPagination" class="pagination"></div>
+        </div>
       </div>
       <div id="tab-saved-ads" class="tab-content hidden">
         <div id="adsSavedList" class="headlines-results"></div>
         <div id="adsDefaultInfoBlock" class="ads-info-block"></div>
       </div>
-      <div class="chat-container"><div class="chat-bar"><input type="text" id="adStyleInput" placeholder="Style de pub..."/><button id="sendAdChat">↑</button></div></div>
+      <div class="chat-container"><div class="chat-bar"><input type="text" id="adStyleInput" placeholder="Style de pub... (ex: UGC, Promo)"/><button id="sendAdChat">↑</button></div></div>
       <div class="modal-footer"><button id="saveAdsBtn" class="primary-btn">Enregistrer les sélections</button></div>
     </div>
   </div>
@@ -140,7 +148,7 @@
         
         <div style="margin-top:15px;">
             <label style="font-size:10px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Product URL</label>
-            <input type="text" id="productUrlInput" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:13px;" placeholder="Lien boutique spécifique..."/>
+            <input type="text" id="productUrlInput" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:13px;" placeholder="https://en.riccardiparis.com/..."/>
         </div>
 
         <div style="display:flex; gap:10px; margin-top:15px;">
