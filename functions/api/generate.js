@@ -8,22 +8,25 @@ export async function onRequestPost({ request, env }) {
     if (action === "generate") {
       prompt = `${config.promptSystem}
       
-      COLLECTION CONTEXT: ${collectionInfo}
-      BLACKLIST (Never use): ${config.blacklist}
-      HISTORY (Avoid duplicates): ${JSON.stringify(historyNames)}
+      COLLECTION CONTEXT: ${collectionDetail}
+      RULES FOR TITLES: ${config.promptTitles}
+      RULES FOR DESCRIPTIONS: ${config.promptDesc}
       
-      STRICT RULES:
-      - Title MUST NOT contain hyphens.
-      - Description MUST HAVE EXACTLY TWO paragraphs.
-      - EACH paragraph MUST BE 180 characters or LESS (including spaces).
-      - NEVER use ellipses "..." to shorten.
-      - Ton: Luxury but accessible.
+      BLACKLIST (Never use these names): ${config.blacklist}
+      ALREADY USED (History): ${JSON.stringify(historyNames)}
       
-      Return valid JSON: { "product_name": "...", "title": "...", "description": "..." }`;
+      Return valid JSON object: { "product_name": "...", "title": "...", "description": "..." }`;
     } else if (action === "regen_title") {
-      prompt = `Generate a new symbolic name and title. Different from: ${currentTitle}. Check history: ${JSON.stringify(historyNames)}. JSON: { "product_name": "...", "title": "..." }`;
+      prompt = `${config.promptSystem}
+      Regenerate ONLY product_name and title. 
+      Rules: ${config.promptTitles}. 
+      Different from: "${currentTitle}". 
+      JSON: { "product_name": "...", "title": "..." }`;
     } else if (action === "regen_desc") {
-      prompt = `Regenerate the description ONLY. Strict 180 chars limit per paragraph. JSON: { "description": "..." }`;
+      prompt = `${config.promptSystem}
+      Regenerate ONLY the description. 
+      Rules: ${config.promptDesc}. 
+      JSON: { "description": "..." }`;
     }
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -45,7 +48,10 @@ export async function onRequestPost({ request, env }) {
 
     const data = await res.json();
     const text = data.content[0].text;
-    return new Response(text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1), {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    
+    return new Response(text.substring(start, end + 1), {
       headers: { "Content-Type": "application/json" }
     });
   } catch (e) {
