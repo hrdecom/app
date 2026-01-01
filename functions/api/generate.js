@@ -1,12 +1,21 @@
 export async function onRequestPost({ request, env }) {
   try {
-    const { action, image, media_type, collection, config, historyNames, currentTitle } = await request.json();
+    const body = await request.json();
+    const { action, image, media_type, collection, config, historyNames, currentTitle } = body;
 
-    const collectionInfo = (config.collections || []).find(c => c.name === collection)?.meaning || "";
+    if (!env.ANTHROPIC_API_KEY) {
+      return new Response(JSON.stringify({ error: "Clé API manquante" }), { status: 500 });
+    }
+
+    const collectionInfo = (config.collections || []).find(c => c.name === collection)?.meaning || "No specific context.";
     
+    // Instruction de sécurité pour le format JSON
+    const jsonSafeRule = "IMPORTANT: You must return valid JSON. If a string value (like 'title' or 'description') contains double quotes, you MUST escape them with a backslash (\\\") so the JSON remains valid.";
+
     let prompt = "";
     if (action === "generate") {
       prompt = `${config.promptSystem}
+      ${jsonSafeRule}
       
       COLLECTION CONTEXT: ${collectionInfo}
       TITLE RULES: ${config.promptTitles}
@@ -15,22 +24,24 @@ export async function onRequestPost({ request, env }) {
       BLACKLIST: ${config.blacklist}
       HISTORY: ${JSON.stringify(historyNames)}
       
-      Return JSON: { "product_name": "...", "title": "...", "description": "..." }`;
+      Output ONLY a valid JSON object: { "product_name": "...", "title": "...", "description": "..." }`;
     } else if (action === "regen_title") {
       prompt = `${config.promptSystem}
-      Regenerate TITLE and product_name only. 
+      ${jsonSafeRule}
+      Regenerate ONLY product_name and title. 
       Rules: ${config.promptTitles}. 
-      Current: "${currentTitle}". 
-      Avoid history: ${JSON.stringify(historyNames)}.
+      Different from: "${currentTitle}". 
+      Avoid: ${JSON.stringify(historyNames)}.
       Return JSON: { "product_name": "...", "title": "..." }`;
     } else if (action === "regen_desc") {
       prompt = `${config.promptSystem}
-      Regenerate DESCRIPTION only. 
+      ${jsonSafeRule}
+      Regenerate ONLY the description. 
       Rules: ${config.promptDesc}. 
       Return JSON: { "description": "..." }`;
     }
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": env.ANTHROPIC_API_KEY,
@@ -47,13 +58,17 @@ export async function onRequestPost({ request, env }) {
       })
     });
 
-    const data = await res.json();
-    if (!res.ok) return new Response(JSON.stringify({ error: data.error?.message }), { status: 500 });
+    const data = await anthropicRes.json();
+    if (!anthropicRes.ok) return new Response(JSON.stringify({ error: data.error?.message }), { status: 500 });
 
     const text = data.content[0].text;
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
-    return new Response(text.substring(start, end + 1), { headers: { "Content-Type": "application/json" } });
+    
+    // On extrait et on nettoie légèrement pour éviter les erreurs de parsing
+    const jsonString = text.substring(start, end + 1);
+    
+    return new Response(jsonString, { headers: { "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });
   }
