@@ -8,10 +8,10 @@ export async function onRequest(context) {
   }
 
   if (request.method === "POST") {
-    const { title, description, image, product_name } = await request.json();
+    const { title, description, image, product_name, headlines } = await request.json();
     const result = await db.prepare(
-      "INSERT INTO history (title, description, image, product_name) VALUES (?, ?, ?, ?)"
-    ).bind(title || "", description || "", image || "", product_name || "").run();
+      "INSERT INTO history (title, description, image, product_name, headlines) VALUES (?, ?, ?, ?, ?)"
+    ).bind(title || "", description || "", image || "", product_name || "", headlines || "[]").run();
     
     return new Response(JSON.stringify({ id: result.meta.last_row_id }), {
       headers: { "content-type": "application/json" }
@@ -19,13 +19,11 @@ export async function onRequest(context) {
   }
 
   if (request.method === "PATCH") {
-    const { id, title, description } = await request.json();
-    if (title) {
-      await db.prepare("UPDATE history SET title = ? WHERE id = ?").bind(title, id).run();
-    }
-    if (description) {
-      await db.prepare("UPDATE history SET description = ? WHERE id = ?").bind(description, id).run();
-    }
+    const { id, title, description, headlines } = await request.json();
+    if (title) await db.prepare("UPDATE history SET title = ? WHERE id = ?").bind(title, id).run();
+    if (description) await db.prepare("UPDATE history SET description = ? WHERE id = ?").bind(description, id).run();
+    if (headlines) await db.prepare("UPDATE history SET headlines = ? WHERE id = ?").bind(headlines, id).run();
+    
     return new Response(JSON.stringify({ success: true }));
   }
 
