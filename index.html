@@ -33,24 +33,14 @@
   <!-- SETTINGS -->
   <section id="settings" class="settings hidden">
     <h2>Paramètres</h2>
-
     <label>Clé de sauvegarde</label>
     <input id="persistKey" placeholder="ex: hrdecom_v1"/>
-
-    <label>CSV “déjà utilisé”</label>
-    <input id="csvFile" type="file" accept=".csv"/>
-    <p id="csvInfo" class="hint">Aucun CSV importé.</p>
-
     <div class="actions-row">
       <button id="saveSettings">Sauvegarder</button>
-      <button id="clearUsed">Vider “déjà utilisé”</button>
-      <button id="exportTemplate">Exporter (Titre+Desc)</button>
-      <button id="exportBlocklist">Exporter “déjà utilisé”</button>
     </div>
   </section>
 
   <section class="workspace">
-
     <!-- LEFT -->
     <div class="left">
       <section class="card">
@@ -68,10 +58,14 @@
 
     <!-- RIGHT -->
     <div class="right">
-
       <section class="card">
         <h2>Suggérer une collection</h2>
-        <select id="collectionSelect"></select>
+        <select id="collectionSelect">
+          <option value="">-- Aucune --</option>
+          <option value="Classique">Classique</option>
+          <option value="Moderne">Moderne</option>
+          <option value="Luxe">Luxe</option>
+        </select>
         <button id="applyCollection">Appliquer</button>
       </section>
 
@@ -96,7 +90,17 @@
         </div>
         <pre id="descText"></pre>
       </section>
+    </div>
+  </section>
 
+  <!-- SECTION HISTORIQUE -->
+  <section class="card history-section">
+    <div class="card-head">
+      <h2>Historique (Cloudflare D1)</h2>
+      <button id="refreshHistory" class="icon-btn">🔄 Actualiser</button>
+    </div>
+    <div id="historyList" class="history-list">
+      <p class="hint">Chargement de l'historique...</p>
     </div>
   </section>
 
