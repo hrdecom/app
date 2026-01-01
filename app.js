@@ -57,28 +57,27 @@
       <div style="display:flex; gap:10px; margin-bottom:10px;">
         <input type="text" value="${c.name}" onchange="state.config.collections[${i}].name=this.value" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:5px;">
         <textarea onchange="state.config.collections[${i}].meaning=this.value" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:5px; font-size:12px;">${c.meaning}</textarea>
-        <button onclick="state.config.collections.splice(${i},1);renderConfigUI()" style="color:red; border:none; background:none; cursor:pointer;">×</button>
+        <button onclick="state.config.collections.splice(${i},1);renderConfigUI()" style="color:red; border:none; background:none;">×</button>
       </div>`).join("");
 
     $("styleButtonsEditor").innerHTML = state.config.headlineStyles.map((s, i) => `
       <div style="display:flex; gap:10px; margin-bottom:10px;">
         <input type="text" value="${s.name}" onchange="state.config.headlineStyles[${i}].name=this.value" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:5px;">
         <textarea onchange="state.config.headlineStyles[${i}].prompt=this.value" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:5px; font-size:12px;">${s.prompt}</textarea>
-        <button onclick="state.config.headlineStyles.splice(${i},1);renderConfigUI()" style="color:red; border:none; background:none; cursor:pointer;">×</button>
+        <button onclick="state.config.headlineStyles.splice(${i},1);renderConfigUI()" style="color:red; border:none; background:none;">×</button>
       </div>`).join("");
 
     $("adStyleButtonsEditor").innerHTML = state.config.adStyles.map((s, i) => `
       <div style="display:flex; gap:10px; margin-bottom:10px;">
         <input type="text" value="${s.name}" onchange="state.config.adStyles[${i}].name=this.value" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:5px;">
         <textarea onchange="state.config.adStyles[${i}].prompt=this.value" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:5px; font-size:12px;">${s.prompt}</textarea>
-        <button onclick="state.config.adStyles.splice(${i},1);renderConfigUI()" style="color:red; border:none; background:none; cursor:pointer;">×</button>
+        <button onclick="state.config.adStyles.splice(${i},1);renderConfigUI()" style="color:red; border:none; background:none;">×</button>
       </div>`).join("");
 
     $("collectionSelect").innerHTML = state.config.collections.map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     renderStyleSelectors();
   }
 
-  // Boutons Ajouter
   $("addCollection").onclick = () => { state.config.collections.push({name:"", meaning:""}); renderConfigUI(); };
   $("addStyleBtn").onclick = () => { state.config.headlineStyles.push({name:"", prompt:""}); renderConfigUI(); };
   $("addAdStyleBtn").onclick = () => { state.config.adStyles.push({name:"", prompt:""}); renderConfigUI(); };
@@ -109,27 +108,18 @@
       if ((action === 'ad_copys' && state.selAdStyles.length > 0) || (action === 'headlines' && state.selHlStyles.length > 0)) {
         const styles = action === 'ad_copys' ? state.selAdStyles : state.selHlStyles;
         const configSource = action === 'ad_copys' ? state.config.adStyles : state.config.headlineStyles;
-        
         const results = await Promise.all(styles.map(sName => {
           const sPrompt = configSource.find(x => x.name === sName)?.prompt;
-          return fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, style: sPrompt + " " + (extra.userText || ""), styleLabel: sName }) })
-                 .then(r => r.json().then(d => ({ ...d, label: sName })));
+          return fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, style: sPrompt + " " + (extra.userText || ""), styleLabel: sName }) }).then(r => r.json().then(d => ({ ...d, label: sName })));
         }));
-        
         results.forEach(res => {
-          if (action === 'ad_copys') {
-            state.sessionAds = [...(res.ad_copys || []).map(t => ({ text: t, style: res.label })), ...state.sessionAds];
-            state.adPage = 1; renderAds();
-          } else {
-            state.sessionHeadlines = [...(res.headlines || []).map(t => ({ text: t, style: res.label })), ...state.sessionHeadlines];
-            state.hlPage = 1; renderHeadlines();
-          }
+          if (action === 'ad_copys') { state.sessionAds = [...(res.ad_copys || []).map(t => ({ text: t, style: res.label })), ...state.sessionAds]; state.adPage = 1; renderAds(); } 
+          else { state.sessionHeadlines = [...(res.headlines || []).map(t => ({ text: t, style: res.label })), ...state.sessionHeadlines]; state.hlPage = 1; renderHeadlines(); }
         });
       } else {
         const res = await fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, ...extra }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Erreur");
-
         if (action === 'generate') {
           $("titleText").textContent = data.title; $("descText").textContent = data.description;
           const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name, product_url: $("productUrlInput").value }) });
@@ -158,7 +148,6 @@
     $("headlinesResults").innerHTML = pag.map((item, i) => `<div class="headline-item" onclick="toggleItemSelect('hl', i, this)"><input type="checkbox"><div class="headline-text"><small>${item.style}</small><br>${item.text}</div></div>`).join("");
     renderPaginationLoc('hl');
   };
-
   const renderAds = () => {
     const pag = state.sessionAds.slice((state.adPage-1)*12, state.adPage*12);
     $("adsResults").innerHTML = pag.map((item, i) => `<div class="headline-item" onclick="toggleItemSelect('ad', i, this)"><input type="checkbox"><div class="headline-text"><small>${item.style}</small><br><span style="white-space:pre-wrap;">${item.text}</span></div></div>`).join("");
@@ -186,21 +175,23 @@
 
   async function saveSelections(type) {
     if (!state.currentHistoryId) return;
-    const selected = []; document.querySelectorAll(`#${type === 'hl' ? 'headlinesResults' : 'adsResults'} .selected .headline-text`).forEach(it => {
+    const containerId = type === 'hl' ? 'headlinesResults' : 'adsResults';
+    const selected = []; document.querySelectorAll(`#${containerId} .selected .headline-text`).forEach(it => {
       const raw = it.innerText.split('\n'); selected.push(raw.length > 1 ? raw.slice(1).join('\n') : raw[0]);
     });
-    const key = type === 'hl' ? 'headlines' : 'ad_copys';
-    if (type === 'hl') state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...selected])];
-    else state.selectedAds = [...new Set([...state.selectedAds, ...selected])];
-    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [key]: JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds) }) });
-    type === 'hl' ? renderSavedHl() : renderSavedAds();
+    if (type === 'hl') {
+        state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...selected])];
+        await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, headlines: JSON.stringify(state.selectedHeadlines) }) });
+        renderSavedHl();
+    } else {
+        state.selectedAds = [...new Set([...state.selectedAds, ...selected])];
+        await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, ad_copys: JSON.stringify(state.selectedAds) }) });
+        renderSavedAds();
+    }
     alert("Enregistré");
   }
 
-  const renderSavedHl = () => {
-    $("headlinesSavedList").innerHTML = state.selectedHeadlines.map((h, i) => `<div class="headline-item no-hover"><span class="headline-text">${h}</span><button class="icon-btn-small" onclick="deleteSaved('hl',${i})">×</button></div>`).join("");
-  };
-
+  const renderSavedHl = () => { $("headlinesSavedList").innerHTML = state.selectedHeadlines.map((h, i) => `<div class="headline-item no-hover"><span class="headline-text">${h}</span><button class="icon-btn-small" onclick="deleteSaved('hl',${i})">×</button></div>`).join(""); };
   const renderSavedAds = () => {
     $("adsSavedList").innerHTML = state.selectedAds.map((h, i) => `<div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;justify-content:space-between;width:100%"><strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong><button class="icon-btn-small" onclick="deleteSaved('ad',${i})">×</button></div><span class="headline-text" style="white-space:pre-wrap;">${h}</span></div>`).join("");
     const n = $("titleText").textContent, u = $("productUrlInput").value;
@@ -210,8 +201,7 @@
   };
 
   window.deleteSaved = async (type, i) => {
-    const list = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
-    list.splice(i, 1);
+    const list = type === 'hl' ? state.selectedHeadlines : state.selectedAds; list.splice(i, 1);
     await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type === 'hl' ? 'headlines' : 'ad_copys']: JSON.stringify(list) }) });
     type === 'hl' ? renderSavedHl() : renderSavedAds();
   };
