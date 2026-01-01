@@ -1,30 +1,50 @@
+// functions/api/history.js
+
 export async function onRequest(context) {
   const { request, env } = context;
   const db = env.DB;
 
-  // GET : Récupérer les 50 dernières entrées
-  if (request.method === "GET") {
-    const { results } = await db.prepare(
-      "SELECT * FROM history ORDER BY id DESC LIMIT 50"
-    ).all();
-    return new Response(JSON.stringify(results), {
-      headers: { "content-type": "application/json" }
-    });
+  if (!db) {
+    return new Response(JSON.stringify({ error: "Lien DB manquant dans Cloudflare" }), { status: 500 });
   }
 
-  // POST : Sauvegarder une nouvelle entrée
-  if (request.method === "POST") {
-    const { title, description, image } = await request.json();
-    
-    // On compresse légèrement l'image pour D1 (limite 1MB par ligne)
-    // Ici on part du principe que l'image base64 est déjà raisonnable
-    await db.prepare(
-      "INSERT INTO history (title, description, image) VALUES (?, ?, ?)"
-    ).bind(title, description, image).run();
+  // GET : Récupérer l'historique
+  if (request.method === "GET") {
+    try {
+      const { results } = await db.prepare(
+        "SELECT * FROM history ORDER BY id DESC LIMIT 50"
+      ).all();
+      return new Response(JSON.stringify(results), {
+        headers: { "content-type": "application/json" }
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+    }
+  }
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { "content-type": "application/json" }
-    });
+  // POST : Sauvegarder
+  if (request.method === "POST") {
+    try {
+      const { title, description, image } = await request.json();
+      
+      // Vérification de la taille (D1 limite à 1MB par ligne environ)
+      // Si l'image est trop grande, on stocke une chaîne vide pour éviter le crash 500
+      let safeImage = image;
+      if (image && image.length > 700000) { // ~700kb en base64
+        console.warn("Image trop lourde pour D1, stockage annulé pour cette image");
+        safeImage = "IMAGE_TOO_LARGE"; 
+      }
+
+      await db.prepare(
+        "INSERT INTO history (title, description, image) VALUES (?, ?, ?)"
+      ).bind(title || "Sans titre", description || "", safeImage || "").run();
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { "content-type": "application/json" }
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+    }
   }
 
   return new Response("Method not allowed", { status: 405 });
