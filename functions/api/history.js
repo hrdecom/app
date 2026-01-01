@@ -9,10 +9,14 @@ export async function onRequest(context) {
 
   if (request.method === "POST") {
     const { title, description, image, product_name } = await request.json();
-    const { lastRowId } = await db.prepare(
+    const result = await db.prepare(
       "INSERT INTO history (title, description, image, product_name) VALUES (?, ?, ?, ?)"
     ).bind(title || "", description || "", image || "", product_name || "").run();
-    return new Response(JSON.stringify({ id: lastRowId }));
+    
+    // On renvoie l'ID de la ligne insérée
+    return new Response(JSON.stringify({ id: result.meta.last_row_id }), {
+      headers: { "content-type": "application/json" }
+    });
   }
 
   if (request.method === "PATCH") {
