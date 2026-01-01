@@ -26,7 +26,6 @@
     timerInterval: null
   };
 
-  /* TIMER */
   function startLoading() {
     let s = 0;
     $("timer").textContent = "00:00";
@@ -46,7 +45,6 @@
     $("loading").classList.add("hidden");
   }
 
-  /* CONFIG */
   async function loadConfig() {
     const res = await fetch("/api/settings");
     const data = await res.json();
@@ -74,11 +72,6 @@
   window.removeCol = (i) => { state.config.collections.splice(i, 1); renderConfigUI(); };
   $("addCollection").onclick = () => { state.config.collections.push({name:"", meaning:""}); renderConfigUI(); };
 
-  async function saveFullConfig() {
-    await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
-  }
-
-  /* IA CALLS */
   async function apiCall(action) {
     if (!state.imageBase64) return;
     startLoading();
@@ -98,32 +91,45 @@
       if (action === 'generate') {
         $("titleText").textContent = data.title;
         $("descText").textContent = data.description;
-        const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ 
-          title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name 
-        }) });
+        
+        // Création initiale
+        const hRes = await fetch("/api/history", { 
+          method: "POST", 
+          body: JSON.stringify({ 
+            title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name 
+          }) 
+        });
         const hData = await hRes.json();
+        
+        // TRÈS IMPORTANT : On lie l'ID immédiatement
         state.currentHistoryId = hData.id;
 
-        // Blacklist Auto
+        // Mise à jour Blacklist
         if (data.product_name) {
           let bList = state.config.blacklist.split(",").map(n => n.trim()).filter(n => n);
           if (!bList.includes(data.product_name)) {
             bList.push(data.product_name);
             state.config.blacklist = bList.join(", ");
             $("configBlacklist").value = state.config.blacklist;
-            await saveFullConfig();
+            await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
           }
         }
-        loadHistory();
+        await loadHistory();
       } else {
+        // Régénération
         if (action === 'regen_title') $("titleText").textContent = data.title;
-        else if (action === 'regen_desc') $("descText").textContent = data.description;
+        if (action === 'regen_desc') $("descText").textContent = data.description;
 
         if (state.currentHistoryId) {
-          await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ 
-            id: state.currentHistoryId, title: $("titleText").textContent, description: $("descText").textContent 
-          }) });
-          loadHistory();
+          await fetch("/api/history", { 
+            method: "PATCH", 
+            body: JSON.stringify({ 
+              id: state.currentHistoryId, 
+              title: $("titleText").textContent, 
+              description: $("descText").textContent 
+            }) 
+          });
+          await loadHistory(); // Rafraîchit l'historique pour voir le nouveau titre
         }
       }
       $("regenTitleBtn").disabled = false;
@@ -133,19 +139,18 @@
   }
 
   function init() {
+    $("loading").classList.add("hidden");
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
     window.onclick = (e) => { if (e.target == $("settingsModal")) $("settingsModal").classList.add("hidden"); };
 
-    // FIX ONGLETS : Utilisation d'un listener robuste
     document.querySelectorAll(".tab-link").forEach(btn => {
-      btn.addEventListener("click", (e) => {
-        const targetId = e.currentTarget.getAttribute("data-tab");
+      btn.onclick = () => {
         document.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active"));
         document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
-        e.currentTarget.classList.add("active");
-        $(targetId).classList.remove("hidden");
-      });
+        btn.classList.add("active");
+        $(btn.dataset.tab).classList.remove("hidden");
+      };
     });
 
     $("drop").onclick = () => $("imageInput").click();
@@ -160,6 +165,8 @@
         $("preview").classList.remove("hidden");
         $("dropPlaceholder").style.display = "none";
         $("generateBtn").disabled = false;
+        
+        // Reset pollution : nouveau produit commence
         state.currentHistoryId = null;
         $("titleText").textContent = ""; $("descText").textContent = "";
         renderHistoryUI();
@@ -168,7 +175,9 @@
     };
 
     $("removeImage").onclick = (e) => {
-      e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null;
+      e.stopPropagation();
+      state.imageBase64 = null;
+      state.currentHistoryId = null;
       $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block";
       $("titleText").textContent = ""; $("descText").textContent = "";
       $("generateBtn").disabled = true; $("regenTitleBtn").disabled = true; $("regenDescBtn").disabled = true;
@@ -184,7 +193,8 @@
       state.config.promptTitles = $("promptTitles").value;
       state.config.promptDesc = $("promptDesc").value;
       state.config.blacklist = $("configBlacklist").value;
-      await saveFullConfig(); alert("Enregistré"); $("settingsModal").classList.add("hidden");
+      await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
+      alert("Enregistré"); $("settingsModal").classList.add("hidden");
     };
 
     $("copyTitle").onclick = () => { navigator.clipboard.writeText($("titleText").textContent); alert("Titre copié"); };
@@ -204,6 +214,7 @@
     const filtered = state.historyCache.filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
     const start = (state.currentPage - 1) * state.pageSize;
     const paginated = filtered.slice(start, start + state.pageSize);
+    
     $("historyList").innerHTML = paginated.map(item => `
       <div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})">
         <img src="data:image/jpeg;base64,${item.image}" class="history-img">
@@ -211,6 +222,7 @@
         <button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button>
       </div>
     `).join("");
+    
     renderPagination(Math.ceil(filtered.length / state.pageSize));
   }
 
@@ -233,7 +245,8 @@
     state.imageBase64 = item.image; $("preview").classList.remove("hidden");
     $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
     $("regenTitleBtn").disabled = false; $("regenDescBtn").disabled = false;
-    renderHistoryUI(); window.scrollTo({top:0, behavior:'smooth'});
+    renderHistoryUI();
+    window.scrollTo({top:0, behavior:'smooth'});
   };
 
   window.deleteItem = async (id) => {
