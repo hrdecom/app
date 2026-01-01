@@ -1,37 +1,36 @@
 export async function onRequestPost({ request, env }) {
   try {
-    const body = await request.json();
-    const { action, image, media_type, collection, config, historyNames, currentTitle } = body;
+    const { action, image, media_type, collection, config, historyNames, currentTitle } = await request.json();
 
-    if (!env.ANTHROPIC_API_KEY) {
-      return new Response(JSON.stringify({ error: "Clé API manquante dans Cloudflare." }), { status: 500 });
-    }
-
-    const collectionInfo = (config.collections || []).find(c => c.name === collection)?.meaning || "No specific context.";
+    const collectionInfo = (config.collections || []).find(c => c.name === collection)?.meaning || "";
     
     let prompt = "";
     if (action === "generate") {
       prompt = `${config.promptSystem}
       
       COLLECTION CONTEXT: ${collectionInfo}
-      RULES FOR TITLES: ${config.promptTitles}
-      RULES FOR DESCRIPTIONS: ${config.promptDesc}
+      TITLE RULES: ${config.promptTitles}
+      DESCRIPTION RULES: ${config.promptDesc}
       
       BLACKLIST: ${config.blacklist}
-      HISTORY: ${JSON.stringify(historyNames)}
+      HISTORY (Avoid these names): ${JSON.stringify(historyNames)}
       
-      Output ONLY a valid JSON object: { "product_name": "...", "title": "...", "description": "..." }`;
+      Return JSON: { "product_name": "...", "title": "...", "description": "..." }`;
     } else if (action === "regen_title") {
       prompt = `${config.promptSystem}
-      Regenerate ONLY product_name and title. Rules: ${config.promptTitles}. Different from: "${currentTitle}". 
-      JSON: { "product_name": "...", "title": "..." }`;
+      Regenerate TITLE and product_name only. 
+      Rules: ${config.promptTitles}. 
+      Current Title: ${currentTitle}. 
+      History: ${JSON.stringify(historyNames)}.
+      Return JSON: { "product_name": "...", "title": "..." }`;
     } else if (action === "regen_desc") {
       prompt = `${config.promptSystem}
-      Regenerate ONLY the description. Rules: ${config.promptDesc}. 
-      JSON: { "description": "..." }`;
+      Regenerate DESCRIPTION only. 
+      Rules: ${config.promptDesc}. 
+      Return JSON: { "description": "..." }`;
     }
 
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": env.ANTHROPIC_API_KEY,
@@ -48,17 +47,13 @@ export async function onRequestPost({ request, env }) {
       })
     });
 
-    const data = await anthropicRes.json();
-    
-    if (!anthropicRes.ok) {
-      return new Response(JSON.stringify({ error: data.error?.message || "Erreur Anthropic" }), { status: 500 });
-    }
+    const data = await res.json();
+    if (!res.ok) return new Response(JSON.stringify({ error: data.error?.message }), { status: 500 });
 
     const text = data.content[0].text;
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
     return new Response(text.substring(start, end + 1), { headers: { "Content-Type": "application/json" } });
-
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });
   }
