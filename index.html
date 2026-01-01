@@ -14,53 +14,65 @@
     <button id="settingsBtn" class="icon-btn">⚙️ Paramètres</button>
   </header>
 
-  <!-- MODAL CONFIGURATION EXISTANTE -->
+  <!-- MODAL CONFIGURATION -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-content">
-      <div class="modal-header">
-        <h2>Configuration Avancée</h2>
-        <button id="closeSettings" class="close-btn">×</button>
-      </div>
+      <div class="modal-header"><h2>Configuration</h2><button id="closeSettings" class="close-btn">×</button></div>
       <div class="tabs">
         <button class="tab-link active" data-tab="tab-collections">Collections</button>
         <button class="tab-link" data-tab="tab-prompts">Prompts IA</button>
-        <button class="tab-link" data-tab="tab-blacklist">Blacklist / CSV</button>
+        <button class="tab-link" data-tab="tab-headlines-config">Headlines</button>
+        <button class="tab-link" data-tab="tab-blacklist">Blacklist</button>
       </div>
+      
       <div id="tab-collections" class="tab-content">
         <div id="collectionsList"></div>
-        <button id="addCollection" class="secondary-btn" style="margin-top:10px">+ Ajouter une collection</button>
+        <button id="addCollection" class="secondary-btn">+ Ajouter collection</button>
       </div>
+
       <div id="tab-prompts" class="tab-content hidden">
-        <div class="prompt-segment"><label>Rôle</label><textarea id="promptSystem" rows="4"></textarea></div>
-        <div class="prompt-segment"><label>Titres</label><textarea id="promptTitles" rows="4"></textarea></div>
-        <div class="prompt-segment"><label>Descriptions</label><textarea id="promptDesc" rows="6"></textarea></div>
+        <div class="prompt-segment"><label>Rôle Système</label><textarea id="promptSystem" rows="3"></textarea></div>
+        <div class="prompt-segment"><label>Règles Titres</label><textarea id="promptTitles" rows="3"></textarea></div>
+        <div class="prompt-segment"><label>Règles Descriptions</label><textarea id="promptDesc" rows="4"></textarea></div>
       </div>
+
+      <div id="tab-headlines-config" class="tab-content hidden">
+        <label>Prompt Principal Headlines</label>
+        <textarea id="promptHeadlines" rows="4" style="margin-bottom:20px;"></textarea>
+        <label>Boutons de Styles (Automatiques)</label>
+        <div id="styleButtonsEditor"></div>
+        <button id="addStyleBtn" class="secondary-btn">+ Ajouter un style</button>
+      </div>
+
       <div id="tab-blacklist" class="tab-content hidden">
-        <input type="file" id="csvImport" accept=".csv" style="margin-bottom:10px; display:block;"/>
+        <input type="file" id="csvImport" accept=".csv" style="display:block; margin-bottom:10px;"/>
         <textarea id="configBlacklist" rows="10"></textarea>
       </div>
-      <div class="modal-footer"><button id="saveConfig" class="primary-btn">Enregistrer</button></div>
+      <div class="modal-footer"><button id="saveConfig" class="primary-btn">Enregistrer tout</button></div>
     </div>
   </div>
 
-  <!-- NOUVELLE MODAL HEADLINES -->
+  <!-- MODAL HEADLINES -->
   <div id="headlinesModal" class="modal hidden">
     <div class="modal-content apple-modal">
-      <div class="modal-header">
-        <h2>Headlines Vidéos</h2>
-        <button id="closeHeadlines" class="close-btn">×</button>
-      </div>
+      <div class="modal-header"><h2>Headlines Vidéos</h2><button id="closeHeadlines" class="close-btn">×</button></div>
       <div class="tabs">
-        <button class="tab-link active" data-tab="tab-gen-headlines">Générer des headlines</button>
-        <button class="tab-link" data-tab="tab-saved-headlines">Headlines enregistrées</button>
+        <button class="tab-link active" data-tab="tab-gen-headlines">Générer</button>
+        <button class="tab-link" data-tab="tab-saved-headlines">Enregistrées</button>
       </div>
       
       <div id="tab-gen-headlines" class="tab-content">
-        <div id="headlinesResults" class="headlines-results">
-            <p class="hint">Indiquez un style ci-dessous pour commencer...</p>
+        <div class="style-selector" id="styleSelectorContainer">
+            <!-- Boutons de style injectés par JS -->
         </div>
+        <div id="headlinesResults" class="headlines-results"></div>
+        
+        <div class="headlines-actions hidden" id="similarActions">
+            <button id="genSimilarBtn" class="secondary-btn" style="width:100%; border-color: var(--apple-blue); color: var(--apple-blue);">✨ Générer des versions similaires améliorées</button>
+        </div>
+
         <div class="chat-bar">
-            <input type="text" id="headlineStyleInput" placeholder="Ex: Style UGC POV Orienté cadeau femme..."/>
+            <input type="text" id="headlineStyleInput" placeholder="Précisez votre demande (optionnel)..."/>
             <button id="sendHeadlineChat">↑</button>
         </div>
       </div>
@@ -77,12 +89,11 @@
 
   <div id="loading" class="loading hidden">
     <div class="spinner"></div>
-    <div><strong>Action en cours...</strong><div id="timer">00:00</div></div>
+    <div><strong>Génération en cours...</strong><div id="timer">00:00</div></div>
   </div>
 
   <section class="workspace">
     <div class="left">
-      <section class="card">
         <div id="drop" class="drop">
           <input id="imageInput" type="file" accept="image/*"/>
           <div id="preview" class="preview hidden">
@@ -91,7 +102,6 @@
           </div>
           <p id="dropPlaceholder">Cliquez ou déposez une image</p>
         </div>
-      </section>
     </div>
 
     <div class="right">
@@ -113,13 +123,13 @@
       <section class="card">
         <div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div>
         <pre id="descText"></pre>
-        <button id="openHeadlinesBtn" class="secondary-btn headline-main-btn" style="margin-top:15px; width:100%;">🎬 Headlines Vidéos</button>
+        <button id="openHeadlinesBtn" class="secondary-btn" style="margin-top:15px; width:100%; font-weight:600;">🎬 Headlines Vidéos</button>
       </section>
     </div>
   </section>
 
   <section class="card history-section">
-    <div class="history-header"><h2>Historique</h2><input type="text" id="historySearch" placeholder="Rechercher..."/></div>
+    <div class="history-header"><h2>Historique</h2><input type="text" id="historySearch" placeholder="Filtrer..."/></div>
     <div id="historyList" class="history-list"></div>
     <div id="pagination" class="pagination"></div>
   </section>
