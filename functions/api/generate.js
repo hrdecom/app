@@ -8,22 +8,22 @@ export async function onRequestPost({ request, env }) {
     if (action === "generate") {
       prompt = `${config.promptSystem}
       
-      ALLOWED COLLECTION CONTEXT: ${collectionInfo}
-      BLACKLIST (Never use these names): ${config.blacklist}
-      HISTORY (Names already used): ${JSON.stringify(historyNames)}
+      COLLECTION CONTEXT: ${collectionInfo}
+      BLACKLIST (Never use): ${config.blacklist}
+      HISTORY (Avoid duplicates): ${JSON.stringify(historyNames)}
       
       STRICT RULES:
-      - Title must not have hyphens.
-      - Description MUST have EXACTLY two paragraphs.
-      - EACH paragraph MUST be 180 characters or LESS.
-      - NO ellipsis "..." in paragraphs. Rewrite to be concise.
-      - Mandatory bullets: Materials, Hypoallergenic, Water resistant.
+      - Title MUST NOT contain hyphens.
+      - Description MUST HAVE EXACTLY TWO paragraphs.
+      - EACH paragraph MUST BE 180 characters or LESS (including spaces).
+      - NEVER use ellipses "..." to shorten.
+      - Ton: Luxury but accessible.
       
-      Output only valid JSON: { "product_name": "...", "title": "...", "description": "..." }`;
+      Return valid JSON: { "product_name": "...", "title": "...", "description": "..." }`;
     } else if (action === "regen_title") {
-      prompt = `Generate a NEW symbolic name and title. Different from: ${currentTitle}. Avoid history: ${JSON.stringify(historyNames)}. JSON: { "product_name": "...", "title": "..." }`;
+      prompt = `Generate a new symbolic name and title. Different from: ${currentTitle}. Check history: ${JSON.stringify(historyNames)}. JSON: { "product_name": "...", "title": "..." }`;
     } else if (action === "regen_desc") {
-      prompt = `Regenerate ONLY the description. Strict 180 chars per paragraph. JSON: { "description": "..." }`;
+      prompt = `Regenerate the description ONLY. Strict 180 chars limit per paragraph. JSON: { "description": "..." }`;
     }
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
