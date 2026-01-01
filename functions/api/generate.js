@@ -4,10 +4,9 @@ export async function onRequestPost({ request, env }) {
     const { action, image, media_type, collection, config, historyNames, currentTitle } = body;
 
     if (!env.ANTHROPIC_API_KEY) {
-      return new Response(JSON.stringify({ error: "La clé ANTHROPIC_API_KEY est absente des secrets Cloudflare." }), { status: 500 });
+      return new Response(JSON.stringify({ error: "Clé API manquante dans Cloudflare." }), { status: 500 });
     }
 
-    // Correction du nom de variable : collectionInfo utilisé partout
     const collectionInfo = (config.collections || []).find(c => c.name === collection)?.meaning || "No specific context.";
     
     let prompt = "";
@@ -18,20 +17,17 @@ export async function onRequestPost({ request, env }) {
       RULES FOR TITLES: ${config.promptTitles}
       RULES FOR DESCRIPTIONS: ${config.promptDesc}
       
-      BLACKLIST (Never use these names): ${config.blacklist}
-      ALREADY USED (History): ${JSON.stringify(historyNames)}
+      BLACKLIST: ${config.blacklist}
+      HISTORY: ${JSON.stringify(historyNames)}
       
       Output ONLY a valid JSON object: { "product_name": "...", "title": "...", "description": "..." }`;
     } else if (action === "regen_title") {
       prompt = `${config.promptSystem}
-      Regenerate ONLY product_name and title. 
-      Rules: ${config.promptTitles}. 
-      Different from: "${currentTitle}". 
+      Regenerate ONLY product_name and title. Rules: ${config.promptTitles}. Different from: "${currentTitle}". 
       JSON: { "product_name": "...", "title": "..." }`;
     } else if (action === "regen_desc") {
       prompt = `${config.promptSystem}
-      Regenerate ONLY the description. 
-      Rules: ${config.promptDesc}. 
+      Regenerate ONLY the description. Rules: ${config.promptDesc}. 
       JSON: { "description": "..." }`;
     }
 
@@ -43,7 +39,7 @@ export async function onRequestPost({ request, env }) {
         "content-type": "application/json"
       },
       body: JSON.stringify({
-        model: env.ANTHROPIC_MODEL || "claude-3-5-sonnet-latest",
+        model: "claude-sonnet-4-5-20250929",
         max_tokens: 1200,
         messages: [{ role: "user", content: [
           { type: "image", source: { type: "base64", media_type: media_type || "image/jpeg", data: image } },
@@ -55,26 +51,15 @@ export async function onRequestPost({ request, env }) {
     const data = await anthropicRes.json();
     
     if (!anthropicRes.ok) {
-      // On renvoie l'erreur réelle d'Anthropic pour débugger
-      return new Response(JSON.stringify({ 
-        error: "Erreur Anthropic API", 
-        details: data.error?.message || "Erreur inconnue" 
-      }), { status: 500 });
+      return new Response(JSON.stringify({ error: data.error?.message || "Erreur Anthropic" }), { status: 500 });
     }
 
     const text = data.content[0].text;
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
-    
-    if (start === -1 || end === -1) {
-      return new Response(JSON.stringify({ error: "L'IA n'a pas renvoyé de JSON valide.", raw: text }), { status: 500 });
-    }
-
-    return new Response(text.substring(start, end + 1), {
-      headers: { "Content-Type": "application/json" }
-    });
+    return new Response(text.substring(start, end + 1), { headers: { "Content-Type": "application/json" } });
 
   } catch (e) {
-    return new Response(JSON.stringify({ error: "Erreur Serveur Interne", details: e.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: e.message }), { status: 500 });
   }
 }
