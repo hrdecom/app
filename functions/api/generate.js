@@ -1,25 +1,29 @@
 export async function onRequestPost({ request, env }) {
   try {
-    const { action, image, collection, config, historyNames, currentTitle } = await request.json();
+    const { action, image, media_type, collection, config, historyNames, currentTitle } = await request.json();
 
-    const collectionDetail = config.collections.find(c => c.name === collection)?.meaning || "";
+    const collectionInfo = config.collections.find(c => c.name === collection)?.meaning || "";
     
     let prompt = "";
     if (action === "generate") {
       prompt = `${config.promptSystem}
       
-      CONTEXT: ${collectionDetail}
-      RULES FOR TITLES: ${config.promptTitles}
-      RULES FOR DESCRIPTIONS: ${config.promptDesc}
+      ALLOWED COLLECTION CONTEXT: ${collectionInfo}
+      BLACKLIST (Never use these names): ${config.blacklist}
+      HISTORY (Names already used): ${JSON.stringify(historyNames)}
       
-      BLACKLIST (Never use): ${config.blacklist}
-      HISTORY (Avoid duplicates): ${JSON.stringify(historyNames)}
+      STRICT RULES:
+      - Title must not have hyphens.
+      - Description MUST have EXACTLY two paragraphs.
+      - EACH paragraph MUST be 180 characters or LESS.
+      - NO ellipsis "..." in paragraphs. Rewrite to be concise.
+      - Mandatory bullets: Materials, Hypoallergenic, Water resistant.
       
-      Output JSON format: { "product_name": "...", "title": "...", "description": "..." }`;
+      Output only valid JSON: { "product_name": "...", "title": "...", "description": "..." }`;
     } else if (action === "regen_title") {
-      prompt = `Regenerate ONLY product_name and title. Different from: ${currentTitle}. ${config.promptTitles}. JSON: { "product_name": "...", "title": "..." }`;
+      prompt = `Generate a NEW symbolic name and title. Different from: ${currentTitle}. Avoid history: ${JSON.stringify(historyNames)}. JSON: { "product_name": "...", "title": "..." }`;
     } else if (action === "regen_desc") {
-      prompt = `Regenerate ONLY the description. ${config.promptDesc}. JSON: { "description": "..." }`;
+      prompt = `Regenerate ONLY the description. Strict 180 chars per paragraph. JSON: { "description": "..." }`;
     }
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -31,9 +35,9 @@ export async function onRequestPost({ request, env }) {
       },
       body: JSON.stringify({
         model: env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20240620",
-        max_tokens: 1000,
+        max_tokens: 1200,
         messages: [{ role: "user", content: [
-          { type: "image", source: { type: "base64", media_type: "image/jpeg", data: image } },
+          { type: "image", source: { type: "base64", media_type: media_type || "image/jpeg", data: image } },
           { type: "text", text: prompt }
         ]}]
       })
