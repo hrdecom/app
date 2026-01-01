@@ -18,21 +18,12 @@
   };
 
   let state = {
-    imageBase64: null,
-    imageMime: "image/jpeg",
-    historyCache: [],
+    imageBase64: null, imageMime: "image/jpeg", historyCache: [],
     config: JSON.parse(JSON.stringify(DEFAULTS)),
-    currentPage: 1,
-    pageSize: 5,
-    searchQuery: "",
-    currentHistoryId: null,
+    currentPage: 1, pageSize: 5, searchQuery: "", currentHistoryId: null,
     timerInterval: null,
-    
-    // HEADLINES STATE
-    sessionGeneratedHeadlines: [], // Toutes les headlines générées dans la session
-    headlinesPage: 1,
-    headlinesPageSize: 5,
-    selectedHeadlines: [] // Headlines sauvegardées en DB pour ce produit
+    sessionGeneratedHeadlines: [], headlinesPage: 1, headlinesPageSize: 5,
+    selectedHeadlines: [], selectedStyleButtons: []
   };
 
   /* TIMER */
@@ -56,8 +47,7 @@
         state.config = JSON.parse(saved.value);
         if (!state.config.headlineStyles) state.config.headlineStyles = DEFAULTS.headlineStyles;
     }
-    renderConfigUI();
-    renderStyleSelector();
+    renderConfigUI(); renderStyleSelector();
   }
 
   function renderConfigUI() {
@@ -66,28 +56,24 @@
     $("promptDesc").value = state.config.promptDesc || DEFAULTS.promptDesc;
     $("promptHeadlines").value = state.config.promptHeadlines || DEFAULTS.promptHeadlines;
     $("configBlacklist").value = state.config.blacklist || "";
-    
     $("collectionsList").innerHTML = state.config.collections.map((c, i) => `
       <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
         <input type="text" value="${c.name}" onchange="updateCol(${i}, 'name', this.value)" style="flex:1">
         <textarea onchange="updateCol(${i}, 'meaning', this.value)" style="flex:2; height:40px;">${c.meaning}</textarea>
         <button onclick="removeCol(${i})">×</button>
       </div>`).join("");
-
     $("styleButtonsEditor").innerHTML = state.config.headlineStyles.map((s, i) => `
       <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
         <input type="text" value="${s.name}" onchange="updateStyleBtn(${i}, 'name', this.value)" style="flex:1">
         <textarea onchange="updateStyleBtn(${i}, 'prompt', this.value)" style="flex:3; height:40px;">${s.prompt}</textarea>
         <button onclick="removeStyleBtn(${i})">×</button>
       </div>`).join("");
-    
     $("collectionSelect").innerHTML = state.config.collections.map(c => `<option value="${c.name}">${c.name}</option>`).join("");
   }
 
   window.updateCol = (i, f, v) => state.config.collections[i][f] = v;
   window.removeCol = (i) => { state.config.collections.splice(i, 1); renderConfigUI(); };
   $("addCollection").onclick = () => { state.config.collections.push({name:"", meaning:""}); renderConfigUI(); };
-
   window.updateStyleBtn = (i, f, v) => state.config.headlineStyles[i][f] = v;
   window.removeStyleBtn = (i) => { state.config.headlineStyles.splice(i, 1); renderConfigUI(); };
   $("addStyleBtn").onclick = () => { state.config.headlineStyles.push({name:"Nouveau Style", prompt:""}); renderConfigUI(); };
@@ -95,18 +81,12 @@
   /* HEADLINES UI */
   function renderStyleSelector() {
     $("styleSelectorContainer").innerHTML = state.config.headlineStyles.map(s => `
-        <div class="style-tag ${state.selectedStyleButtons && state.selectedStyleButtons.includes(s.name) ? 'selected' : ''}" 
-             onclick="toggleStyleButton('${s.name}', this)">${s.name}</div>
-    `).join("");
+        <div class="style-tag ${state.selectedStyleButtons.includes(s.name) ? 'selected' : ''}" 
+             onclick="toggleStyleButton('${s.name}', this)">${s.name}</div>`).join("");
   }
-
   window.toggleStyleButton = (name, el) => {
-    if (!state.selectedStyleButtons) state.selectedStyleButtons = [];
-    if (state.selectedStyleButtons.includes(name)) {
-        state.selectedStyleButtons = state.selectedStyleButtons.filter(n => n !== name);
-    } else {
-        state.selectedStyleButtons.push(name);
-    }
+    if (state.selectedStyleButtons.includes(name)) state.selectedStyleButtons = state.selectedStyleButtons.filter(n => n !== name);
+    else state.selectedStyleButtons.push(name);
     el.classList.toggle('selected');
   };
 
@@ -115,14 +95,13 @@
     if (!state.imageBase64) return;
     startLoading();
     try {
-      const historyNames = state.historyCache.map(h => h.product_name).filter(Boolean);
       const res = await fetch("/api/generate", {
         method: "POST",
         body: JSON.stringify({
           action, image: state.imageBase64, media_type: state.imageMime,
           collection: $("collectionSelect").value, config: state.config,
-          historyNames, currentTitle: $("titleText").textContent, 
-          currentDesc: $("descText").textContent, ...extra
+          historyNames: state.historyCache.map(h => h.product_name).filter(Boolean),
+          currentTitle: $("titleText").textContent, currentDesc: $("descText").textContent, ...extra
         })
       });
       const data = await res.json();
@@ -131,13 +110,10 @@
       if (action === 'generate') {
         $("titleText").textContent = data.title;
         $("descText").textContent = data.description;
-        const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ 
-          title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name 
-        }) });
+        const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name }) });
         const hData = await hRes.json();
         state.currentHistoryId = hData.id;
-        state.selectedHeadlines = [];
-        state.sessionGeneratedHeadlines = []; // Reset on new product
+        state.selectedHeadlines = []; state.sessionGeneratedHeadlines = [];
         await loadHistory();
       } else if (action === 'regen_title' || action === 'regen_desc') {
         if (action === 'regen_title') $("titleText").textContent = data.title;
@@ -147,7 +123,6 @@
           await loadHistory();
         }
       } else if (action === 'headlines' || action === 'headlines_similar') {
-        // Ajouter les nouveaux résultats à la liste de session
         state.sessionGeneratedHeadlines = [...(data.headlines || []), ...state.sessionGeneratedHeadlines];
         state.headlinesPage = 1;
         renderHeadlinesResults();
@@ -160,13 +135,11 @@
   function renderHeadlinesResults() {
     const start = (state.headlinesPage - 1) * state.headlinesPageSize;
     const paginated = state.sessionGeneratedHeadlines.slice(start, start + state.headlinesPageSize);
-    
     $("headlinesResults").innerHTML = paginated.map((h, i) => `
         <div class="headline-item" onclick="toggleHlSelect(${start + i}, this)">
             <input type="checkbox" id="chk-${start + i}">
             <span class="headline-text">${h}</span>
         </div>`).join("");
-
     renderHeadlinesPagination();
   }
 
@@ -175,7 +148,6 @@
     const container = $("headlinesLocalPagination");
     container.innerHTML = "";
     if (total <= 1) return;
-
     for (let i = 1; i <= total; i++) {
         const btn = document.createElement("button");
         btn.textContent = i;
@@ -189,19 +161,15 @@
     const cb = el.querySelector('input');
     cb.checked = !cb.checked;
     el.classList.toggle('selected', cb.checked);
-    const anyChecked = Array.from(document.querySelectorAll('.headline-item input')).some(c => c.checked);
+    const anyChecked = Array.from(document.querySelectorAll('.headline-item.selected')).length > 0;
     $("similarActions").classList.toggle('hidden', !anyChecked);
   };
 
   async function saveSelectedHeadlines() {
     if (!state.currentHistoryId) return;
     const selected = [];
-    // On vérifie tous les checkboxes actuellement visibles (ou on pourrait mapper l'état)
-    const items = document.querySelectorAll('.headline-item.selected .headline-text');
-    items.forEach(it => selected.push(it.textContent));
-
+    document.querySelectorAll('.headline-item.selected .headline-text').forEach(it => selected.push(it.textContent));
     if (selected.length === 0) return alert("Sélectionnez au moins une headline.");
-
     state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...selected])];
     await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, headlines: JSON.stringify(state.selectedHeadlines) }) });
     renderSavedHeadlines();
@@ -232,11 +200,9 @@
     $("loading").classList.add("hidden");
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
-    
     $("openHeadlinesBtn").onclick = () => {
         if(!state.currentHistoryId) return alert("Générez un produit d'abord.");
-        $("headlinesModal").classList.remove("hidden");
-        renderSavedHeadlines();
+        $("headlinesModal").classList.remove("hidden"); renderSavedHeadlines();
     };
     $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
 
@@ -255,18 +221,13 @@
     });
 
     $("sendHeadlineChat").onclick = () => {
-        const stylePrompts = (state.selectedStyleButtons || [])
-            .map(name => state.config.headlineStyles.find(s => s.name === name)?.prompt)
-            .filter(Boolean).join(" ");
+        const stylePrompts = (state.selectedStyleButtons || []).map(n => state.config.headlineStyles.find(s => s.name === n)?.prompt).filter(Boolean).join(" ");
         apiCall('headlines', { style: stylePrompts + " " + $("headlineStyleInput").value });
     };
-
     $("genSimilarBtn").onclick = () => {
-        const selected = [];
-        document.querySelectorAll('.headline-item.selected .headline-text').forEach(it => selected.push(it.textContent));
+        const selected = []; document.querySelectorAll('.headline-item.selected .headline-text').forEach(it => selected.push(it.textContent));
         apiCall('headlines_similar', { selectedForSimilar: selected });
     };
-
     $("saveHeadlinesBtn").onclick = saveSelectedHeadlines;
     $("generateBtn").onclick = () => apiCall('generate');
     $("regenTitleBtn").onclick = () => apiCall('regen_title');
@@ -281,37 +242,25 @@
         state.imageBase64 = ev.target.result.split(",")[1];
         $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden");
         $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
-        state.currentHistoryId = null; 
-        state.selectedHeadlines = []; 
-        state.sessionGeneratedHeadlines = [];
-        renderHistoryUI();
+        state.currentHistoryId = null; state.selectedHeadlines = []; state.sessionGeneratedHeadlines = []; renderHistoryUI();
       };
       reader.readAsDataURL(file);
     };
 
     $("removeImage").onclick = (e) => {
-      e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null;
-      state.sessionGeneratedHeadlines = [];
-      $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block";
-      $("generateBtn").disabled = true;
+      e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null; state.sessionGeneratedHeadlines = [];
+      $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block"; $("generateBtn").disabled = true;
     };
 
     $("saveConfig").onclick = async () => {
-      state.config.promptSystem = $("promptSystem").value;
-      state.config.promptTitles = $("promptTitles").value;
-      state.config.promptDesc = $("promptDesc").value;
-      state.config.promptHeadlines = $("promptHeadlines").value;
+      state.config.promptSystem = $("promptSystem").value; state.config.promptTitles = $("promptTitles").value;
+      state.config.promptDesc = $("promptDesc").value; state.config.promptHeadlines = $("promptHeadlines").value;
       state.config.blacklist = $("configBlacklist").value;
       await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
-      alert("Enregistré"); $("settingsModal").classList.add("hidden");
-      renderConfigUI();
-      renderStyleSelector();
+      alert("Enregistré"); $("settingsModal").classList.add("hidden"); renderConfigUI(); renderStyleSelector();
     };
 
-    $("copyTitle").onclick = () => { navigator.clipboard.writeText($("titleText").textContent); alert("Titre copié"); };
-    $("copyDesc").onclick = () => { navigator.clipboard.writeText($("descText").textContent); alert("Description copiée"); };
     $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
-
     loadConfig(); loadHistory();
   }
 
@@ -345,7 +294,7 @@
     const item = state.historyCache.find(i => i.id === id); if(!item) return;
     state.currentHistoryId = id; 
     state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : [];
-    state.sessionGeneratedHeadlines = []; // Clear current session generations when restoring old product
+    state.sessionGeneratedHeadlines = [];
     $("titleText").textContent = item.title; $("descText").textContent = item.description;
     $("previewImg").src = `data:image/jpeg;base64,${item.image}`;
     state.imageBase64 = item.image; $("preview").classList.remove("hidden");
