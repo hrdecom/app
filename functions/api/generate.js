@@ -19,9 +19,20 @@ export async function onRequestPost({ request, env }) {
     } else if (action === "regen_desc") {
       prompt = `${baseInstructions}\nTASK: New description. JSON: { "description": "..." }`;
     } else if (action === "headlines") {
-      prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}\nSTYLE: ${style}\nTASK: Generate 5 hooks. JSON: { "headlines": ["...", "..."] }`;
+      prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}\nSTYLE: ${style}\nTASK: Generate 5 catchy hooks. JSON: { "headlines": ["...", "..."] }`;
     } else if (action === "ad_copys") {
-      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nDEFAULT LANGUAGE: English.\nPRODUCT CONTEXT:\n- Title: ${currentTitle}\n- Description: ${currentDesc}\n- Product URL: ${product_url || "(no url provided)"}\nSTYLE REQUEST: ${style}\n\nSTRUCTURE:\n1. Hook/Description\n2. Newline\n3. ✅ Bullets\n4. Newline\n5. CTA + URL\n\nOutput ONLY JSON: { "ad_copys": ["...", "..."] }`;
+      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nDEFAULT LANGUAGE: English.\nPRODUCT CONTEXT:\n- Title: ${currentTitle}\n- Description: ${currentDesc}\n- Product URL: ${product_url || "(no url provided)"}\nSTYLE REQUEST: ${style}\n\nOutput ONLY JSON: { "ad_copys": ["...", "..."] }`;
+    } else if (action === "ad_copys_similar") {
+      prompt = `You are a Facebook Ads Expert. Based on these selected ads: ${JSON.stringify(selectedForSimilar)}.
+        And this product: ${currentTitle}.
+        TASK: Generate 3 NEW variations that follow the EXACT same structure:
+        1. Catchy description.
+        2. Newline.
+        3. ✅ Bullets (Hypoallergenic, Water and oxidation resistant, Made to last).
+        4. Newline.
+        5. CTA with URL: ${product_url}.
+        
+        Output ONLY JSON: { "ad_copys": ["...", "..."] }`;
     }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
