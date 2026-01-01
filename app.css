@@ -12,7 +12,6 @@ body { background: var(--bg); margin: 0; padding: 40px 0; display: flex; justify
 
 /* IMAGE PLEIN BLOC FIXE */
 .drop { border: 2px dashed #ccc; border-radius: 12px; padding: 10px; text-align: center; cursor: pointer; position: relative; height: 500px; display: flex; align-items: center; justify-content: center; background: #fff; overflow: hidden; }
-.drop input { display: none; }
 .preview { position: absolute; inset: 0; background: #fff; display: flex; align-items: center; justify-content: center; z-index: 5; }
 .preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .modern-remove-btn { position: absolute; top: 15px; right: 15px; background: #fff; border: 1px solid #ddd; border-radius: 50%; width: 35px; height: 35px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; font-size: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
@@ -27,9 +26,6 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .modal-content { background: #fff; width: 850px; max-height: 90vh; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; }
 .modal-header, .modal-footer { padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-.modal-footer { border-top: 1px solid var(--border); border-bottom: none; }
-.close-btn { background: none; border: none; font-size: 30px; cursor: pointer; color: #999; }
-
 .tabs { display: flex; background: #f9f9f9; border-bottom: 1px solid var(--border); }
 .tab-link { flex: 1; padding: 15px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; }
 .tab-link.active { background: #fff; border-bottom: 2px solid var(--primary); font-weight: bold; }
