@@ -85,26 +85,20 @@
           historyNames, currentTitle: $("titleText").textContent
         })
       });
+      
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur IA");
 
       if (action === 'generate') {
         $("titleText").textContent = data.title;
         $("descText").textContent = data.description;
-        
-        // Création initiale
-        const hRes = await fetch("/api/history", { 
-          method: "POST", 
-          body: JSON.stringify({ 
-            title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name 
-          }) 
-        });
+        const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ 
+          title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name 
+        }) });
         const hData = await hRes.json();
-        
-        // TRÈS IMPORTANT : On lie l'ID immédiatement
         state.currentHistoryId = hData.id;
 
-        // Mise à jour Blacklist
+        // Blacklist Auto
         if (data.product_name) {
           let bList = state.config.blacklist.split(",").map(n => n.trim()).filter(n => n);
           if (!bList.includes(data.product_name)) {
@@ -116,25 +110,20 @@
         }
         await loadHistory();
       } else {
-        // Régénération
+        // RÉGÉNÉRATION : On conserve l'ID et on met à jour le serveur
         if (action === 'regen_title') $("titleText").textContent = data.title;
         if (action === 'regen_desc') $("descText").textContent = data.description;
 
         if (state.currentHistoryId) {
-          await fetch("/api/history", { 
-            method: "PATCH", 
-            body: JSON.stringify({ 
-              id: state.currentHistoryId, 
-              title: $("titleText").textContent, 
-              description: $("descText").textContent 
-            }) 
-          });
-          await loadHistory(); // Rafraîchit l'historique pour voir le nouveau titre
+          await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ 
+            id: state.currentHistoryId, title: $("titleText").textContent, description: $("descText").textContent 
+          }) });
+          await loadHistory();
         }
       }
       $("regenTitleBtn").disabled = false;
       $("regenDescBtn").disabled = false;
-    } catch(e) { alert(e.message); }
+    } catch(e) { alert("Erreur: " + e.message); }
     finally { stopLoading(); }
   }
 
@@ -144,8 +133,9 @@
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
     window.onclick = (e) => { if (e.target == $("settingsModal")) $("settingsModal").classList.add("hidden"); };
 
+    // FIX ONGLETS : Clicable de nouveau
     document.querySelectorAll(".tab-link").forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = (e) => {
         document.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active"));
         document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
         btn.classList.add("active");
@@ -159,15 +149,12 @@
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
-        state.imageMime = ev.target.result.split(";")[0].split(":")[1] || "image/jpeg";
-        state.imageBase64 = ev.target.result.split(",")[1];
-        $("previewImg").src = ev.target.result;
-        $("preview").classList.remove("hidden");
-        $("dropPlaceholder").style.display = "none";
-        $("generateBtn").disabled = false;
-        
-        // Reset pollution : nouveau produit commence
-        state.currentHistoryId = null;
+        const b64 = ev.target.result;
+        state.imageMime = b64.split(";")[0].split(":")[1] || "image/jpeg";
+        state.imageBase64 = b64.split(",")[1];
+        $("previewImg").src = b64; $("preview").classList.remove("hidden");
+        $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
+        state.currentHistoryId = null; // Nouveau produit
         $("titleText").textContent = ""; $("descText").textContent = "";
         renderHistoryUI();
       };
@@ -175,9 +162,7 @@
     };
 
     $("removeImage").onclick = (e) => {
-      e.stopPropagation();
-      state.imageBase64 = null;
-      state.currentHistoryId = null;
+      e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null;
       $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block";
       $("titleText").textContent = ""; $("descText").textContent = "";
       $("generateBtn").disabled = true; $("regenTitleBtn").disabled = true; $("regenDescBtn").disabled = true;
@@ -214,7 +199,6 @@
     const filtered = state.historyCache.filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
     const start = (state.currentPage - 1) * state.pageSize;
     const paginated = filtered.slice(start, start + state.pageSize);
-    
     $("historyList").innerHTML = paginated.map(item => `
       <div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})">
         <img src="data:image/jpeg;base64,${item.image}" class="history-img">
@@ -222,7 +206,6 @@
         <button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button>
       </div>
     `).join("");
-    
     renderPagination(Math.ceil(filtered.length / state.pageSize));
   }
 
