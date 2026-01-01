@@ -3,174 +3,121 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HR Decom — App Copywriting</title>
+  <title>HR Decom — Copywriting App</title>
   <link rel="stylesheet" href="app.css" />
 </head>
 <body>
-  <div id="app">
-    <header class="header">
-      <div class="brand">
-        <div class="logo">✧</div>
-        <div>
-          <h1>App Copywriting Bijoux</h1>
-          <p class="subtitle">Image → Titre & Description (Claude)</p>
-        </div>
-      </div>
 
-      <div class="header-actions">
-        <button id="settingsBtn" class="icon-btn" title="Paramètres">⚙️</button>
-      </div>
-    </header>
+<div id="app">
 
-    <!-- SETTINGS (extension features ported to web; API key is managed server-side) -->
-    <section id="settings" class="settings hidden">
-      <h2>Paramètres</h2>
-
-      <div class="grid-2">
-        <div>
-          <label>Clé API (non utilisée ici)</label>
-          <input id="apiKey" type="password" placeholder="Gérée côté serveur (Cloudflare)" disabled />
-          <p class="hint">La clé API est stockée dans Cloudflare (Variables & Secrets). Elle n'est jamais mise dans le navigateur.</p>
-        </div>
-        <div>
-          <label>Modèle (optionnel)</label>
-          <input id="modelName" type="text" placeholder="ex: claude-sonnet-4-5-20250929" />
-          <p class="hint">Si vide, le serveur utilise ANTHROPIC_MODEL.</p>
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <div>
-          <label>Clé de sauvegarde (optionnel)</label>
-          <input id="persistKey" type="text" placeholder="ex: hrdecom_v1" />
-          <p class="hint">Permet d'isoler tes données (historique/collections) sur ce navigateur.</p>
-        </div>
-        <div>
-          <label>CSV “déjà utilisé” (optionnel)</label>
-          <input id="csvFile" type="file" accept=".csv,text/csv" />
-          <p id="csvInfo" class="hint">Aucun CSV importé.</p>
-        </div>
-      </div>
-
-      <div class="actions-row">
-        <button id="saveSettings" class="btn ghost">Sauvegarder</button>
-        <button id="clearUsed" class="btn ghost">Vider “déjà utilisé”</button>
-        <button id="exportTemplate" class="btn ghost">Exporter (Titre+Desc)</button>
-        <button id="exportBlocklist" class="btn ghost">Exporter “déjà utilisé”</button>
-      </div>
-
-      <hr />
-
-      <h2>Collections</h2>
-      <div class="grid-2">
-        <div>
-          <label>Éditeur de collections</label>
-          <textarea id="collectionsEditor" rows="5" placeholder="Une collection par ligne : Nom | Description"></textarea>
-          <p class="hint">Ex: Summer Glow | Bijoux dorés minimalistes, look estival.</p>
-        </div>
-        <div>
-          <label>Ajouter une collection</label>
-          <input id="newCollection" type="text" placeholder="Nom" />
-          <textarea id="newCollectionDesc" rows="3" placeholder="Description (style, mood, cible...)"></textarea>
-          <div class="actions-row">
-            <button id="addCollection" class="btn ghost">Ajouter</button>
-            <button id="resetCollections" class="btn ghost">Réinitialiser</button>
-            <button id="saveCollections" class="btn ghost">Sauvegarder</button>
-          </div>
-        </div>
-      </div>
-
-      <hr />
-
-      <h2>Sauvegarde / Import</h2>
-      <div class="actions-row">
-        <button id="exportAll" class="btn ghost">Exporter tout</button>
-        <button id="importAll" class="btn ghost">Importer</button>
-        <input id="importAllFile" type="file" accept="application/json" class="hidden" />
-      </div>
-    </section>
-
-    <section class="workspace">
-      <!-- LEFT -->
-      <div class="left">
-        <section class="uploader card">
-          <h2>Image du bijou</h2>
-          <div id="drop" class="drop">
-            <input id="imageInput" type="file" accept="image/*" />
-            <div id="preview" class="preview-in-drop hidden">
-              <button id="removeImage" class="remove-btn" title="Retirer">×</button>
-              <img id="previewImg" alt="Aperçu" />
-            </div>
-            <p id="dropPlaceholder">Cliquez ou déposez une image</p>
-          </div>
-        </section>
-
-        <section class="history card">
-          <div class="history-head">
-            <h2>Historique</h2>
-            <div id="loading" class="loading hidden">⏳</div>
-            <div id="timer" class="timer hidden">00:00</div>
-          </div>
-          <div id="historyList" class="history-list"></div>
-        </section>
-      </div>
-
-      <!-- RIGHT -->
-      <div class="right">
-        <section class="card">
-          <h2>Suggérer une collection</h2>
-          <div class="row">
-            <select id="collectionSelect"></select>
-            <button id="applyCollection" class="btn ghost">Appliquer</button>
-          </div>
-          <p class="hint">La collection influence le ton et le style de la description.</p>
-        </section>
-
-        <section class="actions">
-          <button id="generateBtn" class="btn primary">Générer</button>
-          <button id="regenTitleBtn" class="btn ghost" disabled>Régénérer le titre</button>
-          <button id="regenDescBtn" class="btn ghost" disabled>Régénérer Description</button>
-        </section>
-
-        <section class="output">
-          <div class="bubble card">
-            <div class="bubble-head">
-              <h3>Titre</h3>
-              <button id="copyTitle" class="icon-btn" title="Copier">⌘C</button>
-            </div>
-            <pre id="titleText" class="mono"></pre>
-          </div>
-        </section>
-      </div>
-    </section>
-
-    <section class="output">
-      <div class="bubble card">
-        <div class="bubble-head">
-          <h3>Description</h3>
-          <div class="bubble-actions">
-            <button id="copyDesc" class="icon-btn" title="Copier">⌘C</button>
-            <button id="infoDesc" class="icon-btn" title="Traduire / HTML FR">i</button>
-          </div>
-        </div>
-        <pre id="descText" class="mono"></pre>
-      </div>
-    </section>
-
-    <!-- Modal (Traduction/HTML FR) -->
-    <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <div class="modal-content card">
-        <div class="modal-header">
-          <h3 id="modalTitle">Traduction (FR)</h3>
-          <button id="modalClose" class="icon-btn" title="Fermer">✕</button>
-        </div>
-        <div id="modalBody" class="modal-body"></div>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="brand">
+      <div class="logo">✧</div>
+      <div>
+        <h1>Copywriting Bijoux</h1>
+        <p class="subtitle">Image → Titre & Description</p>
       </div>
     </div>
+    <button id="settingsBtn" class="icon-btn">⚙️</button>
+  </header>
 
-    <div id="toast" class="toast hidden"></div>
-  </div>
+  <!-- SETTINGS -->
+  <section id="settings" class="settings hidden">
+    <h2>Paramètres</h2>
 
-  <script src="app.js"></script>
+    <label>Clé de sauvegarde</label>
+    <input id="persistKey" placeholder="ex: hrdecom_v1" />
+
+    <label>CSV “déjà utilisé”</label>
+    <input id="csvFile" type="file" accept=".csv" />
+    <p id="csvInfo" class="hint">Aucun CSV importé.</p>
+
+    <div class="actions-row">
+      <button id="saveSettings">Sauvegarder</button>
+      <button id="clearUsed">Vider “déjà utilisé”</button>
+      <button id="exportTemplate">Exporter (Titre+Desc)</button>
+      <button id="exportBlocklist">Exporter “déjà utilisé”</button>
+    </div>
+
+    <h2>Collections</h2>
+    <textarea id="collectionsEditor" rows="5"
+      placeholder="Une collection par ligne : Nom | Description"></textarea>
+
+    <input id="newCollection" placeholder="Nom" />
+    <textarea id="newCollectionDesc" rows="3"
+      placeholder="Description (style, mood, cible…)"></textarea>
+
+    <div class="actions-row">
+      <button id="addCollection">Ajouter</button>
+      <button id="resetCollections">Réinitialiser</button>
+      <button id="saveCollections">Sauvegarder</button>
+    </div>
+  </section>
+
+  <!-- WORKSPACE -->
+  <section class="workspace">
+
+    <!-- LEFT -->
+    <div class="left">
+
+      <section class="card">
+        <h2>Image du bijou</h2>
+        <div id="drop" class="drop">
+          <input id="imageInput" type="file" accept="image/*" />
+          <div id="preview" class="preview hidden">
+            <button id="removeImage" class="remove-btn">×</button>
+            <img id="previewImg" />
+          </div>
+          <p id="dropPlaceholder">Cliquez ou déposez une image</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Historique</h2>
+        <div id="historyList"></div>
+      </section>
+
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right">
+
+      <section class="card">
+        <h2>Suggérer une collection</h2>
+        <select id="collectionSelect"></select>
+        <button id="applyCollection">Appliquer</button>
+      </section>
+
+      <section class="actions">
+        <button id="generateBtn" class="primary">Générer</button>
+        <button id="regenTitleBtn" disabled>Régénérer le titre</button>
+        <button id="regenDescBtn" disabled>Régénérer la description</button>
+      </section>
+
+      <!-- TITRE -->
+      <section class="card">
+        <div class="card-head">
+          <h3>Titre</h3>
+          <button id="copyTitle">⌘C</button>
+        </div>
+        <pre id="titleText"></pre>
+      </section>
+
+      <!-- DESCRIPTION SOUS LE TITRE -->
+      <section class="card">
+        <div class="card-head">
+          <h3>Description</h3>
+          <button id="copyDesc">⌘C</button>
+        </div>
+        <pre id="descText"></pre>
+      </section>
+
+    </div>
+  </section>
+
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
