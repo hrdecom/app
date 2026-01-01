@@ -38,14 +38,14 @@
       </div>
 
       <div id="tab-headlines-config" class="tab-content hidden">
-        <div class="prompt-segment"><label>Prompt Principal Headlines</label><textarea id="promptHeadlines" rows="4"></textarea></div>
+        <div class="prompt-segment"><label>Prompt Principal Headlines</label><textarea id="promptHeadlines" rows="6"></textarea></div>
         <label>Boutons de Styles</label>
         <div id="styleButtonsEditor"></div>
         <button id="addStyleBtn" class="secondary-btn">+ Ajouter un style</button>
       </div>
 
       <div id="tab-ads-config" class="tab-content hidden">
-        <div class="prompt-segment"><label>Prompt Principal Ad Copys</label><textarea id="promptAdCopys" rows="4"></textarea></div>
+        <div class="prompt-segment"><label>Prompt Principal Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea></div>
         <label>Boutons de Styles Ads</label>
         <div id="adStyleButtonsEditor"></div>
         <button id="addAdStyleBtn" class="secondary-btn">+ Ajouter un style ad</button>
@@ -70,7 +70,7 @@
         <div class="style-selector" id="styleSelectorContainer"></div>
         <div id="headlinesResults" class="headlines-results"></div>
         <div id="headlinesLocalPagination" class="pagination"></div>
-        <div class="headlines-actions hidden" id="similarActions">
+        <div id="headlinesActionsGroup" class="headlines-actions hidden">
             <button id="genSimilarBtn" class="secondary-btn" style="width:100%; color: var(--apple-blue);">✨ Générer versions similaires</button>
         </div>
       </div>
@@ -99,7 +99,7 @@
         <div id="adsSavedList" class="headlines-results"></div>
         <div id="adsDefaultInfoBlock" class="ads-info-block"></div>
       </div>
-      <div class="chat-container"><div class="chat-bar"><input type="text" id="adStyleInput" placeholder="Style de pub... (ex: Cadeau femme)"/><button id="sendAdChat">↑</button></div></div>
+      <div class="chat-container"><div class="chat-bar"><input type="text" id="adStyleInput" placeholder="Style de pub..."/><button id="sendAdChat">↑</button></div></div>
       <div class="modal-footer"><button id="saveAdsBtn" class="primary-btn">Enregistrer les sélections</button></div>
     </div>
   </div>
@@ -138,13 +138,13 @@
         <div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div>
         <pre id="descText"></pre>
         
-        <div class="url-input-container" style="margin-top:15px;">
-            <label style="font-size:11px; font-weight:bold; color:var(--text-muted);">PRODUCT URL</label>
-            <input type="text" id="productUrlInput" placeholder="https://en.riccardiparis.com/..."/>
+        <div style="margin-top:15px;">
+            <label style="font-size:10px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Product URL</label>
+            <input type="text" id="productUrlInput" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:13px;" placeholder="Lien boutique spécifique..."/>
         </div>
 
         <div style="display:flex; gap:10px; margin-top:15px;">
-            <button id="openHeadlinesBtn" class="secondary-btn" style="flex:1;">🎬 Headlines Vidéos</button>
+            <button id="openHeadlinesBtn" class="secondary-btn" style="flex:1;">🎬 Headlines</button>
             <button id="openAdsBtn" class="secondary-btn" style="flex:1;">📢 Ad Copys</button>
         </div>
       </section>
