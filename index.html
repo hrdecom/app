@@ -11,10 +11,10 @@
 <div id="app">
   <header class="header">
     <div class="brand"><div class="logo">✧</div><h1>Copywriting Bijoux</h1></div>
-    <button id="settingsBtn" class="icon-btn">⚙️ Paramètres</button>
+    <button id="settingsBtn">⚙️ Paramètres</button>
   </header>
 
-  <!-- MODAL PARAMÈTRES (Design Luxe & Segmenté) -->
+  <!-- MODAL PARAMÈTRES -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
@@ -28,7 +28,6 @@
       </div>
       
       <div id="tab-collections" class="tab-content">
-        <p class="hint">Gérez vos collections et leurs descriptions spécifiques.</p>
         <div id="collectionsList"></div>
         <button id="addCollection" class="secondary-btn" style="margin-top:10px">+ Ajouter une collection</button>
       </div>
@@ -49,11 +48,10 @@
       </div>
 
       <div id="tab-blacklist" class="tab-content hidden">
-        <label>Importer CSV (Recherche guillemets automatique)</label>
+        <label>Importer CSV</label>
         <input type="file" id="csvImport" accept=".csv" style="margin: 10px 0;"/>
-        <p id="csvStatus" class="hint">Les noms seront ajoutés à la liste ci-dessous.</p>
         <hr>
-        <label>Liste des noms exclus (Blacklist)</label>
+        <label>Liste des noms exclus</label>
         <textarea id="configBlacklist" rows="8"></textarea>
       </div>
 
@@ -75,7 +73,7 @@
         <div id="drop" class="drop">
           <input id="imageInput" type="file" accept="image/*"/>
           <div id="preview" class="preview hidden">
-            <button id="removeImage" class="modern-remove-btn">×</button>
+            <button id="removeImage" class="modern-remove-btn" title="Supprimer">×</button>
             <img id="previewImg"/>
           </div>
           <p id="dropPlaceholder">Cliquez ou déposez une image</p>
@@ -85,11 +83,8 @@
 
     <div class="right">
       <section class="card">
-        <h2>Paramètres de génération</h2>
-        <div style="margin-bottom:15px;">
-          <label>Collection</label>
-          <select id="collectionSelect"></select>
-        </div>
+        <label>Collection</label>
+        <select id="collectionSelect" style="margin-bottom:15px;"></select>
         <div class="actions">
           <button id="generateBtn" class="primary-btn" disabled>Générer Tout</button>
           <button id="regenTitleBtn" class="secondary-btn" disabled>Titre</button>
@@ -112,10 +107,7 @@
   <section class="card history-section">
     <div class="history-header">
       <h2>Historique</h2>
-      <div style="display:flex; gap:10px; align-items:center;">
-        <input type="text" id="historySearch" placeholder="Rechercher..."/>
-        <span id="historyTotal" class="hint"></span>
-      </div>
+      <input type="text" id="historySearch" placeholder="Rechercher..."/>
     </div>
     <div id="historyList" class="history-list"></div>
     <div id="pagination" class="pagination"></div>
