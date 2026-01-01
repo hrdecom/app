@@ -9,39 +9,51 @@
     promptSystem: "You are a senior luxury jewelry copywriter. Analyze the image and return a valid JSON object.",
     promptTitles: "TITLE FORMAT: Ring: Adjustable {Collection} Ring \"{Name}\". Others: {Collection} {Type} \"{Name}\". Symbolic name must be 1-2 words. NO hyphens.",
     promptDesc: "DESCRIPTION: Exactly TWO paragraphs. Each paragraph MUST be 180 characters or LESS. NO ellipses \"...\". Tone: Luxury.",
-    promptHeadlines: "You are a viral marketing expert for luxury jewelry hooks.",
+    promptHeadlines: "You are a Viral TikTok & Reels Strategist specialized in high-end jewelry UGC. Your goal is to stop the scroll in the first 1.5 seconds.",
     headlineStyles: [
         { name: "Symbolique", prompt: "Use a deep symbolic and emotional tone related to the product concept." },
-        { name: "POV", prompt: "Write from the perspective of someone receiving this as a perfect gift." },
-        { name: "Généraliste", prompt: "Broad, catchy hooks to appeal to the widest possible audience." }
+        { name: "POV", prompt: "Write from the perspective of someone receiving this as a gift." },
+        { name: "Généraliste", prompt: "Broad, catchy hooks for a wide audience." }
     ]
   };
 
   let state = {
-    imageBase64: null, imageMime: "image/jpeg", historyCache: [],
-    config: { ...DEFAULTS, blacklist: "" },
-    currentPage: 1, pageSize: 5, searchQuery: "", currentHistoryId: null,
-    currentGeneratedHeadlines: [], selectedHeadlines: [],
-    selectedStyleButtons: [] // Noms des styles sélectionnés
+    imageBase64: null,
+    imageMime: "image/jpeg",
+    historyCache: [],
+    config: JSON.parse(JSON.stringify(DEFAULTS)), // Deep copy des défauts
+    currentPage: 1,
+    pageSize: 5,
+    searchQuery: "",
+    currentHistoryId: null,
+    timerInterval: null,
+    currentGeneratedHeadlines: [],
+    selectedHeadlines: [],
+    selectedStyleButtons: []
   };
 
   /* TIMER */
   function startLoading() {
     let s = 0; $("timer").textContent = "00:00";
+    if (state.timerInterval) clearInterval(state.timerInterval);
     state.timerInterval = setInterval(() => {
       s++; const mm = String(Math.floor(s/60)).padStart(2,"0"); const ss = String(s%60).padStart(2,"0");
       $("timer").textContent = `${mm}:${ss}`;
     }, 1000);
     $("loading").classList.remove("hidden");
   }
-  function stopLoading() { clearInterval(state.timerInterval); $("loading").classList.add("hidden"); }
+  function stopLoading() { clearInterval(state.timerInterval); state.timerInterval = null; $("loading").classList.add("hidden"); }
 
   /* CONFIG */
   async function loadConfig() {
     const res = await fetch("/api/settings");
     const data = await res.json();
     const saved = data.find(i => i.id === 'full_config');
-    if (saved) state.config = JSON.parse(saved.value);
+    if (saved) {
+        state.config = JSON.parse(saved.value);
+        // Fusionner avec les défauts si de nouveaux champs ont été ajoutés (ex: headlineStyles)
+        if (!state.config.headlineStyles) state.config.headlineStyles = DEFAULTS.headlineStyles;
+    }
     renderConfigUI();
     renderStyleSelector();
   }
@@ -53,34 +65,42 @@
     $("promptHeadlines").value = state.config.promptHeadlines || DEFAULTS.promptHeadlines;
     $("configBlacklist").value = state.config.blacklist || "";
     
-    $("collectionSelect").innerHTML = state.config.collections.map(c => `<option value="${c.name}">${c.name}</option>`).join("");
+    // Collections List
     $("collectionsList").innerHTML = state.config.collections.map((c, i) => `
-      <div style="display:flex; gap:5px; margin-bottom:10px;">
+      <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
         <input type="text" value="${c.name}" onchange="updateCol(${i}, 'name', this.value)" style="flex:1">
         <textarea onchange="updateCol(${i}, 'meaning', this.value)" style="flex:2; height:40px;">${c.meaning}</textarea>
         <button onclick="removeCol(${i})">×</button>
       </div>`).join("");
 
-    $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || DEFAULTS.headlineStyles).map((s, i) => `
-      <div style="display:flex; gap:5px; margin-bottom:10px;">
+    // Styles List (Headlines)
+    $("styleButtonsEditor").innerHTML = state.config.headlineStyles.map((s, i) => `
+      <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
         <input type="text" value="${s.name}" onchange="updateStyleBtn(${i}, 'name', this.value)" style="flex:1">
-        <input type="text" value="${s.prompt}" onchange="updateStyleBtn(${i}, 'prompt', this.value)" style="flex:3">
+        <textarea onchange="updateStyleBtn(${i}, 'prompt', this.value)" style="flex:3; height:40px;">${s.prompt}</textarea>
         <button onclick="removeStyleBtn(${i})">×</button>
       </div>`).join("");
+    
+    // Update Select menu
+    $("collectionSelect").innerHTML = state.config.collections.map(c => `<option value="${c.name}">${c.name}</option>`).join("");
   }
 
+  // Fonctions globales pour les modifications dans l'éditeur
   window.updateCol = (i, f, v) => state.config.collections[i][f] = v;
   window.removeCol = (i) => { state.config.collections.splice(i, 1); renderConfigUI(); };
   $("addCollection").onclick = () => { state.config.collections.push({name:"", meaning:""}); renderConfigUI(); };
 
   window.updateStyleBtn = (i, f, v) => state.config.headlineStyles[i][f] = v;
   window.removeStyleBtn = (i) => { state.config.headlineStyles.splice(i, 1); renderConfigUI(); };
-  $("addStyleBtn").onclick = () => { state.config.headlineStyles.push({name:"", prompt:""}); renderConfigUI(); };
+  $("addStyleBtn").onclick = () => { 
+      state.config.headlineStyles.push({name:"Nouveau Style", prompt:"Description du style..."}); 
+      renderConfigUI(); 
+  };
 
   /* HEADLINES UI */
   function renderStyleSelector() {
     const container = $("styleSelectorContainer");
-    container.innerHTML = (state.config.headlineStyles || DEFAULTS.headlineStyles).map(s => `
+    container.innerHTML = state.config.headlineStyles.map(s => `
         <div class="style-tag ${state.selectedStyleButtons.includes(s.name) ? 'selected' : ''}" 
              onclick="toggleStyleButton('${s.name}', this)">${s.name}</div>
     `).join("");
@@ -122,20 +142,20 @@
         const hData = await hRes.json();
         state.currentHistoryId = hData.id;
         state.selectedHeadlines = [];
-        loadHistory();
+        await loadHistory();
       } else if (action === 'regen_title' || action === 'regen_desc') {
         if (action === 'regen_title') $("titleText").textContent = data.title;
         else $("descText").textContent = data.description;
         if (state.currentHistoryId) {
           await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, title: $("titleText").textContent, description: $("descText").textContent }) });
-          loadHistory();
+          await loadHistory();
         }
       } else if (action === 'headlines' || action === 'headlines_similar') {
         state.currentGeneratedHeadlines = data.headlines || [];
         renderHeadlinesResults();
-        $("similarActions").classList.add("hidden"); // Reset sim btn
+        $("similarActions").classList.add("hidden"); 
       }
-    } catch(e) { alert(e.message); }
+    } catch(e) { alert("Erreur: " + e.message); }
     finally { stopLoading(); }
   }
 
@@ -151,7 +171,6 @@
     const cb = el.querySelector('input');
     cb.checked = !cb.checked;
     el.classList.toggle('selected', cb.checked);
-    // Afficher bouton sim si au moins 1 coché
     const anyChecked = Array.from(document.querySelectorAll('.headline-item input')).some(c => c.checked);
     $("similarActions").classList.toggle('hidden', !anyChecked);
   };
@@ -162,12 +181,12 @@
     state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...selected])];
     await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, headlines: JSON.stringify(state.selectedHeadlines) }) });
     renderSavedHeadlines();
-    alert("Enregistré !");
+    alert("Headlines enregistrées !");
   }
 
   function renderSavedHeadlines() {
     $("headlinesSavedList").innerHTML = state.selectedHeadlines.map(h => `
-        <div class="headline-item">
+        <div class="headline-item no-hover">
             <span class="headline-text">${h}</span>
             <button onclick="copyHl('${h.replace(/'/g,"\\'")}')">📋</button>
         </div>`).join("");
@@ -175,14 +194,21 @@
   window.copyHl = (t) => { navigator.clipboard.writeText(t); alert("Copié"); };
 
   function init() {
+    $("loading").classList.add("hidden");
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
+    
     $("openHeadlinesBtn").onclick = () => {
         if(!state.currentHistoryId) return alert("Générez un produit d'abord.");
         $("headlinesModal").classList.remove("hidden");
         renderSavedHeadlines();
     };
     $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
+
+    window.onclick = (e) => { 
+        if (e.target == $("settingsModal")) $("settingsModal").classList.add("hidden");
+        if (e.target == $("headlinesModal")) $("headlinesModal").classList.add("hidden");
+    };
 
     document.querySelectorAll(".tab-link").forEach(btn => {
       btn.onclick = (e) => {
@@ -194,7 +220,7 @@
     });
 
     $("sendHeadlineChat").onclick = () => {
-        const stylePrompts = (state.config.headlineStyles || DEFAULTS.headlineStyles)
+        const stylePrompts = state.config.headlineStyles
             .filter(s => state.selectedStyleButtons.includes(s.name))
             .map(s => s.prompt).join(" ");
         apiCall('headlines', { style: stylePrompts + " " + $("headlineStyleInput").value });
@@ -230,18 +256,28 @@
       $("generateBtn").disabled = true;
     };
 
+    // SAUVEGARDE CONFIG (FIXÉE)
     $("saveConfig").onclick = async () => {
+      // On récupère manuellement les valeurs des gros textareas
       state.config.promptSystem = $("promptSystem").value;
       state.config.promptTitles = $("promptTitles").value;
       state.config.promptDesc = $("promptDesc").value;
       state.config.promptHeadlines = $("promptHeadlines").value;
       state.config.blacklist = $("configBlacklist").value;
+      
+      // Les collections et styles sont mis à jour via les onchange="update..."
+      
       await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
-      alert("Enregistré"); $("settingsModal").classList.add("hidden");
+      alert("Configuration sauvegardée avec succès !"); 
+      $("settingsModal").classList.add("hidden");
+      renderConfigUI();
       renderStyleSelector();
     };
 
+    $("copyTitle").onclick = () => { navigator.clipboard.writeText($("titleText").textContent); alert("Titre copié"); };
+    $("copyDesc").onclick = () => { navigator.clipboard.writeText($("descText").textContent); alert("Description copiée"); };
     $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
+
     loadConfig(); loadHistory();
   }
 
@@ -273,7 +309,8 @@
 
   window.restore = (id) => {
     const item = state.historyCache.find(i => i.id === id); if(!item) return;
-    state.currentHistoryId = id; state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : [];
+    state.currentHistoryId = id; 
+    state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : [];
     $("titleText").textContent = item.title; $("descText").textContent = item.description;
     $("previewImg").src = `data:image/jpeg;base64,${item.image}`;
     state.imageBase64 = item.image; $("preview").classList.remove("hidden");
