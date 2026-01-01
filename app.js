@@ -1,56 +1,57 @@
 (() => {
   const $ = (id) => document.getElementById(id);
 
-  const ORIG_COLLECTIONS = [
-    { name: "Initial", meaning: "Jewelry featuring 26 letter variants. Titles must contain 'Initial'." },
-    { name: "Projection", meaning: "Jewelry with a pendant holding a customizable image." },
-    { name: "Name", meaning: "Personalized jewelry with raised names (laser-cut plate)." },
-    { name: "Engraved", meaning: "Jewelry with customizable engraving." },
-    { name: "Angel", meaning: "Jewelry with angelic shapes (wings, feathers)." }
-  ];
-
-  const ORIG_PROMPT = `Analyze a jewelry image and produce a SINGLE JSON object.
-- "type": Ring|Bracelet|Necklace|Earrings
-- "collection": one from allowed list
-- "name": a symbolic English name (1–2 words)
-- "title": Ring: Adjustable {Collection} Ring "{Name}". Others: {Collection} {Type} "{Name}". NO hyphens.
-- "description": English plain text. EXACTLY TWO paragraphs, each <=180 characters (including spaces). NO ellipses "...". Rewrite to be concise. Then bullet list starting with '- '.
-
-Required bullets:
-- Materials: Stainless steel
-- Hypoallergenic
-- Water and oxidation resistant
-Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Necklace (Length: 46 cm + 5 cm).`;
+  // PROMPTS D'ORIGINE STRICTS
+  const DEFAULTS = {
+    collections: [
+      { name: "Initial", meaning: "Jewelry featuring 26 letter variants. Titles must contain 'Initial'." },
+      { name: "Projection", meaning: "Jewelry with a pendant holding a customizable image." },
+      { name: "Name", meaning: "Personalized jewelry with raised names (laser-cut plate)." },
+      { name: "Engraved", meaning: "Jewelry with customizable engraving." },
+      { name: "Angel", meaning: "Jewelry with angelic shapes (wings, feathers)." }
+    ],
+    promptSystem: "You are a senior luxury jewelry copywriter. Analyze the image and return a valid JSON object.",
+    promptTitles: "TITLE FORMAT: Ring: Adjustable {Collection} Ring \"{Name}\". Others: {Collection} {Type} \"{Name}\". Symbolic name must be 1-2 words. NO hyphens.",
+    promptDesc: "DESCRIPTION: Exactly TWO paragraphs. Each paragraph MUST be 180 characters or LESS. NO ellipses \"...\". Tone: Luxury. Then bullet list: Materials: Stainless steel, Hypoallergenic, Water resistant. Ring: Adjustable, No green fingers. Bracelet: Size 16+5cm. Necklace: Length 46+5cm."
+  };
 
   let state = {
     imageBase64: null,
     imageMime: "image/jpeg",
     historyCache: [],
-    config: { promptSystem: ORIG_PROMPT, collections: ORIG_COLLECTIONS, blacklist: "" },
+    config: { 
+      promptSystem: DEFAULTS.promptSystem, 
+      promptTitles: DEFAULTS.promptTitles, 
+      promptDesc: DEFAULTS.promptDesc, 
+      collections: DEFAULTS.collections, 
+      blacklist: "" 
+    },
     currentPage: 1,
     pageSize: 5,
-    searchQuery: ""
+    searchQuery: "",
+    currentHistoryId: null
   };
 
-  /* CONFIGURATION */
+  /* CONFIG */
   async function loadConfig() {
-    try {
-      const res = await fetch("/api/settings");
-      const data = await res.json();
-      const saved = data.find(i => i.id === 'full_config');
-      if (saved) state.config = JSON.parse(saved.value);
-      renderConfigUI();
-    } catch(e) { console.error("Config load error", e); }
+    const res = await fetch("/api/settings");
+    const data = await res.json();
+    const saved = data.find(i => i.id === 'full_config');
+    if (saved) state.config = JSON.parse(saved.value);
+    renderConfigUI();
   }
 
   function renderConfigUI() {
     $("promptSystem").value = state.config.promptSystem;
+    $("promptTitles").value = state.config.promptTitles;
+    $("promptDesc").value = state.config.promptDesc;
     $("configBlacklist").value = state.config.blacklist;
+    
     $("collectionSelect").innerHTML = state.config.collections.map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     $("collectionsList").innerHTML = state.config.collections.map((c, i) => `
-      <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
-        <input type="text" value="${c.name}" onchange="updateCol(${i}, 'name', this.value)" style="flex:1; padding:5px;">
-        <textarea onchange="updateCol(${i}, 'meaning', this.value)" style="flex:2; height:40px; padding:5px;">${c.meaning}</textarea>
+      <div style="display:flex; gap:5px; margin-bottom:10px;">
+        <input type="text" value="${c.name}" onchange="updateCol(${i}, 'name', this.value)" style="flex:1">
+        <textarea onchange="updateCol(${i}, 'meaning', this.value)" style="flex:2; height:40px;">${c.meaning}</textarea>
         <button onclick="removeCol(${i})">×</button>
       </div>
     `).join("");
@@ -60,7 +61,7 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
   window.removeCol = (i) => { state.config.collections.splice(i, 1); renderConfigUI(); };
   $("addCollection").onclick = () => { state.config.collections.push({name:"", meaning:""}); renderConfigUI(); };
 
-  /* CSV IMPORT (Logique popup.js) */
+  /* CSV */
   $("csvImport").onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -78,10 +79,10 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
     const currentList = state.config.blacklist.split(",").map(n => n.trim());
     state.config.blacklist = [...new Set([...currentList, ...names])].filter(n => n.length > 2).join(", ");
     $("configBlacklist").value = state.config.blacklist;
-    $("csvStatus").textContent = `${names.length} noms ajoutés.`;
+    alert(`${names.length} noms ajoutés à la blacklist.`);
   };
 
-  /* IA ACTIONS */
+  /* IA CALLS */
   async function apiCall(action) {
     if (!state.imageBase64) return;
     $("loading").classList.remove("hidden");
@@ -100,38 +101,46 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
         })
       });
       const data = await res.json();
+      
       if (action === 'generate') {
         $("titleText").textContent = data.title;
         $("descText").textContent = data.description;
-        await fetch("/api/history", { method: "POST", body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name }) });
+        await fetch("/api/history", { method: "POST", body: JSON.stringify({ 
+          title: data.title, 
+          description: data.description, 
+          image: state.imageBase64, 
+          product_name: data.product_name 
+        }) });
         loadHistory();
-      } else if (action === 'regen_title') $("titleText").textContent = data.title;
-      else if (action === 'regen_desc') $("descText").textContent = data.description;
+      } else if (action === 'regen_title') {
+        $("titleText").textContent = data.title;
+      } else if (action === 'regen_desc') {
+        $("descText").textContent = data.description;
+      }
       
       $("regenTitleBtn").disabled = false;
       $("regenDescBtn").disabled = false;
-    } catch(e) { alert("Erreur IA"); }
+    } catch(e) { alert("Erreur IA: Vérifiez votre clé ou votre connexion."); }
     finally { $("loading").classList.add("hidden"); }
   }
 
   /* INIT */
   function init() {
-    // SÉCURITÉ : On s'assure que le loader est masqué au démarrage
     $("loading").classList.add("hidden");
-
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
     window.onclick = (e) => { if (e.target == $("settingsModal")) $("settingsModal").classList.add("hidden"); };
 
-    document.querySelectorAll(".tab-link").forEach(t => {
-      t.onclick = () => {
-        document.querySelectorAll(".tab-link").forEach(l => l.classList.remove("active"));
+    document.querySelectorAll(".tab-link").forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active"));
         document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
-        t.classList.add("active");
-        $(t.dataset.tab).classList.remove("hidden");
+        btn.classList.add("active");
+        $(btn.dataset.tab).classList.remove("hidden");
       };
     });
 
+    $("drop").onclick = () => $("imageInput").click();
     $("imageInput").onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -148,10 +157,11 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
       reader.readAsDataURL(file);
     };
 
-    $("removeImage").onclick = () => {
+    $("removeImage").onclick = (e) => {
+      e.stopPropagation();
       state.imageBase64 = null;
       $("preview").classList.add("hidden");
-      $("dropPlaceholder").style.display = "flex";
+      $("dropPlaceholder").style.display = "block";
       $("titleText").textContent = ""; $("descText").textContent = "";
       $("generateBtn").disabled = true;
       $("regenTitleBtn").disabled = true;
@@ -164,22 +174,20 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
 
     $("saveConfig").onclick = async () => {
       state.config.promptSystem = $("promptSystem").value;
+      state.config.promptTitles = $("promptTitles").value;
+      state.config.promptDesc = $("promptDesc").value;
       state.config.blacklist = $("configBlacklist").value;
       await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
-      alert("Config sauvegardée");
+      alert("Configuration sauvegardée.");
       $("settingsModal").classList.add("hidden");
     };
 
     $("copyTitle").onclick = () => { navigator.clipboard.writeText($("titleText").textContent); alert("Titre copié"); };
     $("copyDesc").onclick = () => { navigator.clipboard.writeText($("descText").textContent); alert("Description copiée"); };
 
-    $("historySearch").oninput = (e) => {
-      state.searchQuery = e.target.value;
-      renderHistoryUI();
-    };
+    $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
 
-    loadConfig();
-    loadHistory();
+    loadConfig(); loadHistory();
   }
 
   async function loadHistory() {
@@ -193,6 +201,7 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
   function renderHistoryUI() {
     const filtered = state.historyCache.filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
     $("historyTotal").textContent = `Total: ${filtered.length}`;
+    
     const start = (state.currentPage - 1) * state.pageSize;
     const paginated = filtered.slice(start, start + state.pageSize);
     
@@ -203,6 +212,20 @@ Plus: Ring (Size: Adjustable, No green fingers), Bracelet (Size: 16+5cm), Neckla
         <button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button>
       </div>
     `).join("");
+
+    renderPagination(Math.ceil(filtered.length / state.pageSize));
+  }
+
+  function renderPagination(totalPages) {
+    const p = $("pagination"); p.innerHTML = "";
+    if (totalPages <= 1) return;
+    for(let i=1; i<=totalPages; i++) {
+      const b = document.createElement("button");
+      b.textContent = i;
+      if(i === state.currentPage) b.className = "active";
+      b.onclick = () => { state.currentPage = i; renderHistoryUI(); };
+      p.appendChild(b);
+    }
   }
 
   window.restore = (id) => {
