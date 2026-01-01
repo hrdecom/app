@@ -1,4 +1,4 @@
-// popup.js — Web version (Image → Title + Description)
+// popup.js — Web version (Cloudflare compatible)
 
 const state = {
   imageBase64: null,
@@ -18,6 +18,9 @@ const regenDescBtn = document.getElementById("regenDescBtn");
 
 const titleText = document.getElementById("titleText");
 const descText = document.getElementById("descText");
+
+const copyTitle = document.getElementById("copyTitle");
+const copyDesc = document.getElementById("copyDesc");
 
 /* IMAGE UPLOAD */
 imageInput.addEventListener("change", () => {
@@ -42,18 +45,14 @@ removeImage.addEventListener("click", () => {
   imageInput.value = "";
 });
 
-/* API CALL */
+/* API */
 async function callGenerate(action) {
-  if (!state.imageBase64) throw new Error("Image manquante");
-
   const res = await fetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       action,
-      image: state.imageBase64,
-      title: state.title,
-      description: state.description
+      image: state.imageBase64
     })
   });
 
@@ -63,40 +62,36 @@ async function callGenerate(action) {
 
 /* BUTTONS */
 generateBtn.addEventListener("click", async () => {
-  try {
-    generateBtn.disabled = true;
-    const data = await callGenerate("generate");
-    state.title = data.title;
-    state.description = data.description;
+  if (!state.imageBase64) return alert("Importe une image.");
 
-    titleText.textContent = state.title;
-    descText.textContent = state.description;
+  const data = await callGenerate("generate");
+  state.title = data.title;
+  state.description = data.description;
 
-    regenTitleBtn.disabled = false;
-    regenDescBtn.disabled = false;
-  } catch (e) {
-    alert(e.message);
-  } finally {
-    generateBtn.disabled = false;
-  }
+  titleText.textContent = state.title;
+  descText.textContent = state.description;
+
+  regenTitleBtn.disabled = false;
+  regenDescBtn.disabled = false;
 });
 
 regenTitleBtn.addEventListener("click", async () => {
-  try {
-    const data = await callGenerate("regen_title");
-    state.title = data.title;
-    titleText.textContent = state.title;
-  } catch (e) {
-    alert(e.message);
-  }
+  const data = await callGenerate("regen_title");
+  state.title = data.title;
+  titleText.textContent = state.title;
 });
 
 regenDescBtn.addEventListener("click", async () => {
-  try {
-    const data = await callGenerate("regen_desc");
-    state.description = data.description;
-    descText.textContent = state.description;
-  } catch (e) {
-    alert(e.message);
-  }
+  const data = await callGenerate("regen_desc");
+  state.description = data.description;
+  descText.textContent = state.description;
+});
+
+/* COPY */
+copyTitle.addEventListener("click", () => {
+  navigator.clipboard.writeText(state.title);
+});
+
+copyDesc.addEventListener("click", () => {
+  navigator.clipboard.writeText(state.description);
 });
