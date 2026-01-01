@@ -13,15 +13,15 @@ export async function onRequestPost({ request, env }) {
       DESCRIPTION RULES: ${config.promptDesc}
       
       BLACKLIST: ${config.blacklist}
-      HISTORY (Avoid these names): ${JSON.stringify(historyNames)}
+      HISTORY: ${JSON.stringify(historyNames)}
       
       Return JSON: { "product_name": "...", "title": "...", "description": "..." }`;
     } else if (action === "regen_title") {
       prompt = `${config.promptSystem}
       Regenerate TITLE and product_name only. 
       Rules: ${config.promptTitles}. 
-      Current Title: ${currentTitle}. 
-      History: ${JSON.stringify(historyNames)}.
+      Current: "${currentTitle}". 
+      Avoid history: ${JSON.stringify(historyNames)}.
       Return JSON: { "product_name": "...", "title": "..." }`;
     } else if (action === "regen_desc") {
       prompt = `${config.promptSystem}
