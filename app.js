@@ -20,13 +20,14 @@
     config: JSON.parse(JSON.stringify(DEFAULTS)),
     currentPage: 1, pageSize: 5, searchQuery: "", currentHistoryId: null,
     timerInterval: null,
-    sessionHeadlines: [], sessionAds: [], // sessionAds stores {text, style}
+    sessionHeadlines: [], sessionAds: [],
     hlPage: 1, adPage: 1, hlPageSize: 12, adPageSize: 12,
     selHlStyles: [], selAdStyles: []
   };
 
   const startLoading = () => {
     let s = 0; $("timer").textContent = "00:00";
+    if (state.timerInterval) clearInterval(state.timerInterval);
     state.timerInterval = setInterval(() => {
       s++; const mm = String(Math.floor(s/60)).padStart(2,"0"); const ss = String(s%60).padStart(2,"0");
       $("timer").textContent = `${mm}:${ss}`;
@@ -78,7 +79,7 @@
     renderStyleSelectors();
   }
 
-  $("addCollection").onclick = () => { renderConfigUI(); /* Triggers redraw and captures current */ const div = document.createElement('div'); div.className="config-row collections-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`; $("collectionsList").appendChild(div); };
+  $("addCollection").onclick = () => { renderConfigUI(); const div = document.createElement('div'); div.className="config-row collections-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`; $("collectionsList").appendChild(div); };
   $("addStyleBtn").onclick = () => { const div = document.createElement('div'); div.className="config-row headline-style-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`; $("styleButtonsEditor").appendChild(div); };
   $("addAdStyleBtn").onclick = () => { const div = document.createElement('div'); div.className="config-row ad-style-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`; $("adStyleButtonsEditor").appendChild(div); };
 
@@ -98,32 +99,25 @@
     startLoading();
     try {
       const common = { 
-        image: state.imageBase64, media_type: state.imageMime, 
-        collection: $("collectionSelect").value, config: state.config,
+        image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value, config: state.config,
         historyNames: state.historyCache.map(h => h.product_name),
-        currentTitle: $("titleText").textContent, currentDesc: $("descText").textContent,
-        product_url: $("productUrlInput").value 
+        currentTitle: $("titleText").textContent, currentDesc: $("descText").textContent, product_url: $("productUrlInput").value 
       };
 
-      // ADS: Parallel Simultaneous Generation
       if (action === 'ad_copys' && state.selAdStyles.length > 0) {
         const results = await Promise.all(state.selAdStyles.map(sName => {
           const sPrompt = state.config.adStyles.find(x => x.name === sName)?.prompt;
           return fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, style: sPrompt + " " + (extra.userText || ""), styleLabel: sName }) }).then(r => r.json().then(d => ({ ...d, label: sName })));
         }));
-        results.forEach(res => {
-          state.sessionAds = [...(res.ad_copys || []).map(t => ({ text: t, style: res.label })), ...state.sessionAds];
-        });
+        results.forEach(res => { state.sessionAds = [...(res.ad_copys || []).map(t => ({ text: t, style: res.label })), ...state.sessionAds]; });
         state.adPage = 1; renderAds();
-      } 
-      // HEADLINES: Single request with combined style (Original Request)
-      else {
+      } else {
         if (action === 'headlines' && state.selHlStyles.length > 0) {
             extra.style = state.selHlStyles.map(n => state.config.headlineStyles.find(s => s.name === n)?.prompt).join(" ") + " " + (extra.userText || "");
         }
         const res = await fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, ...extra }) });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Erreur IA");
+        if (!res.ok) throw new Error(data.error || "IA Error");
 
         if (action === 'generate') {
           $("titleText").textContent = data.title; $("descText").textContent = data.description;
@@ -177,63 +171,38 @@
   function renderPaginationLoc(type) {
     const list = type === 'hl' ? state.sessionHeadlines : state.sessionAds;
     const container = type === 'hl' ? $("headlinesLocalPagination") : $("adsLocalPagination");
-    const total = Math.ceil(list.length / 12);
-    container.innerHTML = ""; if (total <= 1) return;
+    const total = Math.ceil(list.length / 12); container.innerHTML = ""; if (total <= 1) return;
     for (let i = 1; i <= total; i++) {
       const b = document.createElement("button"); b.textContent = i;
       if (i === (type === 'hl' ? state.hlPage : state.adPage)) b.className = "active";
-      b.onclick = () => { if(type === 'hl') state.hlPage = i; else state.adPage = i; type === 'hl' ? renderHeadlines() : renderAds(); };
-      container.appendChild(b);
+      b.onclick = () => { if(type === 'hl') state.hlPage = i; else state.adPage = i; type === 'hl' ? renderHeadlines() : renderAds(); }; container.appendChild(b);
     }
   }
 
   async function saveSelections(type) {
     if (!state.currentHistoryId) return;
-    const selected = []; 
-    document.querySelectorAll(`#${type === 'hl' ? 'headlinesResults' : 'adsResults'} .selected .headline-text`).forEach(it => selected.push(it.innerText));
+    const selected = []; document.querySelectorAll(`#${type === 'hl' ? 'headlinesResults' : 'adsResults'} .selected .headline-text`).forEach(it => {
+        const raw = it.innerText.split('\n'); selected.push(raw.length > 1 ? raw.slice(1).join('\n') : raw[0]);
+    });
     const key = type === 'hl' ? 'headlines' : 'ad_copys';
-    const targetState = type === 'hl' ? 'selectedHeadlines' : 'selectedAds';
-    state[targetState] = [...new Set([...state[targetState], ...selected])];
-    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [key]: JSON.stringify(state[targetState]) }) });
+    const target = type === 'hl' ? 'selectedHeadlines' : 'selectedAds';
+    state[target] = [...new Set([...state[target], ...selected])];
+    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [key]: JSON.stringify(state[target]) }) });
     type === 'hl' ? renderSavedHl() : renderSavedAds();
     alert("Enregistré");
   }
 
-  const renderSavedHl = () => {
-    $("headlinesSavedList").innerHTML = (state.selectedHeadlines || []).map((h, i) => `
-      <div class="headline-item no-hover">
-        <span class="headline-text">${h}</span>
-        <div style="display:flex;gap:5px;">
-            <button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/'/g,"\\'")}\`)">📋</button>
-            <button class="icon-btn-small" style="color:red" onclick="deleteSaved('hl',${i})">×</button>
-        </div>
-      </div>`).join("");
-  };
-
+  const renderSavedHl = () => { $("headlinesSavedList").innerHTML = (state.selectedHeadlines || []).map((h, i) => `<div class="headline-item no-hover"><span class="headline-text">${h}</span><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('hl',${i})">×</button></div></div>`).join(""); };
   const renderSavedAds = () => {
-    $("adsSavedList").innerHTML = (state.selectedAds || []).map((h, i) => `
-      <div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;">
-        <div style="display:flex;justify-content:space-between;width:100%"><strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong>
-            <div style="display:flex;gap:5px;">
-                <button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button>
-                <button class="icon-btn-small" style="color:red" onclick="deleteSaved('ad',${i})">×</button>
-            </div>
-        </div>
-        <span class="headline-text" style="white-space:pre-wrap;">${h}</span>
-      </div>`).join("");
+    $("adsSavedList").innerHTML = (state.selectedAds || []).map((h, i) => `<div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;justify-content:space-between;width:100%"><strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('ad',${i})">×</button></div></div><span class="headline-text" style="white-space:pre-wrap;">${h}</span></div>`).join("");
     const n = $("titleText").textContent, u = $("productUrlInput").value;
-    $("adsDefaultInfoBlock").innerHTML = [`TITRE 1|${n}`, `TITRE 2|${n} - Special Offer`, `TITRE 3|Gift Idea - ${n}`, `SUB|Free Shipping Worldwide Today`, `URL|${u}`].map(x => {
+    $("adsDefaultInfoBlock").innerHTML = [`TITRE 1|${n}`, `TITRE 2|${n} - Special Offer`, `TITRE 3|Gift Idea - ${n}`, `TITRE 4|${n} - Valentine's Day Gift Idea`, `SUB|Free Shipping Worldwide Today`, `URL|${u}`].map(x => {
       const [l,v] = x.split('|'); return `<div class="ads-info-row"><span><span class="ads-info-label">${l}</span>${v}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${v.replace(/'/g,"\\'")}\`)">📋</button></div>`;
     }).join("");
   };
 
   window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
-
-  window.deleteSaved = async (type, i) => {
-    const list = type === 'hl' ? state.selectedHeadlines : state.selectedAds; list.splice(i, 1);
-    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type === 'hl' ? 'headlines' : 'ad_copys']: JSON.stringify(list) }) });
-    type === 'hl' ? renderSavedHl() : renderSavedAds();
-  };
+  window.deleteSaved = async (type, i) => { const list = type === 'hl' ? state.selectedHeadlines : state.selectedAds; list.splice(i, 1); await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type === 'hl' ? 'headlines' : 'ad_copys']: JSON.stringify(list) }) }); type === 'hl' ? renderSavedHl() : renderSavedAds(); };
 
   function init() {
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
@@ -264,15 +233,8 @@
 
     $("sendHeadlineChat").onclick = () => apiCall('headlines', { userText: $("headlineStyleInput").value });
     $("sendAdChat").onclick = () => apiCall('ad_copys', { userText: $("adStyleInput").value });
-    
-    $("genSimilarBtn").onclick = () => {
-        const sel = []; document.querySelectorAll('#headlinesResults .selected .headline-text').forEach(it => sel.push(it.innerText));
-        apiCall('headlines_similar', { selectedForSimilar: sel });
-    };
-    $("genSimilarAdsBtn").onclick = () => {
-        const sel = []; document.querySelectorAll('#adsResults .selected .headline-text').forEach(it => sel.push(it.innerText));
-        apiCall('ad_copys_similar', { selectedForSimilar: sel });
-    };
+    $("genSimilarBtn").onclick = () => { const sel = []; document.querySelectorAll('#headlinesResults .selected .headline-text').forEach(it => sel.push(it.innerText)); apiCall('headlines_similar', { selectedForSimilar: sel }); };
+    $("genSimilarAdsBtn").onclick = () => { const sel = []; document.querySelectorAll('#adsResults .selected .headline-text').forEach(it => sel.push(it.innerText.split('\n')[1])); apiCall('ad_copys_similar', { selectedForSimilar: sel }); };
 
     $("saveHeadlinesBtn").onclick = () => saveSelections('hl');
     $("saveAdsBtn").onclick = () => saveSelections('ad');
@@ -290,13 +252,16 @@
         $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden");
         $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
         state.currentHistoryId = null; state.sessionHeadlines = []; state.sessionAds = []; $("productUrlInput").value = "";
+        renderHeadlines(); renderAds(); renderHistoryUI();
       }; r.readAsDataURL(f);
     };
 
     $("removeImage").onclick = (e) => {
       e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null;
+      state.sessionHeadlines = []; state.sessionAds = [];
       $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block";
       $("generateBtn").disabled = true; $("regenTitleBtn").disabled = true; $("regenDescBtn").disabled = true;
+      renderHeadlines(); renderAds(); renderHistoryUI();
     };
 
     $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
@@ -320,10 +285,12 @@
 
   window.restore = (id) => {
     const item = state.historyCache.find(i => i.id === id); if(!item) return;
-    state.currentHistoryId = id; state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
+    state.currentHistoryId = id; state.sessionHeadlines = []; state.sessionAds = []; // CLEAN SESSION GENERATIONS
+    state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
     $("titleText").textContent = item.title; $("descText").textContent = item.description; $("productUrlInput").value = item.product_url || "";
     $("previewImg").src = `data:image/jpeg;base64,${item.image}`; state.imageBase64 = item.image; $("preview").classList.remove("hidden");
-    $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; renderHistoryUI(); window.scrollTo({top:0, behavior:'smooth'});
+    $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
+    renderHeadlines(); renderAds(); renderHistoryUI(); window.scrollTo({top:0, behavior:'smooth'});
   };
 
   window.deleteItem = async (id) => { if(!confirm("Supprimer ?")) return; await fetch(`/api/history?id=${id}`, { method: "DELETE" }); if(state.currentHistoryId == id) state.currentHistoryId = null; loadHistory(); };
