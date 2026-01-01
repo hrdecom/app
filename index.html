@@ -11,10 +11,10 @@
 <div id="app">
   <header class="header">
     <div class="brand"><div class="logo">✧</div><h1>Copywriting Bijoux</h1></div>
-    <button id="settingsBtn">⚙️ Paramètres</button>
+    <button id="settingsBtn" class="icon-btn">⚙️ Paramètres</button>
   </header>
 
-  <!-- MODAL PARAMÈTRES (Design Luxe) -->
+  <!-- MODAL PARAMÈTRES (Design Luxe & Segmenté) -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
@@ -28,38 +28,46 @@
       </div>
       
       <div id="tab-collections" class="tab-content">
-        <p class="hint">Définissez vos collections et leur signification pour l'IA.</p>
+        <p class="hint">Gérez vos collections et leurs descriptions spécifiques.</p>
         <div id="collectionsList"></div>
         <button id="addCollection" class="secondary-btn" style="margin-top:10px">+ Ajouter une collection</button>
       </div>
 
       <div id="tab-prompts" class="tab-content hidden">
-        <label>Instruction système (Prompt d'origine)</label>
-        <textarea id="promptSystem" rows="15"></textarea>
+        <div class="prompt-segment">
+          <label>1. Instruction Système (Rôle)</label>
+          <textarea id="promptSystem" rows="4"></textarea>
+        </div>
+        <div class="prompt-segment">
+          <label>2. Règles pour les Titres</label>
+          <textarea id="promptTitles" rows="4"></textarea>
+        </div>
+        <div class="prompt-segment">
+          <label>3. Règles pour les Descriptions (180c limit)</label>
+          <textarea id="promptDesc" rows="6"></textarea>
+        </div>
       </div>
 
       <div id="tab-blacklist" class="tab-content hidden">
-        <label>Importer des noms via CSV (Format guillemets supporté)</label>
+        <label>Importer CSV (Recherche guillemets automatique)</label>
         <input type="file" id="csvImport" accept=".csv" style="margin: 10px 0;"/>
-        <p id="csvStatus" class="hint">Les noms détectés s'ajouteront à la liste ci-dessous.</p>
+        <p id="csvStatus" class="hint">Les noms seront ajoutés à la liste ci-dessous.</p>
         <hr>
-        <label>Noms à ne pas réutiliser (Blacklist)</label>
-        <textarea id="configBlacklist" rows="8" placeholder="Unity, Hope, Destiny..."></textarea>
+        <label>Liste des noms exclus (Blacklist)</label>
+        <textarea id="configBlacklist" rows="8"></textarea>
       </div>
 
       <div class="modal-footer">
-        <button id="saveConfig" class="primary-btn">Enregistrer les réglages</button>
+        <button id="saveConfig" class="primary-btn">Enregistrer tout</button>
       </div>
     </div>
   </div>
 
-  <!-- LOADER (Masqué par défaut) -->
   <div id="loading" class="loading hidden">
     <div class="spinner"></div>
-    <div><strong>Action en cours...</strong><div id="timer">00:00</div></div>
+    <div><strong>Génération en cours...</strong><div id="timer">00:00</div></div>
   </div>
 
-  <!-- WORKSPACE FIXE -->
   <section class="workspace">
     <div class="left">
       <section class="card">
@@ -77,14 +85,16 @@
 
     <div class="right">
       <section class="card">
-        <h2>Sélection Collection</h2>
-        <select id="collectionSelect"></select>
-      </section>
-
-      <section class="actions">
-        <button id="generateBtn" class="primary-btn" disabled>Générer Tout</button>
-        <button id="regenTitleBtn" class="secondary-btn" disabled>Titre</button>
-        <button id="regenDescBtn" class="secondary-btn" disabled>Description</button>
+        <h2>Paramètres de génération</h2>
+        <div style="margin-bottom:15px;">
+          <label>Collection</label>
+          <select id="collectionSelect"></select>
+        </div>
+        <div class="actions">
+          <button id="generateBtn" class="primary-btn" disabled>Générer Tout</button>
+          <button id="regenTitleBtn" class="secondary-btn" disabled>Titre</button>
+          <button id="regenDescBtn" class="secondary-btn" disabled>Description</button>
+        </div>
       </section>
 
       <section class="card">
@@ -99,12 +109,11 @@
     </div>
   </section>
 
-  <!-- HISTORIQUE -->
   <section class="card history-section">
     <div class="history-header">
       <h2>Historique</h2>
       <div style="display:flex; gap:10px; align-items:center;">
-        <input type="text" id="historySearch" placeholder="Filtrer par titre..."/>
+        <input type="text" id="historySearch" placeholder="Rechercher..."/>
         <span id="historyTotal" class="hint"></span>
       </div>
     </div>
