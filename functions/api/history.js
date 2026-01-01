@@ -13,7 +13,6 @@ export async function onRequest(context) {
       "INSERT INTO history (title, description, image, product_name) VALUES (?, ?, ?, ?)"
     ).bind(title || "", description || "", image || "", product_name || "").run();
     
-    // On renvoie l'ID de la ligne insérée
     return new Response(JSON.stringify({ id: result.meta.last_row_id }), {
       headers: { "content-type": "application/json" }
     });
