@@ -1,30 +1,25 @@
 export async function onRequestPost({ request, env }) {
   try {
-    const body = await request.json();
-    const { action, image, collection, config, historyNames, currentTitle } = body;
+    const { action, image, collection, config, historyNames, currentTitle } = await request.json();
 
-    const collectionInfo = config.collections.find(c => c.name === collection);
-    const blacklist = config.blacklist;
-
+    const collectionDetail = config.collections.find(c => c.name === collection)?.meaning || "";
+    
     let prompt = "";
     if (action === "generate") {
-      prompt = `${config.prompt}
-      COLLECTION context: ${collectionInfo ? collectionInfo.meaning : ''}
-      BLACKLIST (Never use): ${blacklist}
-      ALREADY USED NAMES in history: ${JSON.stringify(historyNames)}
+      prompt = `${config.promptSystem}
       
-      RULE: You must create a unique "product_name" (1-2 words). 
-      DO NOT use a name from the ALREADY USED NAMES list.
+      CONTEXT: ${collectionDetail}
+      RULES FOR TITLES: ${config.promptTitles}
+      RULES FOR DESCRIPTIONS: ${config.promptDesc}
       
-      Return JSON: { "product_name": "...", "title": "...", "description": "..." }`;
+      BLACKLIST (Never use): ${config.blacklist}
+      HISTORY (Avoid duplicates): ${JSON.stringify(historyNames)}
+      
+      Output JSON format: { "product_name": "...", "title": "...", "description": "..." }`;
     } else if (action === "regen_title") {
-      prompt = `Generate a new "product_name" and "title" for this jewelry. 
-      It must be different from: "${currentTitle}". 
-      Check this history to avoid duplicates: ${JSON.stringify(historyNames)}.
-      Return JSON: { "product_name": "...", "title": "..." }`;
+      prompt = `Regenerate ONLY product_name and title. Different from: ${currentTitle}. ${config.promptTitles}. JSON: { "product_name": "...", "title": "..." }`;
     } else if (action === "regen_desc") {
-      prompt = `Generate a new luxury description for this jewelry.
-      Return JSON: { "description": "..." }`;
+      prompt = `Regenerate ONLY the description. ${config.promptDesc}. JSON: { "description": "..." }`;
     }
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
