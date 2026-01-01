@@ -26,8 +26,8 @@
     timerInterval: null
   };
 
-  /* TIMER LOGIC */
-  function startLoadingTimer() {
+  /* TIMER */
+  function startLoading() {
     let s = 0;
     $("timer").textContent = "00:00";
     if (state.timerInterval) clearInterval(state.timerInterval);
@@ -40,12 +40,13 @@
     $("loading").classList.remove("hidden");
   }
 
-  function stopLoadingTimer() {
+  function stopLoading() {
     clearInterval(state.timerInterval);
+    state.timerInterval = null;
     $("loading").classList.add("hidden");
   }
 
-  /* CONFIG & BLACKLIST */
+  /* CONFIG */
   async function loadConfig() {
     const res = await fetch("/api/settings");
     const data = await res.json();
@@ -77,12 +78,11 @@
     await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
   }
 
-  /* IA ACTIONS */
+  /* IA CALLS */
   async function apiCall(action) {
     if (!state.imageBase64) return;
-    startLoadingTimer();
+    startLoading();
     const historyNames = state.historyCache.map(h => h.product_name).filter(Boolean);
-    
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -93,22 +93,20 @@
         })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "IA Error");
+      if (!res.ok) throw new Error(data.error || "Erreur IA");
 
       if (action === 'generate') {
         $("titleText").textContent = data.title;
         $("descText").textContent = data.description;
-        
-        // 1. Sauvegarder dans historique
         const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ 
           title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name 
         }) });
         const hData = await hRes.json();
         state.currentHistoryId = hData.id;
 
-        // 2. Blacklist Auto : Ajout du nom généré
+        // Blacklist Auto
         if (data.product_name) {
-          const bList = state.config.blacklist.split(",").map(n => n.trim()).filter(n => n);
+          let bList = state.config.blacklist.split(",").map(n => n.trim()).filter(n => n);
           if (!bList.includes(data.product_name)) {
             bList.push(data.product_name);
             state.config.blacklist = bList.join(", ");
@@ -118,9 +116,8 @@
         }
         loadHistory();
       } else {
-        // RÉGÉNÉRATION : On met à jour l'UI et le serveur
         if (action === 'regen_title') $("titleText").textContent = data.title;
-        if (action === 'regen_desc') $("descText").textContent = data.description;
+        else if (action === 'regen_desc') $("descText").textContent = data.description;
 
         if (state.currentHistoryId) {
           await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ 
@@ -132,13 +129,25 @@
       $("regenTitleBtn").disabled = false;
       $("regenDescBtn").disabled = false;
     } catch(e) { alert(e.message); }
-    finally { stopLoadingTimer(); }
+    finally { stopLoading(); }
   }
 
   function init() {
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
-    
+    window.onclick = (e) => { if (e.target == $("settingsModal")) $("settingsModal").classList.add("hidden"); };
+
+    // FIX ONGLETS : Utilisation d'un listener robuste
+    document.querySelectorAll(".tab-link").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const targetId = e.currentTarget.getAttribute("data-tab");
+        document.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
+        e.currentTarget.classList.add("active");
+        $(targetId).classList.remove("hidden");
+      });
+    });
+
     $("drop").onclick = () => $("imageInput").click();
     $("imageInput").onchange = (e) => {
       const file = e.target.files[0];
@@ -151,23 +160,19 @@
         $("preview").classList.remove("hidden");
         $("dropPlaceholder").style.display = "none";
         $("generateBtn").disabled = false;
-        // Reset pollution
         state.currentHistoryId = null;
         $("titleText").textContent = ""; $("descText").textContent = "";
+        renderHistoryUI();
       };
       reader.readAsDataURL(file);
     };
 
     $("removeImage").onclick = (e) => {
-      e.stopPropagation();
-      state.imageBase64 = null;
-      state.currentHistoryId = null; // Clean state
-      $("preview").classList.add("hidden");
-      $("dropPlaceholder").style.display = "block";
+      e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null;
+      $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block";
       $("titleText").textContent = ""; $("descText").textContent = "";
-      $("generateBtn").disabled = true;
-      $("regenTitleBtn").disabled = true;
-      $("regenDescBtn").disabled = true;
+      $("generateBtn").disabled = true; $("regenTitleBtn").disabled = true; $("regenDescBtn").disabled = true;
+      renderHistoryUI();
     };
 
     $("generateBtn").onclick = () => apiCall('generate');
@@ -179,9 +184,7 @@
       state.config.promptTitles = $("promptTitles").value;
       state.config.promptDesc = $("promptDesc").value;
       state.config.blacklist = $("configBlacklist").value;
-      await saveFullConfig();
-      alert("Config sauvegardée");
-      $("settingsModal").classList.add("hidden");
+      await saveFullConfig(); alert("Enregistré"); $("settingsModal").classList.add("hidden");
     };
 
     $("copyTitle").onclick = () => { navigator.clipboard.writeText($("titleText").textContent); alert("Titre copié"); };
@@ -224,18 +227,13 @@
   window.restore = (id) => {
     const item = state.historyCache.find(i => i.id === id);
     if (!item) return;
-    state.currentHistoryId = id; // Pollution fix: on définit le produit en cours
-    $("titleText").textContent = item.title;
-    $("descText").textContent = item.description;
+    state.currentHistoryId = id;
+    $("titleText").textContent = item.title; $("descText").textContent = item.description;
     $("previewImg").src = `data:image/jpeg;base64,${item.image}`;
-    state.imageBase64 = item.image;
-    $("preview").classList.remove("hidden");
-    $("dropPlaceholder").style.display = "none";
-    $("generateBtn").disabled = false;
-    $("regenTitleBtn").disabled = false;
-    $("regenDescBtn").disabled = false;
-    renderHistoryUI();
-    window.scrollTo({top:0, behavior:'smooth'});
+    state.imageBase64 = item.image; $("preview").classList.remove("hidden");
+    $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
+    $("regenTitleBtn").disabled = false; $("regenDescBtn").disabled = false;
+    renderHistoryUI(); window.scrollTo({top:0, behavior:'smooth'});
   };
 
   window.deleteItem = async (id) => {
