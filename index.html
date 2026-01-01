@@ -14,7 +14,6 @@
     <button id="settingsBtn" class="icon-btn">⚙️ Paramètres</button>
   </header>
 
-  <!-- MODAL CONFIGURATION -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header"><h2>Configuration</h2><button id="closeSettings" class="close-btn">×</button></div>
@@ -30,27 +29,25 @@
         <div id="collectionsList"></div>
         <button id="addCollection" class="secondary-btn">+ Ajouter collection</button>
       </div>
-
       <div id="tab-prompts" class="tab-content hidden">
         <div class="prompt-segment"><label>1. Rôle Système</label><textarea id="promptSystem" rows="4"></textarea></div>
         <div class="prompt-segment"><label>2. Règles pour les Titres</label><textarea id="promptTitles" rows="4"></textarea></div>
         <div class="prompt-segment"><label>3. Règles pour les Descriptions</label><textarea id="promptDesc" rows="4"></textarea></div>
       </div>
-
       <div id="tab-headlines-config" class="tab-content hidden">
-        <div class="prompt-segment"><label>Prompt Principal Headlines</label><textarea id="promptHeadlines" rows="6"></textarea></div>
+        <label>Prompt Principal Headlines</label>
+        <textarea id="promptHeadlines" rows="6" style="margin-bottom:15px;"></textarea>
         <label>Boutons de Styles</label>
         <div id="styleButtonsEditor"></div>
         <button id="addStyleBtn" class="secondary-btn">+ Ajouter un style</button>
       </div>
-
       <div id="tab-ads-config" class="tab-content hidden">
-        <div class="prompt-segment"><label>Prompt Principal Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea></div>
+        <label>Prompt Principal Ad Copys</label>
+        <textarea id="promptAdCopys" rows="6" style="margin-bottom:15px;"></textarea>
         <label>Boutons de Styles Ads</label>
         <div id="adStyleButtonsEditor"></div>
         <button id="addAdStyleBtn" class="secondary-btn">+ Ajouter un style ad</button>
       </div>
-
       <div id="tab-blacklist" class="tab-content hidden">
         <textarea id="configBlacklist" rows="12" placeholder="Unity, Hope..."></textarea>
       </div>
@@ -58,7 +55,6 @@
     </div>
   </div>
 
-  <!-- MODAL HEADLINES -->
   <div id="headlinesModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header"><h2>Headlines Vidéos</h2><button id="closeHeadlines" class="close-btn">×</button></div>
@@ -71,7 +67,7 @@
         <div id="headlinesResults" class="headlines-results"></div>
         <div class="headlines-actions-wrapper">
             <div class="headlines-actions hidden" id="similarActions">
-                <button id="genSimilarBtn" class="secondary-btn" style="width:100%; color: var(--apple-blue);">✨ Générer versions similaires</button>
+                <button id="genSimilarBtn" class="secondary-btn" style="width:100%; color: var(--apple-blue);">✨ Générer versions similaires améliorées</button>
             </div>
             <div id="headlinesLocalPagination" class="pagination"></div>
         </div>
@@ -79,12 +75,11 @@
       <div id="tab-saved-headlines" class="tab-content hidden">
         <div id="headlinesSavedList" class="headlines-results"></div>
       </div>
-      <div class="chat-container"><div class="chat-bar"><input type="text" id="headlineStyleInput" placeholder="Style... (optionnel)"/><button id="sendHeadlineChat">↑</button></div></div>
+      <div class="chat-container"><div class="chat-bar"><input type="text" id="headlineStyleInput" placeholder="Précisez votre demande..."/><button id="sendHeadlineChat">↑</button></div></div>
       <div class="modal-footer"><button id="saveHeadlinesBtn" class="primary-btn">Enregistrer les sélections</button></div>
     </div>
   </div>
 
-  <!-- MODAL AD COPYS -->
   <div id="adsModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header"><h2>Ad Copys (Facebook Ads)</h2><button id="closeAds" class="close-btn">×</button></div>
@@ -95,7 +90,6 @@
       <div id="tab-gen-ads" class="tab-content">
         <div class="style-selector" id="adStyleSelectorContainer"></div>
         <div id="adsResults" class="headlines-results"></div>
-        
         <div class="headlines-actions-wrapper">
             <div class="headlines-actions hidden" id="similarAdsActions">
                 <button id="genSimilarAdsBtn" class="secondary-btn" style="width:100%; color: var(--apple-blue);">✨ Générer versions similaires améliorées</button>
@@ -107,65 +101,9 @@
         <div id="adsSavedList" class="headlines-results"></div>
         <div id="adsDefaultInfoBlock" class="ads-info-block"></div>
       </div>
-      <div class="chat-container"><div class="chat-bar"><input type="text" id="adStyleInput" placeholder="Style de pub... (ex: UGC, Promo)"/><button id="sendAdChat">↑</button></div></div>
+      <div class="chat-container"><div class="chat-bar"><input type="text" id="adStyleInput" placeholder="Style de pub..."/><button id="sendAdChat">↑</button></div></div>
       <div class="modal-footer"><button id="saveAdsBtn" class="primary-btn">Enregistrer les sélections</button></div>
     </div>
   </div>
 
-  <div id="loading" class="loading hidden">
-    <div class="spinner"></div>
-    <div><strong>Action en cours...</strong><div id="timer">00:00</div></div>
-  </div>
-
-  <section class="workspace">
-    <div class="left">
-        <div id="drop" class="drop">
-          <input id="imageInput" type="file" accept="image/*"/>
-          <div id="preview" class="preview hidden">
-            <button id="removeImage" class="modern-remove-btn">×</button>
-            <img id="previewImg"/>
-          </div>
-          <p id="dropPlaceholder">Cliquez ou déposez une image</p>
-        </div>
-    </div>
-    <div class="right">
-      <section class="card">
-        <label>Collection</label>
-        <select id="collectionSelect" style="margin-bottom:15px;"></select>
-        <div class="actions">
-          <button id="generateBtn" class="primary-btn" disabled>Générer Tout</button>
-          <button id="regenTitleBtn" class="secondary-btn" disabled>Titre</button>
-          <button id="regenDescBtn" class="secondary-btn" disabled>Description</button>
-        </div>
-      </section>
-      <section class="card">
-        <div class="card-head"><h3>Titre</h3><button id="copyTitle">⌘C</button></div>
-        <pre id="titleText"></pre>
-      </section>
-      <section class="card">
-        <div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div>
-        <pre id="descText"></pre>
-        
-        <div style="margin-top:15px;">
-            <label style="font-size:10px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Product URL</label>
-            <input type="text" id="productUrlInput" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:13px;" placeholder="https://en.riccardiparis.com/..."/>
-        </div>
-
-        <div style="display:flex; gap:10px; margin-top:15px;">
-            <button id="openHeadlinesBtn" class="secondary-btn" style="flex:1;">🎬 Headlines</button>
-            <button id="openAdsBtn" class="secondary-btn" style="flex:1;">📢 Ad Copys</button>
-        </div>
-      </section>
-    </div>
-  </section>
-
-  <section class="card history-section">
-    <div class="history-header"><h2>Historique</h2><input type="text" id="historySearch" placeholder="Filtrer..."/></div>
-    <div id="historyList" class="history-list"></div>
-    <div id="pagination" class="pagination"></div>
-  </section>
-</div>
-
-<script src="app.js"></script>
-</body>
-</html>
+  <div id="loading"
