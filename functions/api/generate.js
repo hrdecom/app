@@ -3,11 +3,11 @@ export async function onRequestPost({ request, env }) {
     const body = await request.json();
     const { action, image, media_type, collection, config, historyNames, currentTitle } = body;
 
-    // Sécurité Clé API
     if (!env.ANTHROPIC_API_KEY) {
-      return new Response(JSON.stringify({ error: "Clé API Anthropic manquante sur le serveur." }), { status: 500 });
+      return new Response(JSON.stringify({ error: "La clé ANTHROPIC_API_KEY est absente des secrets Cloudflare." }), { status: 500 });
     }
 
+    // Correction du nom de variable : collectionInfo utilisé partout
     const collectionInfo = (config.collections || []).find(c => c.name === collection)?.meaning || "No specific context.";
     
     let prompt = "";
@@ -43,7 +43,7 @@ export async function onRequestPost({ request, env }) {
         "content-type": "application/json"
       },
       body: JSON.stringify({
-        model: env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20240620",
+        model: env.ANTHROPIC_MODEL || "claude-3-5-sonnet-latest",
         max_tokens: 1200,
         messages: [{ role: "user", content: [
           { type: "image", source: { type: "base64", media_type: media_type || "image/jpeg", data: image } },
@@ -55,7 +55,11 @@ export async function onRequestPost({ request, env }) {
     const data = await anthropicRes.json();
     
     if (!anthropicRes.ok) {
-      return new Response(JSON.stringify({ error: "Erreur Anthropic", details: data }), { status: 500 });
+      // On renvoie l'erreur réelle d'Anthropic pour débugger
+      return new Response(JSON.stringify({ 
+        error: "Erreur Anthropic API", 
+        details: data.error?.message || "Erreur inconnue" 
+      }), { status: 500 });
     }
 
     const text = data.content[0].text;
@@ -63,7 +67,7 @@ export async function onRequestPost({ request, env }) {
     const end = text.lastIndexOf("}");
     
     if (start === -1 || end === -1) {
-      return new Response(JSON.stringify({ error: "L'IA n'a pas renvoyé un format JSON valide.", raw: text }), { status: 500 });
+      return new Response(JSON.stringify({ error: "L'IA n'a pas renvoyé de JSON valide.", raw: text }), { status: 500 });
     }
 
     return new Response(text.substring(start, end + 1), {
@@ -71,6 +75,6 @@ export async function onRequestPost({ request, env }) {
     });
 
   } catch (e) {
-    return new Response(JSON.stringify({ error: "Erreur Serveur", details: e.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Erreur Serveur Interne", details: e.message }), { status: 500 });
   }
 }
