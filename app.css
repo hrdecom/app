@@ -8,7 +8,6 @@ body { background: var(--bg); margin: 0; padding: 40px 0; display: flex; justify
 .card { background: #fafafa; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); position: relative; }
 .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .drop { border: 2px dashed #ccc; border-radius: 12px; padding: 10px; text-align: center; cursor: pointer; position: relative; height: 500px; display: flex; align-items: center; justify-content: center; background: #fff; overflow: hidden; }
-.drop input { display: none; }
 .preview { position: absolute; inset: 0; background: #fff; display: flex; align-items: center; justify-content: center; z-index: 5; }
 .preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .modern-remove-btn { position: absolute; top: 15px; right: 15px; background: #fff; border: 1px solid #ddd; border-radius: 50%; width: 35px; height: 35px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; font-size: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
@@ -19,7 +18,7 @@ button.secondary-btn { background: #fff; color: #333; }
 button:disabled { opacity: 0.3; cursor: not-allowed; }
 pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid var(--border); min-height: 50px; font-size: 14px; margin: 0; }
 
-/* MODALS FIXED */
+/* MODALS */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .modal-content { background: #fff; width: 100%; max-width: 850px; height: 85vh; border-radius: 24px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.2); }
 .modal-header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
@@ -27,13 +26,20 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .tab-link { padding: 10px 15px; border: none; background: none; cursor: pointer; border-radius: 10px; font-size: 13px; color: var(--text-muted); white-space: nowrap; }
 .tab-link.active { background: #fff; color: #000; font-weight: 600; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
 
-.tab-container-scroll { flex: 1; overflow-y: auto; background: #fff; }
-.tab-content { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
-.hidden { display: none !important; }
+/* CONTENU SCROLLABLE */
+.tab-container-scroll { flex: 1; overflow-y: auto; background: #fff; display: flex; flex-direction: column; }
+.tab-content { padding: 24px; display: flex; flex-direction: column; gap: 20px; min-height: min-content; }
+
+/* DROPDOWN MENU */
+.dropdown { position: relative; display: inline-block; }
+.dropdown-content { display: none; position: absolute; right: 0; background: #fff; min-width: 200px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border-radius: 12px; z-index: 100; padding: 10px; border: 1px solid #eee; }
+.dropdown-content.show { display: block; }
+.lang-opt { padding: 10px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.lang-opt:hover { background: #f5f5f7; }
 
 .prompt-segment { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .prompt-segment label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
-.prompt-segment textarea { width: 100%; border: 1px solid #d2d2d7; border-radius: 12px; padding: 14px; font-size: 13px; line-height: 1.5; background: #fbfbfd; resize: vertical; outline: none; }
+.prompt-segment textarea { width: 100%; border: 1px solid #d2d2d7; border-radius: 12px; padding: 14px; font-size: 13px; background: #fbfbfd; resize: vertical; outline: none; }
 
 .style-selector { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 5px; flex-shrink: 0; }
 .style-tag { padding: 6px 12px; border-radius: 20px; border: 1px solid #ddd; background: #fff; font-size: 11px; cursor: pointer; }
@@ -45,7 +51,7 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .headline-text { flex: 1; font-size: 14px; line-height: 1.4; color: var(--text-main); }
 .no-hover { cursor: default !important; }
 
-.headlines-actions-wrapper { display: flex; flex-direction: column; gap: 10px; padding: 15px 0; border-top: 1px solid #f0f0f0; margin-top: 20px; }
+.headlines-actions-wrapper { display: flex; flex-direction: column; gap: 10px; padding: 15px 0; border-top: 1px solid #f0f0f0; margin-top: 10px; }
 .ads-info-block { margin-top: 20px; padding: 20px; background: #f5f5f7; border-radius: 18px; display: flex; flex-direction: column; gap: 10px; }
 .ads-info-row { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 10px 15px; border-radius: 10px; border: 1px solid #eee; }
 .ads-info-label { font-weight: bold; font-size: 10px; color: var(--apple-blue); margin-right: 10px; }
@@ -64,13 +70,6 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .history-img { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; }
 .pagination { display: flex; justify-content: center; gap: 5px; margin-top: 15px; }
 .pagination button.active { background: var(--primary); color: #fff; }
-
-#productUrlInput { width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:13px; }
-
-.lang-grid { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
-.lang-item { padding: 12px; background: #f5f5f7; border-radius: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-.lang-item.selected { background: var(--apple-blue); color: #fff; }
-
 .loading { position: fixed; inset: 0; background: rgba(255,255,255,0.8); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .spinner { width: 32px; height: 32px; border: 3px solid #eee; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
