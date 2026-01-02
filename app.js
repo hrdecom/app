@@ -747,7 +747,70 @@
     } catch(e) { alert("Erreur suppression: " + e.message); } finally { stopLoading(); }
   };
 
-  window.deleteItem = async (id) => { if(!confirm("Supprimer ?")) return; await fetch(`/api/history?id=${id}`, { method: "DELETE" }); if(state.currentHistoryId == id) state.currentHistoryId = null; loadHistory(); };
+  // RESTAURATION DES FONCTIONS MANQUANTES DE L'HISTORIQUE
+  
+  async function loadHistory() { 
+      try { 
+          const r = await fetch("/api/history"); 
+          state.historyCache = await r.json(); 
+          renderHistoryUI(); 
+      } catch(e){} 
+  }
+
+  function renderHistoryUI() {
+    const filtered = (state.historyCache || []).filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
+    const start = (state.currentPage - 1) * 5; 
+    const pag = filtered.slice(start, start + 5);
+    $("historyList").innerHTML = pag.map(item => `
+        <div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})">
+            <img src="data:image/jpeg;base64,${item.image}" class="history-img">
+            <div style="flex:1">
+                <h4>${item.title || "Sans titre"}</h4>
+            </div>
+            <button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button>
+        </div>
+    `).join("");
+    renderPagination(Math.ceil(filtered.length / 5));
+  }
+
+  function renderPagination(total) {
+    const p = $("pagination"); 
+    p.innerHTML = ""; 
+    if(total <= 1) return;
+    for(let i=1; i<=total; i++) {
+      const b = document.createElement("button"); 
+      b.textContent = i; 
+      if(i === state.currentPage) b.className = "active";
+      b.onclick = () => { state.currentPage = i; renderHistoryUI(); }; 
+      p.appendChild(b);
+    }
+  }
+
+  window.restore = (id) => {
+    const item = (state.historyCache || []).find(i => i.id === id); if(!item) return;
+    state.currentHistoryId = id; state.sessionHeadlines = []; state.sessionAds = [];
+    state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
+    state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
+    
+    // RESTORE GENERATED IMAGES
+    state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
+    state.sessionGeneratedImages = []; // Reset session on restore
+    
+    $("titleText").textContent = item.title; $("descText").textContent = item.description; $("productUrlInput").value = item.product_url || "";
+    $("previewImg").src = `data:image/jpeg;base64,${item.image}`; state.imageBase64 = item.image; $("preview").classList.remove("hidden");
+    $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; renderHistoryUI();
+    
+    // Re-init inputs for generator
+    state.inputImages = [item.image]; renderInputImages(); renderGenImages();
+  };
+
+  window.deleteItem = async (id) => { 
+      if(!confirm("Supprimer ?")) return; 
+      await fetch(`/api/history?id=${id}`, { method: "DELETE" }); 
+      if(state.currentHistoryId == id) state.currentHistoryId = null; 
+      loadHistory(); 
+  };
+  
   window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
 
   function init() {
@@ -755,7 +818,6 @@
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => {
         $("settingsModal").classList.add("hidden");
-        // Reset form edit mode if closed
         if(window.cancelImgStyleEdit) window.cancelImgStyleEdit();
     };
     $("saveConfig").onclick = async () => {
