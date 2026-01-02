@@ -36,7 +36,6 @@
   };
   const stopLoading = () => { clearInterval(state.timerInterval); $("loading").classList.add("hidden"); };
 
-  // Utilitaire pour formater l'URL avec le bon sous-domaine
   const formatLangUrl = (url, sub = "en.") => {
     if (!url) return "";
     let cleanUrl = url.replace(/https:\/\/(en\.|dn\.|du\.|de\.|it\.|pl\.|pt-br\.|pt\.|es\.)/, "https://");
@@ -75,7 +74,6 @@
     if (!state.imageBase64) return;
     startLoading();
     try {
-      // On force le sous-domaine "en." pour la génération initiale
       const productUrl = formatLangUrl($("productUrlInput").value, "en.");
       const common = { image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value, config: state.config, historyNames: state.historyCache.map(h => h.product_name), currentTitle: $("titleText").textContent, currentDesc: $("descText").textContent, product_url: productUrl };
       
@@ -151,7 +149,6 @@
     }
   }
 
-  // --- TRADUCTION GROUPÉE ---
   const toggleMenu = (id) => $(id).classList.toggle('show');
 
   function renderLangList(type, containerId) {
@@ -188,7 +185,6 @@
     const itemsToTranslate = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
     if (!(itemsToTranslate || []).length) return;
     
-    // On génère l'URL avec le sous-domaine cible (es., de., etc.)
     const targetUrl = formatLangUrl($("productUrlInput").value, LANGUAGES[lang]);
 
     if (singleCall) startLoading();
@@ -217,10 +213,25 @@
     finally { if (singleCall) stopLoading(); }
   };
 
+  // --- MISE À JOUR : SUPPRESSION AUTOMATIQUE DES ONGLETS VIDES ---
   function renderTranslationTabs(type) {
     const tabs = type === 'hl' ? $("headlinesTabs") : $("adsTabs");
     const container = type === 'hl' ? $("headlinesTabContainer") : $("adsTabContainer");
-    const transData = type === 'hl' ? state.headlinesTrans : state.adsTrans;
+    let transData = type === 'hl' ? state.headlinesTrans : state.adsTrans;
+
+    // Vérification et suppression des langues vides
+    let hasChanges = false;
+    Object.keys(transData).forEach(lang => {
+      if (!transData[lang].items || transData[lang].items.length === 0) {
+        delete transData[lang];
+        hasChanges = true;
+      }
+    });
+
+    if (hasChanges) {
+        const payload = { id: state.currentHistoryId, [type==='hl'?'headlines_trans':'ads_trans']: JSON.stringify(transData) };
+        fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
+    }
 
     tabs.querySelectorAll(".lang-tab").forEach(t => t.remove());
     container.querySelectorAll(".lang-tab-content").forEach(c => c.remove());
@@ -267,18 +278,35 @@
     } catch(e) { alert(e.message); } finally { stopLoading(); }
   };
 
+  // --- MISE À JOUR : ÉDITION DES ÉLÉMENTS ENREGISTRÉS ---
+  const makeEditable = (el, type, index) => {
+      el.contentEditable = true; el.focus();
+      el.onblur = async () => {
+          el.contentEditable = false;
+          const newText = el.innerText.trim();
+          if (type === 'hl') state.selectedHeadlines[index] = newText;
+          else state.selectedAds[index] = newText;
+          
+          const val = JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds);
+          await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: val }) });
+          alert("Modifié !");
+      };
+  };
+
   const renderSavedHl = () => {
     const list = state.selectedHeadlines || [];
-    $("headlinesSavedList").innerHTML = list.map((h, i) => `<div class="headline-item no-hover"><span class="headline-text">${h}</span><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('hl',${i})">×</button></div></div>`).join("");
+    $("headlinesSavedList").innerHTML = list.map((h, i) => `<div class="headline-item no-hover"><span class="headline-text" onclick="window.editSaved(this, 'hl', ${i})">${h}</span><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('hl',${i})">×</button></div></div>`).join("");
   };
 
   const renderSavedAds = () => {
     const list = state.selectedAds || [];
-    $("adsSavedList").innerHTML = list.map((h, i) => `<div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;justify-content:space-between;width:100%"><strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('ad',${i})">×</button></div></div><span class="headline-text" style="white-space:pre-wrap;">${h}</span></div>`).join("");
+    $("adsSavedList").innerHTML = list.map((h, i) => `<div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;justify-content:space-between;width:100%"><strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('ad',${i})">×</button></div></div><span class="headline-text" style="white-space:pre-wrap;" onclick="window.editSaved(this, 'ad', ${i})">${h}</span></div>`).join("");
     const n = $("titleText").textContent;
     const u = formatLangUrl($("productUrlInput").value, "en.");
     $("adsDefaultInfoBlock").innerHTML = [`TITRE 1|${n}`, `TITRE 2|${n} - Special Offer`, `TITRE 3|Gift Idea - ${n}`, `TITRE 4|${n} - Valentine's Day Gift Idea`, `SUB|Free Shipping Worldwide Today`, `URL|${u}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("");
   };
+
+  window.editSaved = (el, type, index) => makeEditable(el, type, index);
 
   window.deleteSaved = async (type, i) => {
     if(!confirm("Supprimer ?")) return;
