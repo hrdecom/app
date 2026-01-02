@@ -32,33 +32,27 @@
         <div class="prompt-segment"><label>3. Règles pour les Descriptions</label><textarea id="promptDesc" rows="4"></textarea></div>
       </div>
       <div id="tab-headlines-config" class="tab-content hidden">
-        <label>Prompt Headlines</label><textarea id="promptHeadlines" rows="6"></textarea>
-        <label>Styles Headlines</label><div id="styleButtonsEditor"></div><button id="addStyleBtn" class="secondary-btn">+ Ajouter style</button>
+        <label>Prompt Principal Headlines</label><textarea id="promptHeadlines" rows="6"></textarea>
+        <label>Boutons de Styles</label><div id="styleButtonsEditor"></div><button id="addStyleBtn" class="secondary-btn">+ Ajouter style</button>
       </div>
       <div id="tab-ads-config" class="tab-content hidden">
-        <label>Prompt Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea>
-        <label>Styles Ads</label><div id="adStyleButtonsEditor"></div><button id="addAdStyleBtn" class="secondary-btn">+ Ajouter style</button>
+        <label>Prompt Principal Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea>
+        <label>Boutons de Styles Ads</label><div id="adStyleButtonsEditor"></div><button id="addAdStyleBtn" class="secondary-btn">+ Ajouter style</button>
       </div>
       <div id="tab-blacklist" class="tab-content hidden"><textarea id="configBlacklist" rows="12"></textarea></div>
       <div class="modal-footer"><button id="saveConfig" class="primary-btn">Enregistrer tout</button></div>
     </div>
   </div>
 
-  <!-- MODAL TRADUCTION SÉLECTEUR -->
-  <div id="langModal" class="modal hidden">
-      <div class="modal-content" style="max-width: 400px; height: auto;">
-          <div class="modal-header"><h2>Traduire en...</h2><button id="closeLangModal" class="close-btn">×</button></div>
-          <div class="tab-content" id="langPickerList"></div>
-          <div class="modal-footer"><button id="confirmTranslateBtn" class="primary-btn" style="width:100%">Lancer la traduction</button></div>
-      </div>
-  </div>
-
   <!-- MODAL HEADLINES -->
   <div id="headlinesModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
-          <h2>Headlines</h2>
-          <button id="translateHlBtn" class="secondary-btn">🌍 Traduire...</button>
+          <h2>Headlines Vidéos</h2>
+          <div class="dropdown">
+              <button id="translateHlMenuBtn" class="secondary-btn">🌍 Traduire...</button>
+              <div id="hlLangList" class="dropdown-content"></div>
+          </div>
           <button id="closeHeadlines" class="close-btn">×</button>
       </div>
       <div class="tabs" id="headlinesTabs">
@@ -90,7 +84,10 @@
     <div class="modal-content">
       <div class="modal-header">
           <h2>Ad Copys</h2>
-          <button id="translateAdsBtn" class="secondary-btn">🌍 Traduire...</button>
+          <div class="dropdown">
+              <button id="translateAdMenuBtn" class="secondary-btn">🌍 Traduire...</button>
+              <div id="adLangList" class="dropdown-content"></div>
+          </div>
           <button id="closeAds" class="close-btn">×</button>
       </div>
       <div class="tabs" id="adsTabs">
