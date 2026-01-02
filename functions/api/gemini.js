@@ -5,7 +5,7 @@ export async function onRequestPost({ request, env }) {
 
     if (!env.GEMINI_API_KEY) return new Response(JSON.stringify({ error: "Clé API manquante" }), { status: 500 });
 
-    // Endpoint Imagen 3 (Via Google AI Studio API)
+    // Modèle Imagen 3 via l'API Google AI Studio
     const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${env.GEMINI_API_KEY}`;
 
     const response = await fetch(url, {
