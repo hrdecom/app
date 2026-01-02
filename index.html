@@ -10,64 +10,72 @@
 <div id="app">
   <header class="header">
     <div class="brand"><h1>Copywriting Bijoux</h1></div>
-    <button id="settingsBtn">⚙️ Paramètres</button>
+    <button id="settingsBtn" class="icon-btn">⚙️ Paramètres</button>
   </header>
 
   <div id="settingsModal" class="modal hidden">
     <div class="modal-content">
-      <div class="modal-header"><h2>Configuration</h2><button id="closeSettings">×</button></div>
+      <div class="modal-header"><h2>Configuration</h2><button id="closeSettings" class="close-btn">×</button></div>
       <div class="tabs">
         <button class="tab-link active" data-tab="tab-prompts">Prompts IA</button>
         <button class="tab-link" data-tab="tab-translate-config">Traduction</button>
       </div>
       <div id="tab-prompts" class="tab-content">
-        <textarea id="promptSystem" placeholder="Système"></textarea>
-        <textarea id="promptTitles" placeholder="Titres"></textarea>
-        <textarea id="promptDesc" placeholder="Descriptions"></textarea>
-        <textarea id="promptHeadlines" placeholder="Headlines"></textarea>
-        <textarea id="promptAdCopys" placeholder="Ads"></textarea>
+        <div class="prompt-segment"><label>Rôle Système</label><textarea id="promptSystem" rows="3"></textarea></div>
+        <div class="prompt-segment"><label>Titres</label><textarea id="promptTitles" rows="3"></textarea></div>
+        <div class="prompt-segment"><label>Descriptions</label><textarea id="promptDesc" rows="3"></textarea></div>
+        <div class="prompt-segment"><label>Headlines</label><textarea id="promptHeadlines" rows="3"></textarea></div>
+        <div class="prompt-segment"><label>Ads</label><textarea id="promptAdCopys" rows="3"></textarea></div>
       </div>
-      <div id="tab-translate-config" class="tab-content hidden"><textarea id="promptTranslate" rows="10"></textarea></div>
-      <button id="saveConfig" class="primary-btn">Enregistrer</button>
+      <div id="tab-translate-config" class="tab-content hidden">
+        <div class="prompt-segment"><label>Prompt Traduction</label><textarea id="promptTranslate" rows="12"></textarea></div>
+      </div>
+      <div class="modal-footer"><button id="saveConfig" class="primary-btn">Enregistrer</button></div>
     </div>
   </div>
 
   <section class="workspace">
     <div class="left">
-      <div id="drop" class="drop">
-        <input id="imageInput" type="file" accept="image/*"/>
-        <div id="preview" class="preview hidden"><img id="previewImg"/></div>
-      </div>
-      <button id="openGeminiBtn" class="primary-btn" style="width:100%; margin-top:10px;">✨ Generate Images (Gemini)</button>
-      <div class="carousel-outer">
-        <button class="nav-arrow" onclick="$('imageCarousel').scrollBy(-120,0)">‹</button>
-        <div id="imageCarousel" class="carousel-track"></div>
-        <button class="nav-arrow" onclick="$('imageCarousel').scrollBy(120,0)">›</button>
-      </div>
+        <div id="drop" class="drop">
+          <input id="imageInput" type="file" accept="image/*"/>
+          <div id="preview" class="preview hidden"><img id="previewImg"/></div>
+          <p id="dropPlaceholder">Cliquez ou déposez une image</p>
+        </div>
+        
+        <button id="openGeminiBtn" class="primary-btn" style="width:100%; margin-top:10px;">✨ Generate Images (Gemini)</button>
+        <div class="carousel-outer">
+            <button class="nav-arrow" onclick="$('imageCarousel').scrollBy(-120,0)">‹</button>
+            <div id="imageCarousel" class="carousel-track"></div>
+            <button class="nav-arrow" onclick="$('imageCarousel').scrollBy(120,0)">›</button>
+        </div>
     </div>
+    
     <div class="right">
-      <button id="generateBtn" class="primary-btn" disabled>Générer Fiche Produit</button>
-      <pre id="titleText"></pre><pre id="descText"></pre>
-      <input type="text" id="productUrlInput" placeholder="URL de base..."/>
-      <div style="display:flex; gap:10px; margin-top:10px;">
-        <button id="openHeadlinesBtn" style="flex:1">🎬 Headlines</button>
-        <button id="openAdsBtn" style="flex:1">📢 Ad Copys</button>
-      </div>
+      <section class="card">
+        <div class="actions">
+          <button id="generateBtn" class="primary-btn" disabled>Générer Tout</button>
+          <button id="regenTitleBtn" class="secondary-btn" disabled>Titre</button>
+          <button id="regenDescBtn" class="secondary-btn" disabled>Description</button>
+        </div>
+      </section>
+      <section class="card"><pre id="titleText"></pre></section>
+      <section class="card"><pre id="descText"></pre>
+        <div style="margin-top:15px;"><input type="text" id="productUrlInput" placeholder="URL du produit..."/></div>
+        <div style="display:flex; gap:10px; margin-top:15px;"><button id="openHeadlinesBtn" class="secondary-btn" style="flex:1;">🎬 Headlines</button><button id="openAdsBtn" class="secondary-btn" style="flex:1;">📢 Ad Copys</button></div>
+      </section>
     </div>
   </section>
 
   <div id="geminiModal" class="modal hidden">
     <div class="modal-content" style="max-width: 600px;">
-        <div class="modal-header"><h2>Générateur d'images Gemini</h2><button onclick="$('geminiModal').classList.add('hidden')">×</button></div>
+        <div class="modal-header"><h2>Générateur d'images Gemini</h2><button onclick="$('geminiModal').classList.add('hidden')" class="close-btn">×</button></div>
         <div class="tab-content">
-            <label>Votre consigne</label>
-            <textarea id="geminiPrompt" rows="4" placeholder="Ex: Place le bijou sur un fond de marbre..."></textarea>
-            <label>Ratio</label>
-            <select id="geminiAspect"><option value="1:1">1:1</option><option value="4:3">4:3</option><option value="3:4">3:4</option></select>
+            <div class="prompt-segment"><label>Votre consigne</label><textarea id="geminiPrompt" rows="4" placeholder="Ex: Place le bijou sur un fond de marbre..."></textarea></div>
+            <label>Ratio</label><select id="geminiAspect"><option value="1:1">1:1</option><option value="4:3">4:3</option><option value="3:4">3:4</option></select>
             <div id="geminiPreview" class="gemini-preview-area"></div>
         </div>
-        <div class="modal-footer">
-            <button onclick="window.generateGeminiImage()">Générer</button>
+        <div class="modal-footer" style="display:flex; justify-content:space-between;">
+            <button onclick="window.generateGeminiImage()" class="secondary-btn">Générer</button>
             <button id="saveGeminiBtn" class="primary-btn hidden" onclick="window.saveGeneratedImage()">Enregistrer & Utiliser</button>
         </div>
     </div>
@@ -75,20 +83,50 @@
 
   <div id="headlinesModal" class="modal hidden">
     <div class="modal-content">
-        <div class="tabs" id="headlinesTabs">
-            <button class="tab-link active" data-tab="tab-hl-gen">Générer</button>
-            <button class="tab-link" data-tab="tab-hl-saved">Enregistrées</button>
-        </div>
-        <div id="headlinesTabContainer">
-            <div id="tab-hl-gen" class="tab-content"><div id="headlinesResults"></div></div>
-            <div id="tab-hl-saved" class="tab-content hidden"><div id="headlinesSavedList"></div></div>
-        </div>
-        <button onclick="window.saveSelections('hl')">Sauvegarder</button>
+      <div class="modal-header">
+          <h2>Headlines</h2>
+          <div class="dropdown">
+              <button id="translateHlMenuBtn" class="secondary-btn">🌍 Traduire...</button>
+              <div id="hlLangList" class="dropdown-content"></div>
+          </div>
+          <button id="closeHeadlines" class="close-btn">×</button>
+      </div>
+      <div class="tabs" id="headlinesTabs">
+        <button class="tab-link active" data-tab="tab-gen-headlines">Générer</button>
+        <button class="tab-link" data-tab="tab-saved-headlines">Enregistrées</button>
+      </div>
+      <div id="headlinesTabContainer">
+          <div id="tab-gen-headlines" class="tab-content"><div id="headlinesResults"></div></div>
+          <div id="tab-saved-headlines" class="tab-content hidden"><div id="headlinesSavedList"></div></div>
+      </div>
+      <div class="modal-footer"><button onclick="window.saveSelections('hl')" class="primary-btn">Enregistrer sélections</button></div>
+    </div>
+  </div>
+
+  <div id="adsModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+          <h2>Ad Copys</h2>
+          <div class="dropdown">
+              <button id="translateAdMenuBtn" class="secondary-btn">🌍 Traduire...</button>
+              <div id="adLangList" class="dropdown-content"></div>
+          </div>
+          <button id="closeAds" class="close-btn">×</button>
+      </div>
+      <div class="tabs" id="adsTabs">
+        <button class="tab-link active" data-tab="tab-gen-ads">Générer</button>
+        <button class="tab-link" data-tab="tab-saved-ads">Enregistrés</button>
+      </div>
+      <div id="adsTabContainer">
+          <div id="tab-gen-ads" class="tab-content"><div id="adsResults"></div></div>
+          <div id="tab-saved-ads" class="tab-content hidden"><div id="adsSavedList"></div><div id="adsDefaultInfoBlock"></div></div>
+      </div>
+      <div class="modal-footer"><button onclick="window.saveSelections('ad')" class="primary-btn">Enregistrer sélections</button></div>
     </div>
   </div>
 
   <div id="loading" class="loading hidden"><div class="spinner"></div><div id="timer">00:00</div></div>
-  <div id="historyList" class="card history-list"></div>
+  <div id="historyList" class="history-section"></div>
 </div>
 <script src="app.js"></script>
 </body>
