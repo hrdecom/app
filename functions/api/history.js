@@ -9,7 +9,6 @@ export async function onRequest(context) {
 
   if (request.method === "POST") {
     const { title, description, image, product_name, headlines, product_url, ad_copys } = await request.json();
-    // Correction ici : on force l'insertion de tableaux JSON vides par défaut
     const result = await db.prepare(
       "INSERT INTO history (title, description, image, product_name, headlines, product_url, ad_copys, headlines_trans, ads_trans) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
@@ -27,22 +26,25 @@ export async function onRequest(context) {
   }
 
   if (request.method === "PATCH") {
-    const { id, title, description, headlines, product_url, ad_copys, headlines_trans, ads_trans } = await request.json();
-    if (title) await db.prepare("UPDATE history SET title = ? WHERE id = ?").bind(title, id).run();
-    if (description) await db.prepare("UPDATE history SET description = ? WHERE id = ?").bind(description, id).run();
-    if (headlines) await db.prepare("UPDATE history SET headlines = ? WHERE id = ?").bind(headlines, id).run();
-    if (product_url !== undefined) await db.prepare("UPDATE history SET product_url = ? WHERE id = ?").bind(product_url, id).run();
-    if (ad_copys) await db.prepare("UPDATE history SET ad_copys = ? WHERE id = ?").bind(ad_copys, id).run();
-    if (headlines_trans) await db.prepare("UPDATE history SET headlines_trans = ? WHERE id = ?").bind(headlines_trans, id).run();
-    if (ads_trans) await db.prepare("UPDATE history SET ads_trans = ? WHERE id = ?").bind(ads_trans, id).run();
-    return new Response(JSON.stringify({ success: true }));
+    const body = await request.json();
+    const { id } = body;
+
+    // Mise à jour dynamique pour éviter d'écraser des données par erreur
+    if (body.title !== undefined) await db.prepare("UPDATE history SET title = ? WHERE id = ?").bind(body.title, id).run();
+    if (body.description !== undefined) await db.prepare("UPDATE history SET description = ? WHERE id = ?").bind(body.description, id).run();
+    if (body.headlines !== undefined) await db.prepare("UPDATE history SET headlines = ? WHERE id = ?").bind(body.headlines, id).run();
+    if (body.product_url !== undefined) await db.prepare("UPDATE history SET product_url = ? WHERE id = ?").bind(body.product_url, id).run();
+    if (body.ad_copys !== undefined) await db.prepare("UPDATE history SET ad_copys = ? WHERE id = ?").bind(body.ad_copys, id).run();
+    if (body.headlines_trans !== undefined) await db.prepare("UPDATE history SET headlines_trans = ? WHERE id = ?").bind(body.headlines_trans, id).run();
+    if (body.ads_trans !== undefined) await db.prepare("UPDATE history SET ads_trans = ? WHERE id = ?").bind(body.ads_trans, id).run();
+
+    return new Response(JSON.stringify({ success: true }), { headers: { "content-type": "application/json" } });
   }
 
   if (request.method === "DELETE") {
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
     await db.prepare("DELETE FROM history WHERE id = ?").bind(id).run();
-    return new Response(JSON.stringify({ success: true }));
+    return new Response(JSON.stringify({ success: true }), { headers: { "content-type": "application/json" } });
   }
-  return new Response("Method not allowed", { status: 405 });
 }
