@@ -7,7 +7,7 @@ export async function onRequestPost({ request, env }) {
     if (!env.GEMINI_API_KEY) return new Response(JSON.stringify({ error: "Clé API Google manquante" }), { status: 500 });
 
     // --- CONFIGURATION DU MODÈLE ---
-    // Utilisation du modèle demandé
+    // Utilisation du modèle demandé explicitement :
     const modelName = "gemini-3-pro-image"; 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${env.GEMINI_API_KEY}`;
 
@@ -69,6 +69,7 @@ export async function onRequestPost({ request, env }) {
 
     const data = await response.json();
     
+    // Gestion des erreurs explicites de l'API (ex: modèle non trouvé)
     if (data.error) {
         throw new Error(data.error.message || "Erreur API Google Gemini Image");
     }
