@@ -56,11 +56,14 @@
             </div>
          </div>
 
-         <p style="font-size:12px; color:#666; margin-bottom:10px;">Boutons de styles existants :</p>
+         <p style="font-size:12px; color:#666; margin-bottom:10px;">Boutons de styles existants (Cliquez sur ✏️ pour modifier) :</p>
          <div id="imgStyleEditorList"></div>
          
-         <div style="background:#f5f5f7; padding:15px; border-radius:12px; margin-top:15px; border:1px solid #ddd;">
-            <label style="font-size:10px; font-weight:bold; color:#666;">AJOUTER UN STYLE</label>
+         <div id="imgStyleEditorForm" style="background:#f5f5f7; padding:15px; border-radius:12px; margin-top:15px; border:1px solid #ddd;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label style="font-size:10px; font-weight:bold; color:#666;" id="imgStyleFormTitle">AJOUTER UN STYLE</label>
+                <button id="cancelImgStyleEditBtn" class="secondary-btn hidden" style="font-size:10px; padding:2px 8px;">Annuler</button>
+            </div>
             <div style="display:flex; gap:10px; margin-top:5px;">
                <input type="text" id="newImgStyleName" placeholder="Nom du bouton" style="flex:1; padding:8px; border-radius:6px; border:1px solid #ccc;">
                <select id="newImgStyleCategory" style="padding:8px; border-radius:6px; border:1px solid #ccc; max-width:150px;">
@@ -70,6 +73,7 @@
             <div style="margin-top:8px;">
                <label style="font-size:10px; color:#666;">Image de référence (Optionnelle)</label>
                <input type="file" id="newImgStyleFile" accept="image/*" style="font-size:11px; display:block; margin-top:3px;">
+               <div id="currentRefImgPreview" class="hidden" style="font-size:10px; color:green; margin-top:2px;">Image actuelle conservée</div>
             </div>
             <textarea id="newImgStylePrompt" rows="2" placeholder="Prompt (ex: Luxury packaging shot...)" style="width:100%; margin-top:8px; padding:8px; border-radius:6px; border:1px solid #ccc;"></textarea>
             <button id="addImgStyleBtn" class="secondary-btn" style="width:100%; margin-top:8px;">+ Enregistrer le Style</button>
