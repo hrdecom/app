@@ -1,34 +1,25 @@
-{
-type: uploaded file
-fileName: hrdecom/app/app-27d76271ad2791fefb3fedb97f6611dbe58d43b2/functions/api/gemini.js
-fullContent:
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
     const { images, prompt, aspectRatio, resolution } = body; 
     // resolution attendu : "1k", "2k", "4k"
-    // images : array de base64 (contexte optionnel selon capacités du modèle)
 
     if (!env.GEMINI_API_KEY) return new Response(JSON.stringify({ error: "Clé API Google manquante" }), { status: 500 });
 
-    // 1. CHANGEMENT DU MODÈLE SELON DEMANDE SPÉCIFIQUE
+    // --- CONFIGURATION DU MODÈLE ---
     const modelName = "gemini-3-pro-image-preview"; 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${env.GEMINI_API_KEY}`;
 
-    // 2. LOGIQUE DE CALCUL DE LA RÉSOLUTION (1k, 2k, 4k)
-    // L'API attend souvent width/height si on sort du standard 1024x1024.
-    // Base 1k = 1024, 2k = 2048, 4k = 4096 (approximatif selon ratio)
-    
-    let baseSize = 1024; // Défaut 1k
+    // --- CALCUL DE LA RÉSOLUTION ---
+    // Base : 1k = 1024px, 2k = 2048px, 4k = 4096px
+    let baseSize = 1024; 
     if (resolution === "2k") baseSize = 2048;
     if (resolution === "4k") baseSize = 4096;
 
     let width = baseSize;
     let height = baseSize;
 
-    // Calcul des dimensions selon l'Aspect Ratio
-    // Note : Le modèle peut rejeter des dimensions trop élevées (ex: 4k natif), 
-    // mais c'est la méthode correcte pour demander cette résolution via l'API.
+    // Ajustement selon l'Aspect Ratio pour garder la définition cible sur le côté le plus long
     switch (aspectRatio) {
         case "16:9":
             width = baseSize;
@@ -53,36 +44,29 @@ export async function onRequestPost({ request, env }) {
             break;
     }
 
-    // 3. CONSTRUCTION DU PAYLOAD
-    // Pour les modèles "gemini-..." image preview, la structure ressemble à celle d'Imagen
+    // --- CONSTRUCTION DU PAYLOAD ---
     const payload = {
       instances: [
         {
           prompt: prompt
-          // Si le modèle supporte l'img2img (image input), décommenter ci-dessous :
-          // image: images && images.length > 0 ? { bytesBase64Encoded: images[0] } : undefined
         }
       ],
       parameters: {
         sampleCount: 1,
-        // On envoie le ratio textuel standard
+        // On envoie l'aspectRatio textuel (requis par certains endpoints)
         aspectRatio: aspectRatio || "1:1",
-        // On force les dimensions calculées pour tenter d'atteindre la résolution cible
-        // Note: Si le modèle ne supporte pas "width/height" explicites, il ignorera ou erreur.
-        // Dans ce cas, il faudra s'en tenir à l'aspectRatio seul.
-        // width: width,  <-- Décommenter si le modèle accepte les dimensions explicites (souvent restreint sur les previews)
-        // height: height,
-        
-        // Certains modèles preview utilisent "sampleImageSize" ou "outputOptions"
-        // Ici on passe le paramètre de format de sortie standard
+        // On force les dimensions calculées (requis pour le contrôle 2k/4k)
+        width: width,
+        height: height,
         outputMimeType: "image/jpeg"
       }
     };
 
-    // Ajout spécifique pour 2k/4k si supporté via paramètre de qualité ou upscale implicite
-    // (À ajuster selon la doc exacte de ce modèle preview qui évolue vite)
-    if (resolution === "2k" || resolution === "4k") {
-        // payload.parameters.upscale = true; // Exemple hypothétique
+    // Gestion optionnelle de l'image de référence (Img2Img) si le modèle le supporte
+    if (images && images.length > 0) {
+        // Note: La structure exacte dépend de la version de l'API (bytesBase64Encoded ou image.blob)
+        // Pour l'instant, on laisse le prompt textuel prioritaire pour éviter les erreurs 400 sur ce modèle spécifique
+        // payload.instances[0].image = { bytesBase64Encoded: images[0] };
     }
 
     const response = await fetch(url, {
@@ -98,15 +82,15 @@ export async function onRequestPost({ request, env }) {
     }
 
     if (!data.predictions || !data.predictions[0].bytesBase64Encoded) {
-        throw new Error("Aucune image retournée par l'API (vérifiez si le prompt n'a pas déclenché le filtre de sécurité).");
+        throw new Error("Aucune image générée. Vérifiez votre prompt (sécurité) ou les paramètres.");
     }
 
     const generatedBase64 = data.predictions[0].bytesBase64Encoded;
     return new Response(JSON.stringify({ image: generatedBase64 }), {
       headers: { "Content-Type": "application/json" }
     });
+
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });
   }
-}
 }
