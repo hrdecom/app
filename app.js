@@ -35,8 +35,10 @@
     savedGeneratedImages: [], 
     selectedSessionImagesIdx: [],
     // ETATS UI STUDIO
-    currentImgCategory: "Tout", // Filtre actif
-    activeImgStyle: null // Style actuellement sélectionné (Objet)
+    currentImgCategory: "Tout", 
+    selectedImgStyles: [], // Array d'objets styles sélectionnés (MULTI-SELECT)
+    // ETAT EDITION
+    editingImgStyleIndex: null // Index du style en cours de modification (null si ajout)
   };
 
   const startLoading = () => {
@@ -59,9 +61,7 @@
     const saved = data.find(i => i.id === 'full_config');
     if (saved) {
       const parsed = JSON.parse(saved.value);
-      state.config = { ...DEFAULTS, ...parsed }; // Merge pour éviter perte si nouveaux champs
-      
-      // Assurer les arrays
+      state.config = { ...DEFAULTS, ...parsed }; // Merge
       if (!state.config.imgStyles) state.config.imgStyles = [];
       if (!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
     }
@@ -86,7 +86,9 @@
 
     // Update Select pour création style
     const catSelect = $("newImgStyleCategory");
+    const currentVal = catSelect.value;
     catSelect.innerHTML = `<option value="">Général</option>` + (state.config.imgCategories || []).map(c => `<option value="${c}">${c}</option>`).join("");
+    if(currentVal) catSelect.value = currentVal;
 
     // --- LISTE STYLES (SETTINGS) ---
     $("imgStyleEditorList").innerHTML = (state.config.imgStyles || []).map((s, i) => `
@@ -101,13 +103,15 @@
                 </div>
                 <div style="font-size:11px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:300px;">${s.prompt}</div>
             </div>
-            <button onclick="window.removeImgStyle(${i})" style="color:red; border:none; background:none;">×</button>
+            <div style="display:flex; flex-direction:column; gap:5px;">
+                <button onclick="window.editImgStyle(${i})" style="color:var(--apple-blue); border:none; background:none; font-size:14px;">✏️</button>
+                <button onclick="window.removeImgStyle(${i})" style="color:red; border:none; background:none; font-size:14px;">×</button>
+            </div>
         </div>
     `).join("");
 
     $("collectionSelect").innerHTML = (state.config.collections || []).map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     renderStyleSelectors();
-    // Update Studio UI as well if config changes
     renderStudioCategories();
     renderImgStylesButtons();
   }
@@ -122,7 +126,7 @@
     el.classList.toggle('selected');
   };
 
-  /* --- GESTION PARAMÈTRES IMAGES --- */
+  /* --- GESTION PARAMÈTRES IMAGES (CRUD & EDIT) --- */
   window.removeImgCategory = (i) => {
       state.config.imgCategories.splice(i, 1);
       renderConfigUI();
@@ -137,10 +141,52 @@
   };
 
   window.removeImgStyle = (i) => {
+      if(!confirm("Supprimer ce style ?")) return;
       state.config.imgStyles.splice(i, 1);
+      if(state.editingImgStyleIndex === i) window.cancelImgStyleEdit();
       renderConfigUI();
   };
 
+  // NOUVEAU : Fonction pour éditer
+  window.editImgStyle = (i) => {
+      const style = state.config.imgStyles[i];
+      if(!style) return;
+      
+      state.editingImgStyleIndex = i;
+      
+      // Remplir le formulaire
+      $("newImgStyleName").value = style.name;
+      $("newImgStyleCategory").value = style.category || "";
+      $("newImgStylePrompt").value = style.prompt;
+      $("newImgStyleFile").value = ""; // Reset input file
+      
+      // UI Mode Edition
+      $("imgStyleFormTitle").textContent = "MODIFIER LE STYLE";
+      $("addImgStyleBtn").textContent = "Mettre à jour le Style";
+      $("cancelImgStyleEditBtn").classList.remove("hidden");
+      
+      if(style.refImage) $("currentRefImgPreview").classList.remove("hidden");
+      else $("currentRefImgPreview").classList.add("hidden");
+      
+      // Scroll vers le formulaire
+      $("imgStyleEditorForm").scrollIntoView({ behavior: 'smooth' });
+  };
+
+  window.cancelImgStyleEdit = () => {
+      state.editingImgStyleIndex = null;
+      $("newImgStyleName").value = "";
+      $("newImgStyleCategory").value = "";
+      $("newImgStylePrompt").value = "";
+      $("newImgStyleFile").value = "";
+      
+      $("imgStyleFormTitle").textContent = "AJOUTER UN STYLE";
+      $("addImgStyleBtn").textContent = "+ Enregistrer le Style";
+      $("cancelImgStyleEditBtn").classList.add("hidden");
+      $("currentRefImgPreview").classList.add("hidden");
+  };
+  $("cancelImgStyleEditBtn").onclick = window.cancelImgStyleEdit;
+
+  // Ajout OU Mise à jour
   $("addImgStyleBtn").onclick = () => {
       const name = $("newImgStyleName").value;
       const category = $("newImgStyleCategory").value;
@@ -149,27 +195,37 @@
       
       if(!name || !prompt) return alert("Nom et Prompt requis.");
 
+      const saveStyle = (imgBase64) => {
+          const styleData = { name, category, prompt };
+          
+          if(state.editingImgStyleIndex !== null) {
+              // UPDATE : On garde l'ancienne image si pas de nouvelle
+              const oldStyle = state.config.imgStyles[state.editingImgStyleIndex];
+              styleData.refImage = imgBase64 || oldStyle.refImage;
+              state.config.imgStyles[state.editingImgStyleIndex] = styleData;
+              window.cancelImgStyleEdit(); // Reset mode
+          } else {
+              // CREATE
+              styleData.refImage = imgBase64;
+              if(!state.config.imgStyles) state.config.imgStyles = [];
+              state.config.imgStyles.push(styleData);
+              // Reset champs
+              $("newImgStyleName").value = ""; $("newImgStylePrompt").value = ""; fileInput.value = "";
+          }
+          renderConfigUI();
+      };
+
       if (fileInput.files && fileInput.files[0]) {
           const r = new FileReader();
-          r.onload = (e) => {
-              const b64 = e.target.result.split(",")[1];
-              if(!state.config.imgStyles) state.config.imgStyles = [];
-              state.config.imgStyles.push({ name, category, prompt, refImage: b64 });
-              $("newImgStyleName").value = ""; $("newImgStylePrompt").value = ""; fileInput.value = "";
-              renderConfigUI();
-          };
+          r.onload = (e) => saveStyle(e.target.result.split(",")[1]);
           r.readAsDataURL(fileInput.files[0]);
       } else {
-          if(!state.config.imgStyles) state.config.imgStyles = [];
-          state.config.imgStyles.push({ name, category, prompt, refImage: null });
-          $("newImgStyleName").value = ""; $("newImgStylePrompt").value = "";
-          renderConfigUI();
+          saveStyle(null);
       }
   };
 
   /* --- STUDIO UI LOGIC --- */
   
-  // 1. Rendu des onglets catégories
   function renderStudioCategories() {
       const container = $("imgGenCategoriesBar");
       if(!container) return;
@@ -190,7 +246,6 @@
       renderImgStylesButtons();
   };
 
-  // 2. Rendu des boutons de styles (Filtrés)
   function renderImgStylesButtons() {
       const container = $("imgGenStylesContainer");
       if(!container) return;
@@ -201,8 +256,8 @@
       });
 
       container.innerHTML = filtered.map((s) => {
-          // On vérifie si ce style est "actif"
-          const isActive = state.activeImgStyle && state.activeImgStyle.name === s.name;
+          // Vérifie si le style est dans la liste des sélectionnés
+          const isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
           
           return `
          <button class="style-tag ${isActive ? 'selected' : ''}" onclick="window.toggleImgStyle('${s.name}')" style="display:flex; align-items:center; gap:5px; flex-shrink:0; border:1px solid #ddd; ${isActive ? 'background:var(--apple-blue); color:white; border-color:var(--apple-blue);' : 'background:#fff;'}">
@@ -212,16 +267,18 @@
       `}).join("");
   }
 
-  // 3. Toggle Logic (Sélection unique)
+  // Toggle Multiple
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName);
-      
-      if (state.activeImgStyle && state.activeImgStyle.name === styleName) {
+      if(!style) return;
+
+      const idx = state.selectedImgStyles.findIndex(s => s.name === styleName);
+      if (idx > -1) {
           // Désélection
-          state.activeImgStyle = null;
+          state.selectedImgStyles.splice(idx, 1);
       } else {
-          // Sélection (remplace le précédent)
-          state.activeImgStyle = style;
+          // Sélection (Ajout)
+          state.selectedImgStyles.push(style);
       }
       renderImgStylesButtons();
   };
@@ -289,56 +346,82 @@
   
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   
+  // --- NOUVELLE LOGIQUE BATCH MULTIPLE ---
   async function callGeminiImageGen() {
       const userPrompt = $("imgGenPrompt").value;
-      if (!userPrompt && !state.activeImgStyle) return alert("Veuillez entrer une description ou sélectionner un style.");
+      if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style.");
       
       const count = parseInt($("imgCount").value) || 1;
       const aspectRatio = $("imgAspectRatio").value;
       const resolution = $("imgResolution").value;
 
-      // --- CONSTRUCTION DU CONTEXTE FINAL ---
-      // 1. Prompt : User Input + Style Prompt
-      let finalPrompt = userPrompt;
-      if (state.activeImgStyle && state.activeImgStyle.prompt) {
-          finalPrompt += " " + state.activeImgStyle.prompt;
-      }
+      // Création des paquets de requêtes
+      const batches = [];
 
-      // 2. Images : User Uploads + Style Ref Image
-      let finalImages = [...state.inputImages];
-      if (state.activeImgStyle && state.activeImgStyle.refImage) {
-          finalImages.push(state.activeImgStyle.refImage);
-      }
-      // --------------------------------------
+      // SCENARIO 1 : Un ou plusieurs styles sélectionnés
+      if (state.selectedImgStyles.length > 0) {
+          state.selectedImgStyles.forEach(style => {
+              // 1. Fusion des images (User input + Style Ref)
+              let batchImages = [...state.inputImages];
+              if(style.refImage) batchImages.push(style.refImage);
 
-      const newItems = [];
-      for(let i=0; i<count; i++) {
-          newItems.push({ 
-              id: Date.now() + Math.random(), 
-              loading: true, 
-              prompt: finalPrompt, // On affiche le prompt complet dans l'historique
-              aspectRatio: aspectRatio 
+              // 2. Fusion du prompt (User + Style)
+              let batchPrompt = userPrompt ? (userPrompt + " " + style.prompt) : style.prompt;
+
+              // 3. Multiplication par le nombre demandé
+              for (let i = 0; i < count; i++) {
+                  batches.push({
+                      prompt: batchPrompt,
+                      images: batchImages,
+                      aspectRatio: aspectRatio,
+                      resolution: resolution,
+                      styleName: style.name
+                  });
+              }
           });
+      } 
+      // SCENARIO 2 : Aucun style, juste le prompt utilisateur
+      else {
+          for (let i = 0; i < count; i++) {
+              batches.push({
+                  prompt: userPrompt,
+                  images: [...state.inputImages],
+                  aspectRatio: aspectRatio,
+                  resolution: resolution,
+                  styleName: null
+              });
+          }
       }
+
+      // -- MISE A JOUR UI AVANT ENVOI --
       
+      // 1. Création placeholders
+      const newItems = batches.map(b => ({
+          id: Date.now() + Math.random(), 
+          loading: true, 
+          prompt: b.prompt,
+          aspectRatio: b.aspectRatio
+      }));
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
-      
-      // RESET UI : On garde le prompt user visible ? Non, on clear souvent pour éviter re-clic accidentel
-      // Mais on DESELECTIONNE le style obligatoirement comme demandé
-      state.activeImgStyle = null; 
-      renderImgStylesButtons();
-      // $("imgGenPrompt").value = ""; // Optionnel, je laisse le prompt user si besoin de re-iterer
 
-      newItems.forEach(async (item) => {
+      // 2. Nettoyage Interface (Comme demandé)
+      state.selectedImgStyles = []; // On désélectionne tout
+      renderImgStylesButtons(); // On met à jour l'affichage des boutons
+      // $("imgGenPrompt").value = ""; // Optionnel, je laisse si besoin de réutiliser
+
+      // -- ENVOI DES REQUÊTES (PARALLÈLE) --
+      
+      newItems.forEach(async (item, index) => {
+          const batchData = batches[index];
           try {
               const res = await fetch("/api/gemini", { 
                   method: "POST", 
                   body: JSON.stringify({ 
-                      prompt: item.prompt,
-                      images: finalImages, // On envoie le tableau fusionné
-                      aspectRatio: item.aspectRatio,
-                      resolution: resolution
+                      prompt: batchData.prompt,
+                      images: batchData.images, 
+                      aspectRatio: batchData.aspectRatio,
+                      resolution: batchData.resolution
                   }) 
               });
               
@@ -688,117 +771,6 @@
       if (type === 'hl') { state.selectedHeadlines = list; renderSavedHl(); } else { state.selectedAds = list; renderSavedAds(); }
       renderTranslationTabs(type);
     } catch(e) { alert("Erreur suppression: " + e.message); } finally { stopLoading(); }
-  };
-
-  function init() {
-    $("loading").classList.add("hidden");
-    $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
-    $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
-    $("saveConfig").onclick = async () => {
-      ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => state.config[id] = $(id).value);
-      state.config.blacklist = $("configBlacklist").value;
-      state.config.collections = Array.from(document.querySelectorAll('.collections-item')).map(r => ({ name: r.querySelector('.col-name').value, meaning: r.querySelector('.col-meaning').value }));
-      state.config.headlineStyles = Array.from(document.querySelectorAll('.headline-style-item')).map(r => ({ name: r.querySelector('.style-name').value, prompt: r.querySelector('.style-prompt').value }));
-      state.config.adStyles = Array.from(document.querySelectorAll('.ad-style-item')).map(r => ({ name: r.querySelector('.ad-style-name').value, prompt: r.querySelector('.ad-style-prompt').value }));
-      
-      // La config imgStyles et imgCategories est déjà mise à jour via les fonctions d'ajout/suppression
-      
-      await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
-      alert("Enregistré"); $("settingsModal").classList.add("hidden"); renderConfigUI();
-    };
-    $("openHeadlinesBtn").onclick = () => { if(!state.currentHistoryId) return; $("headlinesModal").classList.remove("hidden"); renderSavedHl(); renderTranslationTabs('hl'); };
-    $("openAdsBtn").onclick = () => { if(!state.currentHistoryId) return; $("adsModal").classList.remove("hidden"); renderSavedAds(); renderTranslationTabs('ad'); };
-    $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
-    $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
-    
-    // Nouveaux Event Listeners pour Images
-    $("openImgGenBtn").onclick = () => {
-        if (!state.imageBase64) return alert("Veuillez d'abord uploader une image principale.");
-        // Init input images if empty
-        if (state.inputImages.length === 0) state.inputImages = [state.imageBase64];
-        renderInputImages();
-        $("imgGenModal").classList.remove("hidden");
-        // Init Studio UI
-        renderStudioCategories();
-        renderImgStylesButtons();
-        renderGenImages();
-    };
-    $("closeImgGen").onclick = () => $("imgGenModal").classList.add("hidden");
-    $("sendImgGen").onclick = callGeminiImageGen;
-    $("addInputImgBtn").onclick = () => $("extraImgInput").click();
-    $("extraImgInput").onchange = (e) => {
-        const files = Array.from(e.target.files);
-        files.forEach(f => {
-            const r = new FileReader();
-            r.onload = (ev) => {
-                const b64 = ev.target.result.split(",")[1];
-                state.inputImages.push(b64);
-                renderInputImages();
-            };
-            r.readAsDataURL(f);
-        });
-    };
-    $("saveImgSelectionBtn").onclick = window.saveImgSelection;
-    
-    window.onclick = (e) => { if (e.target.classList.contains('modal')) e.target.classList.add("hidden"); document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show')); };
-    document.querySelectorAll(".tab-link").forEach(btn => btn.onclick = (e) => switchTab(e));
-    $("sendHeadlineChat").onclick = () => apiCall('headlines', { userText: $("headlineStyleInput").value });
-    $("sendAdChat").onclick = () => apiCall('ad_copys', { userText: $("adStyleInput").value });
-    $("genSimilarBtn").onclick = () => { const sel = Array.from(document.querySelectorAll('#headlinesResults .selected .headline-text')).map(it => it.innerText); apiCall('headlines_similar', { selectedForSimilar: sel }); };
-    $("genSimilarAdsBtn").onclick = () => { const sel = Array.from(document.querySelectorAll('#adsResults .selected .headline-text')).map(it => it.innerText.split('\n').pop()); apiCall('ad_copys_similar', { selectedForSimilar: sel }); };
-    $("saveHeadlinesBtn").onclick = () => saveSelections('hl');
-    $("saveAdsBtn").onclick = () => saveSelections('ad');
-    $("productUrlInput").onchange = async () => { if(state.currentHistoryId) await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, product_url: $("productUrlInput").value }) }); };
-    $("generateBtn").onclick = () => apiCall('generate');
-    $("regenTitleBtn").onclick = () => apiCall('regen_title');
-    $("regenDescBtn").onclick = () => apiCall('regen_desc');
-    $("drop").onclick = () => $("imageInput").click();
-    $("imageInput").onchange = (e) => {
-      const f = e.target.files[0]; if(!f) return;
-      const r = new FileReader(); r.onload = (ev) => {
-        state.imageMime = ev.target.result.split(";")[0].split(":")[1]; state.imageBase64 = ev.target.result.split(",")[1];
-        $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden");
-        $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; state.currentHistoryId = null;
-        // Reset Img Gen
-        state.inputImages = [state.imageBase64]; renderInputImages();
-      }; r.readAsDataURL(f);
-    };
-    $("removeImage").onclick = (e) => { e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null; $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block"; $("generateBtn").disabled = true; };
-    $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
-    loadConfig(); loadHistory();
-  }
-
-  async function loadHistory() { try { const r = await fetch("/api/history"); state.historyCache = await r.json(); renderHistoryUI(); } catch(e){} }
-  function renderHistoryUI() {
-    const filtered = (state.historyCache || []).filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
-    const start = (state.currentPage - 1) * 5; const pag = filtered.slice(start, start + 5);
-    $("historyList").innerHTML = pag.map(item => `<div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})"><img src="data:image/jpeg;base64,${item.image}" class="history-img"><div style="flex:1"><h4>${item.title || "Sans titre"}</h4></div><button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button></div>`).join("");
-    renderPagination(Math.ceil(filtered.length / 5));
-  }
-  function renderPagination(total) {
-    const p = $("pagination"); p.innerHTML = ""; if(total <= 1) return;
-    for(let i=1; i<=total; i++) {
-      const b = document.createElement("button"); b.textContent = i; if(i === state.currentPage) b.className = "active";
-      b.onclick = () => { state.currentPage = i; renderHistoryUI(); }; p.appendChild(b);
-    }
-  }
-
-  window.restore = (id) => {
-    const item = (state.historyCache || []).find(i => i.id === id); if(!item) return;
-    state.currentHistoryId = id; state.sessionHeadlines = []; state.sessionAds = [];
-    state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
-    state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
-    
-    // RESTORE GENERATED IMAGES
-    state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
-    state.sessionGeneratedImages = []; // Reset session on restore
-    
-    $("titleText").textContent = item.title; $("descText").textContent = item.description; $("productUrlInput").value = item.product_url || "";
-    $("previewImg").src = `data:image/jpeg;base64,${item.image}`; state.imageBase64 = item.image; $("preview").classList.remove("hidden");
-    $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; renderHistoryUI();
-    
-    // Re-init inputs for generator
-    state.inputImages = [item.image]; renderInputImages(); renderGenImages();
   };
 
   window.deleteItem = async (id) => { if(!confirm("Supprimer ?")) return; await fetch(`/api/history?id=${id}`, { method: "DELETE" }); if(state.currentHistoryId == id) state.currentHistoryId = null; loadHistory(); };
