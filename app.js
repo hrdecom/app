@@ -13,7 +13,10 @@
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }]
   };
 
-  const LANGUAGES = { "Danish": "dn.", "Dutch": "du.", "German": "de.", "Italian": "it.", "Polish": "pl.", "Portuguese (Brazil)": "pt-br.", "Portuguese (Portugal)": "pt.", "Spanish": "es." };
+  const LANGUAGES = { 
+    "Danish": "dn.", "Dutch": "du.", "German": "de.", "Italian": "it.", 
+    "Polish": "pl.", "Portuguese (Brazil)": "pt-br.", "Portuguese (Portugal)": "pt.", "Spanish": "es." 
+  };
 
   let state = {
     imageBase64: null, imageMime: "image/jpeg", historyCache: [],
@@ -24,7 +27,7 @@
     headlinesTrans: {}, adsTrans: {},
     selHlStyles: [], selAdStyles: [],
     hlPage: 1, adPage: 1,
-    generatedImages: [] // Carousel d'images générées
+    generatedImages: []
   };
 
   const startLoading = () => {
@@ -41,7 +44,7 @@
     return cleanUrl.replace("https://", `https://${sub}`);
   };
 
-  // --- GESTION GEMINI (IMAGEN 3) ---
+  // --- GESTION GEMINI (NOUVELLE FONCTIONNALITÉ) ---
   window.openGeminiModal = () => {
     if (!state.imageBase64) return alert("Uploadez une image d'abord.");
     $("geminiModal").classList.remove("hidden");
@@ -64,7 +67,7 @@
       if (data.error) throw new Error(data.error);
       $("geminiPreview").innerHTML = `<img src="data:image/jpeg;base64,${data.image}" id="tempGenImage" style="max-width:100%; border-radius:12px;"/>`;
       $("saveGeminiBtn").classList.remove("hidden");
-    } catch (e) { alert("Erreur: " + e.message); }
+    } catch (e) { alert("Erreur Gemini: " + e.message); }
     finally { stopLoading(); }
   };
 
@@ -83,10 +86,9 @@
 
   const renderImageCarousel = () => {
     const container = $("imageCarousel");
-    // L'image d'origine est toujours en position 0
     const allImgs = [state.imageBase64, ...state.generatedImages];
     container.innerHTML = allImgs.map((img, i) => `
-      <div class="carousel-item" onclick="window.selectCarouselImg('${img}', this)">
+      <div class="carousel-item ${i === 0 ? 'active-thumb' : ''}" onclick="window.selectCarouselImg('${img}', this)">
         <img src="data:image/jpeg;base64,${img}" />
         ${i > 0 ? `<button class="del-img" onclick="event.stopPropagation(); window.deleteGenImage(${i-1})">×</button>` : ''}
       </div>
@@ -112,7 +114,7 @@
     renderImageCarousel();
   };
 
-  // --- LOGIQUE COPYWRITING ---
+  // --- LOGIQUE COPYWRITING ANTHROPIC ---
   async function apiCall(action, extra = {}) {
     if (!state.imageBase64) return;
     startLoading();
@@ -122,7 +124,7 @@
       
       const res = await fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, ...extra }) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erreur serveur");
+      if (!res.ok) throw new Error(data.error || "Erreur IA");
 
       if (action === 'generate') {
         $("titleText").textContent = data.title; $("descText").textContent = data.description;
@@ -131,12 +133,17 @@
         state.currentHistoryId = hData.id;
         state.sessionHeadlines = []; state.sessionAds = []; state.selectedHeadlines = []; state.selectedAds = []; state.headlinesTrans = {}; state.adsTrans = {}; state.generatedImages = [];
         renderImageCarousel(); await loadHistory();
+      } else if (action === 'regen_title' || action === 'regen_desc') {
+        if (action === 'regen_title') $("titleText").textContent = data.title; else $("descText").textContent = data.description;
+        if (state.currentHistoryId) await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, title: $("titleText").textContent, description: $("descText").textContent }) });
+        await loadHistory();
       } else if (action.includes('headlines')) {
-        state.sessionHeadlines = [...(data.headlines || []), ...state.sessionHeadlines]; renderHeadlines();
+        state.sessionHeadlines = [...(data.headlines || []), ...state.sessionHeadlines]; state.hlPage = 1; renderHeadlines();
       } else if (action.includes('ad_copys')) {
-        state.sessionAds = [...(data.ad_copys || []).map(t => ({ text: t, style: 'Style' })), ...state.sessionAds]; renderAds();
+        state.sessionAds = [...(data.ad_copys || []).map(t => ({ text: t, style: 'Généré' })), ...state.sessionAds]; state.adPage = 1; renderAds();
       }
-    } catch(e) { alert(e.message); } finally { stopLoading(); }
+      $("regenTitleBtn").disabled = $("regenDescBtn").disabled = false;
+    } catch(e) { alert("Erreur: " + e.message); } finally { stopLoading(); }
   }
 
   // --- TRADUCTION GROUPÉE ---
@@ -148,7 +155,7 @@
     try {
       for (const lang of selected) { await window.processTranslation(type, lang, false); }
       alert("Traductions terminées !"); renderTranslationTabs(type);
-    } catch(e) { alert(e.message); } finally { stopLoading(); }
+    } catch(e) { alert("Erreur: " + e.message); } finally { stopLoading(); }
   };
 
   window.processTranslation = async (type, lang, singleCall = true) => {
@@ -156,7 +163,14 @@
     const targetUrl = formatLangUrl($("productUrlInput").value, LANGUAGES[lang]);
     if (singleCall) startLoading();
     try {
-      const res = await fetch("/api/generate", { method: "POST", body: JSON.stringify({ action: "translate", itemsToTranslate, targetLang: lang, config: state.config, image: state.imageBase64, product_url: targetUrl }) });
+      const res = await fetch("/api/generate", { 
+        method: "POST", 
+        body: JSON.stringify({ 
+            action: "translate", itemsToTranslate, targetLang: lang, config: state.config, 
+            image: state.imageBase64, product_url: targetUrl, 
+            infoToTranslate: (type === 'ad') ? { title1: $("titleText").textContent, title2: $("titleText").textContent + " - Special Offer", title3: "Gift Idea - " + $("titleText").textContent, title4: $("titleText").textContent + " - Valentine's Day Gift Idea", sub: "Free Shipping Worldwide Today" } : null
+        }) 
+      });
       const data = await res.json();
       if (type === 'hl') state.headlinesTrans[lang] = { items: data.translated_items };
       else state.adsTrans[lang] = { items: data.translated_items, info: data.translated_info };
@@ -166,7 +180,7 @@
       const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
       if (histItem) histItem[type==='hl'?'headlines_trans':'ads_trans'] = payload[type==='hl'?'headlines_trans':'ads_trans'];
 
-      if (singleCall) renderTranslationTabs(type);
+      if (singleCall) { renderTranslationTabs(type); const tabBtn = document.querySelector(`button[data-tab="tab-${type}-${lang.replace(/\s/g,'')}"]`); if(tabBtn) tabBtn.click(); }
     } catch(e) { if (singleCall) alert(e.message); } finally { if (singleCall) stopLoading(); }
   };
 
@@ -180,26 +194,30 @@
       if (type === 'hl') state.selectedHeadlines[index] = newText; else state.selectedAds[index] = newText;
       const val = JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds);
       await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: val }) });
+      const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
+      if (histItem) histItem[type==='hl'?'headlines':'ad_copys'] = val;
     };
   };
 
-  // --- RENDU UI ---
+  // --- RENDU INTERFACE ---
   const renderHeadlines = () => {
     const pag = (state.sessionHeadlines || []).slice((state.hlPage-1)*12, state.hlPage*12);
     $("headlinesResults").innerHTML = pag.map((text, i) => `<div class="headline-item" onclick="window.toggleItemSelect('hl', this)"><input type="checkbox"><span class="headline-text">${text}</span></div>`).join("");
+    renderPaginationLoc('hl');
   };
 
   const renderAds = () => {
     const pag = (state.sessionAds || []).slice((state.adPage-1)*12, state.adPage*12);
     $("adsResults").innerHTML = pag.map((item, i) => `<div class="headline-item" onclick="window.toggleItemSelect('ad', this)"><input type="checkbox"><div class="headline-text" style="white-space:pre-wrap;">${item.text}</div></div>`).join("");
+    renderPaginationLoc('ad');
   };
 
   function renderTranslationTabs(type) {
     const tabs = type === 'hl' ? $("headlinesTabs") : $("adsTabs");
     const container = type === 'hl' ? $("headlinesTabContainer") : $("adsTabContainer");
     let transData = type === 'hl' ? state.headlinesTrans : state.adsTrans;
+    const currentUrl = $("productUrlInput").value || "";
 
-    // Suppression auto des onglets vides
     Object.keys(transData).forEach(lang => {
       if (!transData[lang].items || transData[lang].items.length === 0) delete transData[lang];
     });
@@ -211,8 +229,13 @@
       const tabId = `tab-${type}-${lang.replace(/\s/g,'')}`;
       const btn = document.createElement("button"); btn.className = "tab-link lang-tab"; btn.textContent = lang; btn.dataset.tab = tabId; btn.onclick = (e) => switchTab(e); tabs.appendChild(btn);
       const content = document.createElement("div"); content.id = tabId; content.className = "tab-content hidden lang-tab-content";
-      content.innerHTML = `<div class="headlines-results">` + (transData[lang].items || []).map(t => `<div class="headline-item no-hover"><span class="headline-text">${t}</span></div>`).join("") + `</div>`;
-      container.appendChild(content);
+      
+      let html = `<div class="headlines-results">` + (transData[lang].items || []).map(t => `<div class="headline-item no-hover"><span class="headline-text">${t}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${t.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
+      if (type === 'ad' && transData[lang].info) {
+          const info = transData[lang].info; const langUrl = formatLangUrl(currentUrl, LANGUAGES[lang]);
+          html += `<div class="ads-info-block">` + [`TITRE 1|${info.title1}`, `TITRE 2|${info.title2}`, `TITRE 3|${info.title3}`, `TITRE 4|${info.title4}`, `SUB|${info.sub}`, `URL|${langUrl}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
+      }
+      content.innerHTML = html; container.appendChild(content);
     });
   }
 
@@ -227,31 +250,59 @@
     const cb = el.querySelector('input'); cb.checked = !cb.checked; el.classList.toggle('selected', cb.checked);
   };
 
+  function renderPaginationLoc(type) {
+    const list = type === 'hl' ? state.sessionHeadlines : state.sessionAds;
+    const container = type === 'hl' ? $("headlinesLocalPagination") : $("adsLocalPagination");
+    const total = Math.ceil((list || []).length / 12); container.innerHTML = ""; if (total <= 1) return;
+    for (let i = 1; i <= total; i++) {
+      const b = document.createElement("button"); b.textContent = i; if (i === (type === 'hl' ? state.hlPage : state.adPage)) b.className = "active";
+      b.onclick = () => { if(type === 'hl') state.hlPage = i; else state.adPage = i; type === 'hl' ? renderHeadlines() : renderAds(); }; container.appendChild(b);
+    }
+  }
+
   window.saveSelections = async (type) => {
     if (!state.currentHistoryId) return;
     const items = document.querySelectorAll(`#${type === 'hl' ? 'headlinesResults' : 'adsResults'} .selected .headline-text`);
     const sel = Array.from(items).map(it => it.innerText.trim());
-    if (type === 'hl') state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...sel])];
-    else state.selectedAds = [...new Set([...state.selectedAds, ...sel])];
-    const val = JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds);
-    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: val }) });
-    type === 'hl' ? renderSavedHl() : renderSavedAds();
+    if (sel.length === 0) return alert("Sélectionnez des éléments.");
+    if (type === 'hl') state.selectedHeadlines = [...new Set([...(state.selectedHeadlines || []), ...sel])];
+    else state.selectedAds = [...new Set([...(state.selectedAds || []), ...sel])];
+    
+    startLoading();
+    try {
+      const val = JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds);
+      await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: val }) });
+      const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
+      if (histItem) histItem[type==='hl'?'headlines':'ad_copys'] = val;
+      type === 'hl' ? renderSavedHl() : renderSavedAds();
+      alert("Enregistré");
+    } catch(e) { alert(e.message); } finally { stopLoading(); }
   };
 
   const renderSavedHl = () => {
-    $("headlinesSavedList").innerHTML = (state.selectedHeadlines || []).map((h, i) => `<div class="headline-item no-hover"><span class="headline-text" id="hl-text-${i}">${h}</span><div style="display:flex; gap:5px;"><button class="icon-btn-small" onclick="window.editSavedItem(${i}, 'hl')">✏️</button><button class="icon-btn-small" style="color:red" onclick="window.deleteSaved('hl',${i})">×</button></div></div>`).join("");
+    $("headlinesSavedList").innerHTML = (state.selectedHeadlines || []).map((h, i) => `<div class="headline-item no-hover"><span class="headline-text" id="hl-text-${i}">${h}</span><div style="display:flex; gap:5px;"><button class="icon-btn-small" onclick="window.editSavedItem(${i}, 'hl')">✏️</button><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="window.deleteSaved('hl',${i})">×</button></div></div>`).join("");
   };
 
   const renderSavedAds = () => {
-    $("adsSavedList").innerHTML = (state.selectedAds || []).map((h, i) => `<div class="headline-item no-hover"><span class="headline-text" id="ad-text-${i}">${h}</span><div style="display:flex; gap:5px;"><button class="icon-btn-small" onclick="window.editSavedItem(${i}, 'ad')">✏️</button><button class="icon-btn-small" style="color:red" onclick="window.deleteSaved('ad',${i})">×</button></div></div>`).join("");
+    $("adsSavedList").innerHTML = (state.selectedAds || []).map((h, i) => `<div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;justify-content:space-between;width:100%"><strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong><div style="display:flex; gap:5px;"><button class="icon-btn-small" onclick="window.editSavedItem(${i}, 'ad')">✏️</button><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="window.deleteSaved('ad',${i})">×</button></div></div><span class="headline-text" id="ad-text-${i}" style="white-space:pre-wrap;">${h}</span></div>`).join("");
+    const n = $("titleText").textContent; const u = formatLangUrl($("productUrlInput").value, "en.");
+    $("adsDefaultInfoBlock").innerHTML = [`TITRE 1|${n}`, `TITRE 2|${n} - Special Offer`, `TITRE 3|Gift Idea - ${n}`, `TITRE 4|${n} - Valentine's Day Gift Idea`, `SUB|Free Shipping Worldwide Today`, `URL|${u}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("");
   };
 
   window.deleteSaved = async (type, i) => {
     if(!confirm("Supprimer ?")) return;
     let list = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
+    let trans = type === 'hl' ? state.headlinesTrans : state.adsTrans;
     list.splice(i, 1);
-    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: JSON.stringify(list) }) });
-    type === 'hl' ? renderSavedHl() : renderSavedAds(); renderTranslationTabs(type);
+    Object.keys(trans || {}).forEach(lang => { if (trans[lang].items && trans[lang].items[i] !== undefined) trans[lang].items.splice(i, 1); });
+    startLoading();
+    try {
+      const hStr = JSON.stringify(list); const tStr = JSON.stringify(trans);
+      await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: hStr, [type==='hl'?'headlines_trans':'ads_trans']: tStr }) });
+      const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
+      if (histItem) { histItem[type==='hl'?'headlines':'ad_copys'] = hStr; histItem[type==='hl'?'headlines_trans':'ads_trans'] = tStr; }
+      type === 'hl' ? renderSavedHl() : renderSavedAds(); renderTranslationTabs(type);
+    } catch(e) { alert(e.message); } finally { stopLoading(); }
   };
 
   function init() {
@@ -261,24 +312,31 @@
     $("saveConfig").onclick = async () => {
       ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => state.config[id] = $(id).value);
       await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
-      $("settingsModal").classList.add("hidden");
+      alert("Enregistré"); $("settingsModal").classList.add("hidden"); renderConfigUI();
     };
-    $("openHeadlinesBtn").onclick = () => { $("headlinesModal").classList.remove("hidden"); renderSavedHl(); renderTranslationTabs('hl'); };
-    $("openAdsBtn").onclick = () => { $("adsModal").classList.remove("hidden"); renderSavedAds(); renderTranslationTabs('ad'); };
+    $("openHeadlinesBtn").onclick = () => { if(!state.currentHistoryId) return; $("headlinesModal").classList.remove("hidden"); renderSavedHl(); renderTranslationTabs('hl'); };
+    $("openAdsBtn").onclick = () => { if(!state.currentHistoryId) return; $("adsModal").classList.remove("hidden"); renderSavedAds(); renderTranslationTabs('ad'); };
+    $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
+    $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
     $("generateBtn").onclick = () => apiCall('generate');
     $("openGeminiBtn").onclick = () => window.openGeminiModal();
     $("imageInput").onchange = (e) => {
-      const f = e.target.files[0]; const r = new FileReader();
-      r.onload = (ev) => { state.imageBase64 = ev.target.result.split(",")[1]; $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden"); state.generatedImages = []; renderImageCarousel(); $("generateBtn").disabled = false; };
-      r.readAsDataURL(f);
+      const f = e.target.files[0]; if(!f) return;
+      const r = new FileReader(); r.onload = (ev) => {
+        state.imageMime = ev.target.result.split(";")[0].split(":")[1]; state.imageBase64 = ev.target.result.split(",")[1];
+        $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden"); $("generateBtn").disabled = false;
+        state.generatedImages = []; renderImageCarousel();
+      }; r.readAsDataURL(f);
     };
+    window.onclick = (e) => { if (e.target.classList.contains('modal')) e.target.classList.add("hidden"); document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show')); };
     document.querySelectorAll(".tab-link").forEach(btn => btn.onclick = (e) => switchTab(e));
     loadConfig(); loadHistory();
   }
 
-  async function loadHistory() { const r = await fetch("/api/history"); state.historyCache = await r.json(); renderHistoryUI(); }
+  async function loadHistory() { try { const r = await fetch("/api/history"); state.historyCache = await r.json(); renderHistoryUI(); } catch(e){} }
   function renderHistoryUI() {
-    $("historyList").innerHTML = (state.historyCache || []).slice(0, 5).map(item => `<div class="history-item" onclick="window.restore(${item.id})"><img src="data:image/jpeg;base64,${item.image}"><h4>${item.title}</h4></div>`).join("");
+    const filtered = (state.historyCache || []).slice(0, 5);
+    $("historyList").innerHTML = filtered.map(item => `<div class="history-item" onclick="window.restore(${item.id})"><img src="data:image/jpeg;base64,${item.image}"><h4>${item.title}</h4></div>`).join("");
   }
 
   window.restore = (id) => {
@@ -289,8 +347,12 @@
     state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {};
     state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
     state.generatedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
-    $("previewImg").src = `data:image/jpeg;base64,${item.image}`; $("preview").classList.remove("hidden"); renderImageCarousel();
+    $("titleText").textContent = item.title; $("descText").textContent = item.description;
+    $("previewImg").src = `data:image/jpeg;base64,${item.image}`; $("preview").classList.remove("hidden");
+    renderImageCarousel(); $("generateBtn").disabled = false;
   };
+
+  window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
 
   init();
 })();
