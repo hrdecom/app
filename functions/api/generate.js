@@ -1,13 +1,12 @@
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
-    const { action, image, media_type, collection, config, historyNames, currentTitle, currentDesc, product_url, style, selectedForSimilar, itemsToTranslate, targetLang } = body;
+    const { action, image, media_type, collection, config, historyNames, currentTitle, currentDesc, product_url, style, selectedForSimilar, itemsToTranslate, infoToTranslate, targetLang } = body;
 
     if (!env.ANTHROPIC_API_KEY) return new Response(JSON.stringify({ error: "Clé API manquante" }), { status: 500 });
 
-    const collectionInfo = (config.collections || []).find(c => c.name === collection)?.meaning || "";
     const jsonSafeRule = "IMPORTANT: Return valid JSON. Escape double quotes with backslash (\\\"). Output ONLY JSON.";
-    const baseInstructions = `${config.promptSystem}\n${jsonSafeRule}\nCONTEXT: ${collectionInfo}\nTITLES: ${config.promptTitles}\nDESC: ${config.promptDesc}`;
+    const baseInstructions = `${config.promptSystem}\n${jsonSafeRule}\nCONTEXT: ${collection}\nTITLES: ${config.promptTitles}\nDESC: ${config.promptDesc}`;
 
     let prompt = "";
     
@@ -18,27 +17,25 @@ export async function onRequestPost({ request, env }) {
     } else if (action === "regen_desc") {
       prompt = `${baseInstructions}\nTASK: New description. JSON: { "description": "..." }`;
     } else if (action === "headlines") {
-      prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}\nSTYLE: ${style}\nTASK: Generate 5 hooks. JSON: { "headlines": ["...", "..."] }`;
+      prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}\nSTYLE: ${style}\nTASK: 5 hooks. JSON: { "headlines": ["...", "..."] }`;
     } else if (action === "ad_copys") {
-      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nDEFAULT LANGUAGE: English.\nPRODUCT CONTEXT:\n- Title: ${currentTitle}\n- Description: ${currentDesc}\n- Product URL: ${product_url || "(no url provided)"}\nSTYLE REQUEST: ${style}\n\nOutput ONLY JSON: { "ad_cop_ys": ["...", "..."] }`;
-    } else if (action === "headlines_similar" || action === "ad_copys_similar") {
-        const type = action.includes('headlines') ? "Headlines" : "Ad Copys";
-        prompt = `You are a Luxury Jewelry Marketing Expert. Based on these selected ${type}: ${JSON.stringify(selectedForSimilar)}.
-        TASK: Generate 5 NEW improved variations. Keep the same structure. 
-        Output ONLY JSON: { "${action.includes('headlines') ? 'headlines' : 'ad_copys'}": ["...", "..."] }`;
+      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nDEFAULT LANGUAGE: English.\nPRODUCT: ${currentTitle}\nSTYLE: ${style}\nTASK: Generate 3 variations following the structure. JSON: { "ad_copys": ["...", "..."] }`;
+    } else if (action === "headlines_similar") {
+      prompt = `Viral Copywriting Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Task: 5 improved varied versions. English. JSON: { "headlines": ["...", "..."] }`;
+    } else if (action === "ad_copys_similar") {
+      prompt = `Facebook Ads Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Task: 3 improved variations following structure. English. JSON: { "ad_copys": ["...", "..."] }`;
     } 
-    // ACTION TRADUCTION
+    // TRADUCTION AMELIORÉE
     else if (action === "translate") {
       prompt = `You are a professional luxury translator. 
-      TASK: Translate the following list of jewelry marketing texts into ${targetLang}.
-      - Maintain the premium, intimate, and persuasive tone.
-      - Keep EXACTLY the same structure, line breaks, and emojis (especially for Ad Copies).
-      - If there are URLs, do NOT translate or change them.
+      TASK: Translate these items into ${targetLang}.
+      - Maintain premium tone.
+      - Keep emojis and line breaks exactly as provided.
       
-      TEXTS TO TRANSLATE:
-      ${JSON.stringify(itemsToTranslate)}
+      ITEMS TO TRANSLATE: ${JSON.stringify(itemsToTranslate)}
+      ${infoToTranslate ? `INFO BLOCK TO TRANSLATE: ${JSON.stringify(infoToTranslate)}` : ''}
       
-      Output ONLY JSON: { "translated_items": ["...", "..."] }`;
+      Output ONLY JSON: { "translated_items": [...], "translated_info": { "title1": "...", "title2": "...", "title3": "...", "title4": "...", "sub": "..." } }`;
     }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -55,11 +52,8 @@ export async function onRequestPost({ request, env }) {
     });
 
     const data = await anthropicRes.json();
-    if (!anthropicRes.ok) return new Response(JSON.stringify({ error: data.error?.message }), { status: 500 });
     const text = data.content[0].text;
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    return new Response(text.substring(start, end + 1), { headers: { "Content-Type": "application/json" } });
+    return new Response(text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1), { headers: { "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });
   }
