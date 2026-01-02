@@ -32,12 +32,12 @@
         <div class="prompt-segment"><label>Descriptions</label><textarea id="promptDesc" rows="4"></textarea></div>
       </div>
       <div id="tab-headlines-config" class="tab-content hidden">
-        <label>Prompt Headlines</label><textarea id="promptHeadlines" rows="6"></textarea>
-        <label>Boutons de Styles</label><div id="styleButtonsEditor"></div><button id="addStyleBtn" class="secondary-btn">+ Ajouter un style</button>
+        <label>Prompt Principal Headlines</label><textarea id="promptHeadlines" rows="6"></textarea>
+        <label>Boutons de Styles</label><div id="styleButtonsEditor"></div><button id="addStyleBtn" class="secondary-btn">+ Ajouter style</button>
       </div>
       <div id="tab-ads-config" class="tab-content hidden">
-        <label>Prompt Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea>
-        <label>Boutons de Styles Ads</label><div id="adStyleButtonsEditor"></div><button id="addAdStyleBtn" class="secondary-btn">+ Ajouter un style ad</button>
+        <label>Prompt Principal Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea>
+        <label>Boutons de Styles Ads</label><div id="adStyleButtonsEditor"></div><button id="addAdStyleBtn" class="secondary-btn">+ Ajouter style</button>
       </div>
       <div id="tab-blacklist" class="tab-content hidden"><textarea id="configBlacklist" rows="12"></textarea></div>
       <div class="modal-footer"><button id="saveConfig" class="primary-btn">Enregistrer tout</button></div>
@@ -74,8 +74,8 @@
             <div id="headlinesSavedList" class="headlines-results"></div>
           </div>
       </div>
-      <div class="chat-container"><div class="chat-bar"><input type="text" id="headlineStyleInput" placeholder="Style..."/><button id="sendHeadlineChat">↑</button></div></div>
-      <div class="modal-footer"><button id="saveHeadlinesBtn" class="primary-btn">Enregistrer les sélections</button></div>
+      <div class="chat-container"><div class="chat-bar"><input type="text" id="headlineStyleInput" placeholder="Précisez votre demande..."/><button id="sendHeadlineChat">↑</button></div></div>
+      <div class="modal-footer"><button id="saveHeadlinesBtn" class="primary-btn">Enregistrer sélections</button></div>
     </div>
   </div>
 
@@ -111,7 +111,7 @@
           </div>
       </div>
       <div class="chat-container"><div class="chat-bar"><input type="text" id="adStyleInput" placeholder="Style..."/><button id="sendAdChat">↑</button></div></div>
-      <div class="modal-footer"><button id="saveAdsBtn" class="primary-btn">Enregistrer les sélections</button></div>
+      <div class="modal-footer"><button id="saveAdsBtn" class="primary-btn">Enregistrer sélections</button></div>
     </div>
   </div>
 
@@ -135,7 +135,7 @@
       </section>
       <section class="card"><div class="card-head"><h3>Titre</h3><button id="copyTitle">⌘C</button></div><pre id="titleText"></pre></section>
       <section class="card"><div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div><pre id="descText"></pre>
-        <div style="margin-top:15px;"><label style="font-size:10px; font-weight:bold; color:var(--text-muted);">Product URL</label><input type="text" id="productUrlInput" placeholder="https://en.riccardiparis.com/..."/></div>
+        <div style="margin-top:15px;"><label style="font-size:10px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Product URL</label><input type="text" id="productUrlInput" placeholder="https://en.riccardiparis.com/..."/></div>
         <div style="display:flex; gap:10px; margin-top:15px;"><button id="openHeadlinesBtn" class="secondary-btn" style="flex:1;">🎬 Headlines</button><button id="openAdsBtn" class="secondary-btn" style="flex:1;">📢 Ad Copys</button></div>
       </section>
     </div>
