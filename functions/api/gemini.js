@@ -1,11 +1,11 @@
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
-    const { image, prompt, aspect_ratio } = body;
+    const { image, prompt, aspectRatio } = body;
 
     if (!env.GEMINI_API_KEY) return new Response(JSON.stringify({ error: "Clé API manquante" }), { status: 500 });
 
-    // Endpoint pour Imagen 3 via l'API Google AI
+    // Endpoint Imagen 3 (Via Google AI Studio API)
     const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${env.GEMINI_API_KEY}`;
 
     const response = await fetch(url, {
@@ -20,19 +20,16 @@ export async function onRequestPost({ request, env }) {
         ],
         parameters: {
           sampleCount: 1,
-          aspectRatio: aspect_ratio || "1:1",
+          aspectRatio: aspectRatio || "1:1",
           outputMimeType: "image/jpeg"
         }
       })
     });
 
     const data = await response.json();
-    
     if (data.error) throw new Error(data.error.message);
 
-    // Extraction de l'image générée (Base64)
     const generatedBase64 = data.predictions[0].bytesBase64Encoded;
-
     return new Response(JSON.stringify({ image: generatedBase64 }), {
       headers: { "Content-Type": "application/json" }
     });
