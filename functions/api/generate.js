@@ -19,24 +19,22 @@ export async function onRequestPost({ request, env }) {
     } else if (action === "headlines") {
       prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}\nSTYLE: ${style}\nTASK: 5 hooks. JSON: { "headlines": ["...", "..."] }`;
     } else if (action === "ad_copys" || action === "ad_copys_similar") {
-      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nPRODUCT URL TO USE: ${product_url}\nPRODUCT: ${currentTitle}\nSTYLE: ${style}\nTASK: Generate variations. Replace any placeholder like [Product URL] by the real URL: ${product_url}. JSON: { "ad_copys": ["...", "..."] }`;
+      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nPRODUCT URL TO USE: ${product_url}\nPRODUCT: ${currentTitle}\nSTYLE: ${style}\nTASK: Generate variations. You MUST use the exact URL provided: ${product_url}. Replace any placeholder like [Product URL] by this real URL. JSON: { "ad_copys": ["...", "..."] }`;
     } else if (action === "headlines_similar") {
       prompt = `Viral Copywriting Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Task: 5 improved varied versions. English. JSON: { "headlines": ["...", "..."] }`;
     } else if (action === "translate") {
-      // INSTRUCTIONS POUR TRADUCTION NON LITTÉRALE ET LOCALISÉE
       prompt = `Professional luxury translator and transcreation expert. 
-      TASK: Translate items into ${targetLang}. 
+      TASK: Translate/Adapt items into ${targetLang}. 
       
       LOCALIZATION RULES:
-      1. DO NOT TRANSLATE LITERALLY. If an idiom, metaphor, or hook doesn't sound natural or persuasive in ${targetLang}, adapt it (Transcreation).
-      2. PERSUASION: Ensure the tone remains luxury, elegant, and punchy for social media ads.
-      3. CHARACTER COUNT: Keep the translated text length similar to the original to avoid UI breaks.
-      4. URLs: Do NOT modify or translate the URL provided: ${product_url}.
-      5. FORMAT: Keep structure, line breaks, and emojis exactly as they are.
+      1. DO NOT TRANSLATE LITERALLY. Adapt idioms and metaphors to resonate naturally in ${targetLang}.
+      2. PERSUASION: Tone must remain luxury and punchy.
+      3. CHARACTER COUNT: Keep similar length to original text.
+      4. URLs: You MUST use this exact URL: ${product_url}. Do not modify or translate it.
+      5. FORMAT: Keep emojis and line breaks.
 
-      ITEMS TO TRANSCREATE: ${JSON.stringify(itemsToTranslate)}
-      ${infoToTranslate ? `EXTRA INFO: ${JSON.stringify(infoToTranslate)}` : ''}
-      
+      ITEMS TO TRANSLATE: ${JSON.stringify(itemsToTranslate)}
+      ${infoToTranslate ? `INFO: ${JSON.stringify(infoToTranslate)}` : ''}
       Output JSON: { "translated_items": [...], "translated_info": { "title1": "...", "title2": "...", "title3": "...", "title4": "...", "sub": "..." } }`;
     }
 
