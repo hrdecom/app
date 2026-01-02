@@ -6,7 +6,8 @@ export async function onRequestPost({ request, env }) {
     if (!env.ANTHROPIC_API_KEY) return new Response(JSON.stringify({ error: "Clé API manquante" }), { status: 500 });
 
     const jsonSafeRule = "IMPORTANT: Return valid JSON. Escape double quotes with backslash (\\\"). Output ONLY JSON.";
-    const baseInstructions = `${config.promptSystem}\n${jsonSafeRule}\nCONTEXT: ${collection}\nTITLES: ${config.promptTitles}\nDESC: ${config.promptDesc}`;
+    // Ajout de l'URL dans les instructions de base
+    const baseInstructions = `${config.promptSystem}\n${jsonSafeRule}\nCONTEXT: ${collection}\nTITLES: ${config.promptTitles}\nDESC: ${config.promptDesc}\nPRODUCT URL: ${product_url || 'https://riccardiparis.com'}`;
 
     let prompt = "";
     
@@ -18,14 +19,13 @@ export async function onRequestPost({ request, env }) {
       prompt = `${baseInstructions}\nTASK: New description. JSON: { "description": "..." }`;
     } else if (action === "headlines") {
       prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}\nSTYLE: ${style}\nTASK: 5 hooks. JSON: { "headlines": ["...", "..."] }`;
-    } else if (action === "ad_copys") {
-      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nDEFAULT LANGUAGE: English.\nPRODUCT: ${currentTitle}\nSTYLE: ${style}\nTASK: Generate 3 variations. JSON: { "ad_copys": ["...", "..."] }`;
+    } else if (action === "ad_copys" || action === "ad_copys_similar") {
+      // Instruction spécifique pour l'URL réelle dans les Ad Copys
+      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nPRODUCT URL TO USE: ${product_url || ''}\nPRODUCT: ${currentTitle}\nSTYLE: ${style}\nTASK: Generate variations. Replace any placeholder like [Product URL] by the real URL: ${product_url}. JSON: { "ad_copys": ["...", "..."] }`;
     } else if (action === "headlines_similar") {
       prompt = `Viral Copywriting Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Task: 5 improved varied versions. English. JSON: { "headlines": ["...", "..."] }`;
-    } else if (action === "ad_copys_similar") {
-      prompt = `Facebook Ads Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Task: 3 variations following strict structure. English. JSON: { "ad_copys": ["...", "..."] }`;
     } else if (action === "translate") {
-      prompt = `Professional luxury translator. TASK: Translate items into ${targetLang}. Keep structure, line breaks, emojis. Do NOT change URLs.
+      prompt = `Professional luxury translator. TASK: Translate items into ${targetLang}. Keep structure, line breaks, emojis. Do NOT translate the URL: ${product_url}.
       ITEMS: ${JSON.stringify(itemsToTranslate)}
       ${infoToTranslate ? `INFO: ${JSON.stringify(infoToTranslate)}` : ''}
       Output JSON: { "translated_items": [...], "translated_info": { "title1": "...", "title2": "...", "title3": "...", "title4": "...", "sub": "..." } }`;
