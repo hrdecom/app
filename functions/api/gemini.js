@@ -3,6 +3,7 @@ export async function onRequestPost({ request, env }) {
     const body = await request.json();
     const { images, prompt, aspectRatio, resolution } = body; 
     // resolution reçu du front : "1k", "2k", "4k"
+    // images : Array de base64 strings
 
     if (!env.GEMINI_API_KEY) return new Response(JSON.stringify({ error: "Clé API Google manquante" }), { status: 500 });
 
@@ -10,29 +11,31 @@ export async function onRequestPost({ request, env }) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${env.GEMINI_API_KEY}`;
 
     // --- 1. GESTION FORMAT ET RÉSOLUTION ---
-    // Conversion des valeurs pour correspondre aux Enums de l'API Gemini 3
-    let targetSize = "1K"; // Défaut
+    let targetSize = "1K"; 
     if (resolution === "2k") targetSize = "2K";
     if (resolution === "4k") targetSize = "4K";
 
-    // --- 2. CONFIGURATION TECHNIQUE CORRECTE ---
-    // Pour Gemini 3 Pro Image, les paramètres d'image doivent être dans 'imageConfig'
-    // et NON à la racine de generationConfig.
+    // --- 2. CONFIGURATION TECHNIQUE ---
     const genConfig = {
       responseModalities: ["IMAGE"],
       temperature: 0.9,
       imageConfig: {
-        aspectRatio: aspectRatio || "1:1", // ex: "16:9", "3:4"
-        imageSize: targetSize              // "1K", "2K" ou "4K"
+        aspectRatio: aspectRatio || "1:1",
+        imageSize: targetSize
       }
     };
 
     // --- 3. ENRICHISSEMENT DU PROMPT ---
-    // On garde quand même l'instruction textuelle par sécurité pour la qualité des détails
     let qualitySuffix = "";
     if (resolution === "4k") qualitySuffix = ", masterpiece, 4k, ultra detailed, photorealistic.";
     
-    const finalPrompt = `Generate an image: ${prompt}${qualitySuffix}`;
+    // On précise au modèle comment gérer les inputs multiples si présents
+    let multiImgInstruction = "";
+    if (images && images.length > 1) {
+        multiImgInstruction = " Use the provided images as context: typically one is the subject and the other is the style/composition reference.";
+    }
+
+    const finalPrompt = `Generate an image: ${prompt}${multiImgInstruction}${qualitySuffix}`;
 
     const payload = {
       contents: [
@@ -45,13 +48,17 @@ export async function onRequestPost({ request, env }) {
       generationConfig: genConfig
     };
 
-    // Gestion Image Input (Img2Img)
+    // --- 4. GESTION DES IMAGES MULTIPLES (Sujet + Référence) ---
     if (images && images.length > 0) {
-        payload.contents[0].parts.unshift({
-            inlineData: {
-                mimeType: "image/jpeg",
-                data: images[0]
-            }
+        // On inverse l'ordre pour que les images soient avant le texte dans le tableau parts (recommandation Gemini)
+        // Mais on itère sur TOUTES les images fournies
+        images.forEach(imgBase64 => {
+            payload.contents[0].parts.unshift({
+                inlineData: {
+                    mimeType: "image/jpeg",
+                    data: imgBase64
+                }
+            });
         });
     }
 
@@ -64,7 +71,6 @@ export async function onRequestPost({ request, env }) {
     const data = await response.json();
     
     if (data.error) {
-        // Log détaillé pour vous aider à débugger si le format change encore
         const msg = data.error.message || "Erreur inconnue";
         throw new Error(`Erreur Gemini (${data.error.code}): ${msg}`);
     }
