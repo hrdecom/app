@@ -14,7 +14,6 @@
     <button id="settingsBtn" class="icon-btn">⚙️ Paramètres</button>
   </header>
 
-  <!-- MODAL CONFIGURATION -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header"><h2>Configuration</h2><button id="closeSettings" class="close-btn">×</button></div>
@@ -23,6 +22,7 @@
         <button class="tab-link" data-tab="tab-prompts">Prompts IA</button>
         <button class="tab-link" data-tab="tab-headlines-config">Headlines</button>
         <button class="tab-link" data-tab="tab-ads-config">Ad Copys</button>
+        <button class="tab-link" data-tab="tab-translate-config">Traduction</button>
         <button class="tab-link" data-tab="tab-blacklist">Blacklist</button>
       </div>
       <div id="tab-collections" class="tab-content"><div id="collectionsList"></div><button id="addCollection" class="secondary-btn">+ Ajouter collection</button></div>
@@ -39,12 +39,14 @@
         <label>Prompt Principal Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea>
         <label>Boutons de Styles Ads</label><div id="adStyleButtonsEditor"></div><button id="addAdStyleBtn" class="secondary-btn">+ Ajouter style</button>
       </div>
+      <div id="tab-translate-config" class="tab-content hidden">
+        <label>Prompt Principal Traduction</label><textarea id="promptTranslate" rows="12"></textarea>
+      </div>
       <div id="tab-blacklist" class="tab-content hidden"><textarea id="configBlacklist" rows="12"></textarea></div>
       <div class="modal-footer"><button id="saveConfig" class="primary-btn">Enregistrer tout</button></div>
     </div>
   </div>
 
-  <!-- MODAL HEADLINES -->
   <div id="headlinesModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
@@ -79,7 +81,6 @@
     </div>
   </div>
 
-  <!-- MODAL AD COPYS -->
   <div id="adsModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
