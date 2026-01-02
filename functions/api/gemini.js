@@ -7,6 +7,7 @@ export async function onRequestPost({ request, env }) {
     if (!env.GEMINI_API_KEY) return new Response(JSON.stringify({ error: "Clé API Google manquante" }), { status: 500 });
 
     // --- CONFIGURATION DU MODÈLE ---
+    // Utilisation du modèle demandé
     const modelName = "gemini-3-pro-image-preview"; 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${env.GEMINI_API_KEY}`;
 
@@ -19,7 +20,7 @@ export async function onRequestPost({ request, env }) {
     let width = baseSize;
     let height = baseSize;
 
-    // Ajustement selon l'Aspect Ratio pour garder la définition cible sur le côté le plus long
+    // Ajustement selon l'Aspect Ratio
     switch (aspectRatio) {
         case "16:9":
             width = baseSize;
@@ -53,21 +54,12 @@ export async function onRequestPost({ request, env }) {
       ],
       parameters: {
         sampleCount: 1,
-        // On envoie l'aspectRatio textuel (requis par certains endpoints)
         aspectRatio: aspectRatio || "1:1",
-        // On force les dimensions calculées (requis pour le contrôle 2k/4k)
         width: width,
         height: height,
         outputMimeType: "image/jpeg"
       }
     };
-
-    // Gestion optionnelle de l'image de référence (Img2Img) si le modèle le supporte
-    if (images && images.length > 0) {
-        // Note: La structure exacte dépend de la version de l'API (bytesBase64Encoded ou image.blob)
-        // Pour l'instant, on laisse le prompt textuel prioritaire pour éviter les erreurs 400 sur ce modèle spécifique
-        // payload.instances[0].image = { bytesBase64Encoded: images[0] };
-    }
 
     const response = await fetch(url, {
       method: "POST",
@@ -82,7 +74,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     if (!data.predictions || !data.predictions[0].bytesBase64Encoded) {
-        throw new Error("Aucune image générée. Vérifiez votre prompt (sécurité) ou les paramètres.");
+        throw new Error("Aucune image générée. Vérifiez le prompt ou les paramètres.");
     }
 
     const generatedBase64 = data.predictions[0].bytesBase64Encoded;
