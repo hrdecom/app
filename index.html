@@ -22,7 +22,8 @@
         <button class="tab-link" data-tab="tab-prompts">Prompts IA</button>
         <button class="tab-link" data-tab="tab-headlines-config">Headlines</button>
         <button class="tab-link" data-tab="tab-ads-config">Ad Copys</button>
-        <button class="tab-link" data-tab="tab-img-styles">Styles Images</button> <button class="tab-link" data-tab="tab-translate-config">Traduction</button>
+        <button class="tab-link" data-tab="tab-img-styles">Styles Images</button>
+        <button class="tab-link" data-tab="tab-translate-config">Traduction</button>
         <button class="tab-link" data-tab="tab-blacklist">Blacklist</button>
       </div>
       
@@ -45,17 +46,33 @@
       </div>
 
       <div id="tab-img-styles" class="tab-content hidden">
-         <p style="font-size:12px; color:#666; margin-bottom:15px;">Configurez ici des boutons de styles pour le studio image. Vous pouvez attacher une image de référence (ex: packaging, fond, ambiance) qui sera envoyée avec votre prompt.</p>
+         
+         <div style="margin-bottom:20px; border-bottom:1px solid #eee; padding-bottom:15px;">
+            <label style="font-size:11px; font-weight:bold; color:#888;">GESTION DES CATÉGORIES</label>
+            <div id="imgCategoriesList" style="display:flex; flex-wrap:wrap; gap:8px; margin:10px 0;"></div>
+            <div style="display:flex; gap:10px;">
+               <input type="text" id="newImgCategoryInput" placeholder="Nouvelle catégorie..." style="padding:6px; border-radius:6px; border:1px solid #ccc; font-size:12px;">
+               <button id="addImgCategoryBtn" class="secondary-btn" style="padding:4px 10px;">+ Créer</button>
+            </div>
+         </div>
+
+         <p style="font-size:12px; color:#666; margin-bottom:10px;">Boutons de styles existants :</p>
          <div id="imgStyleEditorList"></div>
          
          <div style="background:#f5f5f7; padding:15px; border-radius:12px; margin-top:15px; border:1px solid #ddd;">
-            <label style="font-size:10px; font-weight:bold; color:#666;">NOUVEAU STYLE</label>
+            <label style="font-size:10px; font-weight:bold; color:#666;">AJOUTER UN STYLE</label>
             <div style="display:flex; gap:10px; margin-top:5px;">
-               <input type="text" id="newImgStyleName" placeholder="Nom du bouton (ex: Packaging)" style="flex:1; padding:8px; border-radius:6px; border:1px solid #ccc;">
-               <input type="file" id="newImgStyleFile" accept="image/*" style="font-size:11px;">
+               <input type="text" id="newImgStyleName" placeholder="Nom du bouton" style="flex:1; padding:8px; border-radius:6px; border:1px solid #ccc;">
+               <select id="newImgStyleCategory" style="padding:8px; border-radius:6px; border:1px solid #ccc; max-width:150px;">
+                  <option value="">Général</option>
+               </select>
             </div>
-            <textarea id="newImgStylePrompt" rows="2" placeholder="Prompt associé (ex: Place this jewelry inside a luxurious black velvet box...)" style="width:100%; margin-top:8px; padding:8px; border-radius:6px; border:1px solid #ccc;"></textarea>
-            <button id="addImgStyleBtn" class="secondary-btn" style="width:100%; margin-top:8px;">+ Ajouter Style Image</button>
+            <div style="margin-top:8px;">
+               <label style="font-size:10px; color:#666;">Image de référence (Optionnelle)</label>
+               <input type="file" id="newImgStyleFile" accept="image/*" style="font-size:11px; display:block; margin-top:3px;">
+            </div>
+            <textarea id="newImgStylePrompt" rows="2" placeholder="Prompt (ex: Luxury packaging shot...)" style="width:100%; margin-top:8px; padding:8px; border-radius:6px; border:1px solid #ccc;"></textarea>
+            <button id="addImgStyleBtn" class="secondary-btn" style="width:100%; margin-top:8px;">+ Enregistrer le Style</button>
          </div>
       </div>
 
@@ -160,7 +177,9 @@
         </div>
 
         <div class="chat-container">
-           <div id="imgGenStylesContainer" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:8px; margin-bottom:10px; border-bottom:1px solid #f0f0f0;"></div>
+           <div id="imgGenCategoriesBar" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:5px; margin-bottom:5px;"></div>
+           
+           <div id="imgGenStylesContainer" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:8px; margin-bottom:10px; border-bottom:1px solid #f0f0f0; min-height: 35px;"></div>
 
            <div id="inputImagesPreview" class="input-images-bar hidden"></div>
            
@@ -187,11 +206,6 @@
                   <option value="3">3</option>
                   <option value="4">4</option>
                   <option value="5">5</option>
-                  <option value="6">6</option>
-                  <option value="7">7</option>
-                  <option value="8">8</option>
-                  <option value="9">9</option>
-                  <option value="10">10</option>
                </select>
             </div>
 
@@ -217,9 +231,6 @@
 
             <div style="margin-top:auto;">
                <button id="saveImgSelectionBtn" class="primary-btn" style="width:100%;">Enregistrer Sélection</button>
-               <p style="font-size:10px; color:#888; margin-top:10px; text-align:center;">
-                  Les images non enregistrées seront perdues lors de l'actualisation.
-               </p>
             </div>
          </div>
       </div>
