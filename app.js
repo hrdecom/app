@@ -39,8 +39,6 @@
     const saved = data.find(i => i.id === 'full_config');
     if (saved) {
       state.config = JSON.parse(saved.value);
-      if (!state.config.headlineStyles) state.config.headlineStyles = [...DEFAULTS.headlineStyles];
-      if (!state.config.adStyles) state.config.adStyles = [...DEFAULTS.adStyles];
     }
     renderConfigUI();
   }
@@ -109,12 +107,14 @@
   }
 
   const renderHeadlines = () => {
-    const pag = state.sessionHeadlines.slice((state.hlPage-1)*12, state.hlPage*12);
+    const list = state.sessionHeadlines || [];
+    const pag = list.slice((state.hlPage-1)*12, state.hlPage*12);
     $("headlinesResults").innerHTML = pag.map((text, i) => `<div class="headline-item" onclick="toggleItemSelect('hl', this)"><input type="checkbox"><span class="headline-text">${text}</span></div>`).join("");
     renderPaginationLoc('hl');
   };
   const renderAds = () => {
-    const pag = state.sessionAds.slice((state.adPage-1)*12, state.adPage*12);
+    const list = state.sessionAds || [];
+    const pag = list.slice((state.adPage-1)*12, state.adPage*12);
     let html = "", lastStyle = "";
     pag.forEach((item, i) => {
       if (item.style !== lastStyle) { html += `<div style="margin: 10px 0 5px; font-size:11px; font-weight:bold; color:var(--apple-blue); border-bottom:1px solid #eee; padding-bottom:3px;">${item.style.toUpperCase()}</div>`; lastStyle = item.style; }
@@ -134,7 +134,7 @@
   function renderPaginationLoc(type) {
     const list = type === 'hl' ? state.sessionHeadlines : state.sessionAds;
     const container = type === 'hl' ? $("headlinesLocalPagination") : $("adsLocalPagination");
-    const total = Math.ceil(list.length / 12); container.innerHTML = ""; if (total <= 1) return;
+    const total = Math.ceil((list || []).length / 12); container.innerHTML = ""; if (total <= 1) return;
     for (let i = 1; i <= total; i++) {
       const b = document.createElement("button"); b.textContent = i; if (i === (type === 'hl' ? state.hlPage : state.adPage)) b.className = "active";
       b.onclick = () => { if(type === 'hl') state.hlPage = i; else state.adPage = i; type === 'hl' ? renderHeadlines() : renderAds(); }; container.appendChild(b);
@@ -150,7 +150,7 @@
   window.processTranslation = async (type, lang) => {
     document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
     const itemsToTranslate = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
-    if (!itemsToTranslate.length) return alert("Aucun élément enregistré à traduire.");
+    if (!(itemsToTranslate || []).length) return alert("Aucun élément enregistré à traduire.");
     startLoading();
     let infoToTranslate = (type === 'ad') ? { title1: $("titleText").textContent, title2: $("titleText").textContent + " - Special Offer", title3: "Gift Idea - " + $("titleText").textContent, title4: $("titleText").textContent + " - Valentine's Day Gift Idea", sub: "Free Shipping Worldwide Today" } : null;
     try {
@@ -172,11 +172,11 @@
     const transData = type === 'hl' ? state.headlinesTrans : state.adsTrans;
     tabs.querySelectorAll(".lang-tab").forEach(t => t.remove());
     container.querySelectorAll(".lang-tab-content").forEach(c => c.remove());
-    Object.keys(transData).forEach(lang => {
+    Object.keys(transData || {}).forEach(lang => {
       const tabId = `tab-${type}-${lang.replace(/\s/g,'')}`;
       const btn = document.createElement("button"); btn.className = "tab-link lang-tab"; btn.textContent = lang; btn.dataset.tab = tabId; btn.onclick = (e) => switchTab(e); tabs.appendChild(btn);
       const content = document.createElement("div"); content.id = tabId; content.className = "tab-content hidden lang-tab-content";
-      let html = `<div class="headlines-results">` + transData[lang].items.map(t => `<div class="headline-item no-hover"><span class="headline-text" style="white-space:pre-wrap;">${t}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${t.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
+      let html = `<div class="headlines-results">` + (transData[lang].items || []).map(t => `<div class="headline-item no-hover"><span class="headline-text" style="white-space:pre-wrap;">${t}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${t.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
       if (type === 'ad' && transData[lang].info) {
           const info = transData[lang].info; const langUrl = ($("productUrlInput").value).replace("en.", LANGUAGES[lang] || "en.");
           html += `<div class="ads-info-block">` + [`TITRE 1|${info.title1}`, `TITRE 2|${info.title2}`, `TITRE 3|${info.title3}`, `TITRE 4|${info.title4}`, `SUB|${info.sub}`, `URL|${langUrl}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
@@ -198,8 +198,8 @@
     const items = document.querySelectorAll(`#${containerId} .headline-item.selected .headline-text`);
     const sel = Array.from(items).map(it => it.innerText.trim());
     if (sel.length === 0) return alert("Sélectionnez des éléments.");
-    if (type === 'hl') { state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...sel])]; } 
-    else { state.selectedAds = [...new Set([...state.selectedAds, ...sel])]; }
+    if (type === 'hl') { state.selectedHeadlines = [...new Set([...(state.selectedHeadlines || []), ...sel])]; } 
+    else { state.selectedAds = [...new Set([...(state.selectedAds || []), ...sel])]; }
     startLoading();
     try {
       const val = JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds);
@@ -211,25 +211,29 @@
     } catch(e) { alert(e.message); } finally { stopLoading(); }
   };
 
-  const renderSavedHl = () => { $("headlinesSavedList").innerHTML = (state.selectedHeadlines || []).map((h, i) => `<div class="headline-item no-hover"><span class="headline-text">${h}</span><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('hl',${i})">×</button></div></div>`).join(""); };
+  const renderSavedHl = () => {
+    const list = state.selectedHeadlines || [];
+    $("headlinesSavedList").innerHTML = list.map((h, i) => `<div class="headline-item no-hover"><span class="headline-text">${h}</span><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('hl',${i})">×</button></div></div>`).join("");
+  };
+
   const renderSavedAds = () => {
-    $("adsSavedList").innerHTML = (state.selectedAds || []).map((h, i) => `<div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;justify-content:space-between;width:100%"><strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('ad',${i})">×</button></div></div><span class="headline-text" style="white-space:pre-wrap;">${h}</span></div>`).join("");
+    const list = state.selectedAds || [];
+    $("adsSavedList").innerHTML = list.map((h, i) => `<div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;justify-content:space-between;width:100%"><strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('ad',${i})">×</button></div></div><span class="headline-text" style="white-space:pre-wrap;">${h}</span></div>`).join("");
     const n = $("titleText").textContent, u = $("productUrlInput").value;
     $("adsDefaultInfoBlock").innerHTML = [`TITRE 1|${n}`, `TITRE 2|${n} - Special Offer`, `TITRE 3|Gift Idea - ${n}`, `TITRE 4|${n} - Valentine's Day Gift Idea`, `SUB|Free Shipping Worldwide Today`, `URL|${u}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("");
   };
 
-  // --- CORRECTION CRITIQUE: deleteSaved ---
   window.deleteSaved = async (type, i) => {
     if(!confirm("Supprimer ?")) return;
     
-    // 1. Suppression dans les listes locales
-    const list = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
-    const trans = type === 'hl' ? state.headlinesTrans : state.adsTrans;
+    let list = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
+    let trans = type === 'hl' ? state.headlinesTrans : state.adsTrans;
     
+    if (!list) return;
+
     list.splice(i, 1);
     
-    // Suppression dans les traductions (synchronisation)
-    Object.keys(trans).forEach(lang => {
+    Object.keys(trans || {}).forEach(lang => {
       if (trans[lang].items && trans[lang].items[i] !== undefined) {
         trans[lang].items.splice(i, 1);
       }
@@ -237,7 +241,6 @@
 
     startLoading();
     try {
-      // 2. Conversion explicite en STRING JSON pour l'API
       const payload = {
         id: state.currentHistoryId,
         [type === 'hl' ? 'headlines' : 'ad_copys']: JSON.stringify(list),
@@ -250,18 +253,17 @@
         body: JSON.stringify(payload)
       });
 
-      if (!res.ok) throw new Error("Erreur serveur lors de la suppression");
+      if (!res.ok) throw new Error("Erreur serveur");
 
-      // 3. Mise à jour du cache global pour que ça ne revienne pas au refresh
       const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
       if (histItem) {
         histItem[type === 'hl' ? 'headlines' : 'ad_copys'] = payload[type === 'hl' ? 'headlines' : 'ad_copys'];
         histItem[type === 'hl' ? 'headlines_trans' : 'ads_trans'] = payload[type === 'hl' ? 'headlines_trans' : 'ads_trans'];
       }
 
-      // 4. Rafraîchir l'interface
-      type === 'hl' ? renderSavedHl() : renderSavedAds();
-      renderTranslationTabs(type === 'hl' ? 'hl' : 'ad');
+      if (type === 'hl') { state.selectedHeadlines = list; renderSavedHl(); } 
+      else { state.selectedAds = list; renderSavedAds(); }
+      renderTranslationTabs(type);
       
     } catch(e) { 
       alert("Erreur suppression: " + e.message); 
@@ -315,7 +317,7 @@
 
   async function loadHistory() { try { const r = await fetch("/api/history"); state.historyCache = await r.json(); renderHistoryUI(); } catch(e){} }
   function renderHistoryUI() {
-    const filtered = state.historyCache.filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
+    const filtered = (state.historyCache || []).filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
     const start = (state.currentPage - 1) * 5; const pag = filtered.slice(start, start + 5);
     $("historyList").innerHTML = pag.map(item => `<div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})"><img src="data:image/jpeg;base64,${item.image}" class="history-img"><div style="flex:1"><h4>${item.title || "Sans titre"}</h4></div><button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button></div>`).join("");
     renderPagination(Math.ceil(filtered.length / 5));
@@ -329,7 +331,7 @@
   }
 
   window.restore = (id) => {
-    const item = state.historyCache.find(i => i.id === id); if(!item) return;
+    const item = (state.historyCache || []).find(i => i.id === id); if(!item) return;
     state.currentHistoryId = id; state.sessionHeadlines = []; state.sessionAds = [];
     state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
     state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
