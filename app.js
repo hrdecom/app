@@ -110,7 +110,7 @@
 
   const renderHeadlines = () => {
     const pag = state.sessionHeadlines.slice((state.hlPage-1)*12, state.hlPage*12);
-    $("headlinesResults").innerHTML = pag.map((text, i) => `<div class="headline-item" onclick="toggleItemSelect('hl', i, this)"><input type="checkbox"><span class="headline-text">${text}</span></div>`).join("");
+    $("headlinesResults").innerHTML = pag.map((text, i) => `<div class="headline-item" onclick="toggleItemSelect('hl', this)"><input type="checkbox"><span class="headline-text">${text}</span></div>`).join("");
     renderPaginationLoc('hl');
   };
   const renderAds = () => {
@@ -118,16 +118,25 @@
     let html = "", lastStyle = "";
     pag.forEach((item, i) => {
       if (item.style !== lastStyle) { html += `<div style="margin: 10px 0 5px; font-size:11px; font-weight:bold; color:var(--apple-blue); border-bottom:1px solid #eee; padding-bottom:3px;">${item.style.toUpperCase()}</div>`; lastStyle = item.style; }
-      html += `<div class="headline-item" onclick="toggleItemSelect('ad', i, this)"><input type="checkbox"><div class="headline-text" style="white-space:pre-wrap;">${item.text}</div></div>`;
+      html += `<div class="headline-item" onclick="toggleItemSelect('ad', this)"><input type="checkbox"><div class="headline-text" style="white-space:pre-wrap;">${item.text}</div></div>`;
     });
     $("adsResults").innerHTML = html;
     renderPaginationLoc('ad');
   };
-  window.toggleItemSelect = (type, idx, el) => {
-    const cb = el.querySelector('input'); cb.checked = !cb.checked; el.classList.toggle('selected', cb.checked);
-    const has = document.querySelectorAll(type === 'hl' ? '#headlinesResults .selected' : '#adsResults .selected').length > 0;
-    if(type === 'hl') $("similarActions").classList.toggle('hidden', !has); else $("similarAdsActions").classList.toggle('hidden', !has);
+
+  // --- CORRECTION: toggleItemSelect plus robuste ---
+  window.toggleItemSelect = (type, el) => {
+    const cb = el.querySelector('input');
+    cb.checked = !cb.checked;
+    el.classList.toggle('selected', cb.checked);
+    
+    const containerId = type === 'hl' ? 'headlinesResults' : 'adsResults';
+    const hasSelected = document.querySelectorAll(`#${containerId} .headline-item.selected`).length > 0;
+    
+    if(type === 'hl') $("similarActions").classList.toggle('hidden', !hasSelected); 
+    else $("similarAdsActions").classList.toggle('hidden', !hasSelected);
   };
+
   function renderPaginationLoc(type) {
     const list = type === 'hl' ? state.sessionHeadlines : state.sessionAds;
     const container = type === 'hl' ? $("headlinesLocalPagination") : $("adsLocalPagination");
@@ -208,12 +217,15 @@
     e.target.classList.add("active"); $(e.target.dataset.tab).classList.remove("hidden");
   }
 
-  /* PERSISTENT SYNC SELECTIONS */
+  // --- CORRECTION: saveSelections avec sélecteur CSS précis ---
   window.saveSelections = async (type) => {
     if (!state.currentHistoryId) return;
-    const items = document.querySelectorAll(`#${type === 'hl' ? 'headlinesResults' : 'adsResults'} .selected .headline-text`);
+    
+    const containerId = type === 'hl' ? 'headlinesResults' : 'adsResults';
+    const items = document.querySelectorAll(`#${containerId} .headline-item.selected .headline-text`);
     const sel = Array.from(items).map(it => it.innerText.trim());
-    if (!sel.length) return alert("Sélectionnez des éléments.");
+    
+    if (sel.length === 0) return alert("Sélectionnez des éléments.");
 
     if (type === 'hl') { state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...sel])]; } 
     else { state.selectedAds = [...new Set([...state.selectedAds, ...sel])]; }
