@@ -8,7 +8,7 @@ export async function onRequestPost({ request, env }) {
 
     // --- CONFIGURATION DU MODÈLE ---
     // Utilisation du modèle demandé
-    const modelName = "gemini-3-pro-image-preview"; 
+    const modelName = "gemini-3-pro-image"; 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${env.GEMINI_API_KEY}`;
 
     // --- CALCUL DE LA RÉSOLUTION ---
