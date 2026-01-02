@@ -1,45 +1,44 @@
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
-    const { action, image, media_type, collection, config, historyNames, currentTitle, currentDesc, product_url, style, selectedForSimilar, textsToTranslate, targetLang } = body;
+    const { action, image, media_type, collection, config, historyNames, currentTitle, currentDesc, product_url, style, selectedForSimilar, itemsToTranslate, targetLang } = body;
 
     if (!env.ANTHROPIC_API_KEY) return new Response(JSON.stringify({ error: "Clé API manquante" }), { status: 500 });
+
+    const collectionInfo = (config.collections || []).find(c => c.name === collection)?.meaning || "";
     const jsonSafeRule = "IMPORTANT: Return valid JSON. Escape double quotes with backslash (\\\"). Output ONLY JSON.";
+    const baseInstructions = `${config.promptSystem}\n${jsonSafeRule}\nCONTEXT: ${collectionInfo}\nTITLES: ${config.promptTitles}\nDESC: ${config.promptDesc}`;
 
     let prompt = "";
     
-    // LOGIQUE DE TRADUCTION
-    if (action === "translate") {
-      prompt = `You are a professional native translator specialized in luxury jewelry marketing.
-        TASK: Translate the following list of marketing texts into ${targetLang}.
-        
-        STRICT RULES:
-        - Maintain the EXACT same tone (luxury, emotional, punchy).
-        - Keep all emojis (like ✅, ✨, 🎬) exactly where they are.
-        - Preserve all line breaks and structure.
-        - Ensure the translation feels natural and high-end in ${targetLang}, not a literal word-for-word translation.
-        
-        TEXTS TO TRANSLATE:
-        ${JSON.stringify(textsToTranslate)}
-        
-        Output ONLY a JSON object: { "translations": ["translated text 1", "translated text 2", ...] }`;
-    } 
-    // RESTE DES ACTIONS... (inchangé pour la stabilité)
-    else if (action === "generate") {
-      const collectionInfo = (config.collections || []).find(c => c.name === collection)?.meaning || "";
-      prompt = `${config.promptSystem}\n${jsonSafeRule}\nCONTEXT: ${collectionInfo}\nTITLES: ${config.promptTitles}\nDESC: ${config.promptDesc}\nBLACKLIST: ${config.blacklist}\nHISTORY: ${JSON.stringify(historyNames)}\nTASK: Analyze image and output JSON: { "product_name": "...", "title": "...", "description": "..." }`;
-    } else if (action === "headlines") {
-      prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nCONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}\nSTYLE: ${style}\nTASK: Generate 5 hooks. JSON: { "headlines": ["...", "..."] }`;
-    } else if (action === "ad_copys") {
-      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nPRODUCT: ${currentTitle}, URL: ${product_url}\nSTYLE: ${style}\nOutput ONLY JSON: { "ad_copys": ["...", "..."] }`;
-    } else if (action === "headlines_similar") {
-      prompt = `Viral Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Product: ${currentTitle}. 5 punchy variations. English. JSON: { "headlines": ["...", "..."] }`;
-    } else if (action === "ad_copys_similar") {
-      prompt = `Ads Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Product: ${currentTitle}. 3 variations. Keep structure (Bullets + URL). English. JSON: { "ad_copys": ["...", "..."] }`;
+    if (action === "generate") {
+      prompt = `${baseInstructions}\nBLACKLIST: ${config.blacklist}\nHISTORY: ${JSON.stringify(historyNames)}\nTASK: Analyze image and output JSON: { "product_name": "...", "title": "...", "description": "..." }`;
     } else if (action === "regen_title") {
-      prompt = `New product_name/title. Different from: "${currentTitle}". JSON: { "product_name": "...", "title": "..." }`;
+      prompt = `${baseInstructions}\nTASK: New product_name/title. Different from: "${currentTitle}". JSON: { "product_name": "...", "title": "..." }`;
     } else if (action === "regen_desc") {
-      prompt = `New description. JSON: { "description": "..." }`;
+      prompt = `${baseInstructions}\nTASK: New description. JSON: { "description": "..." }`;
+    } else if (action === "headlines") {
+      prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}\nSTYLE: ${style}\nTASK: Generate 5 hooks. JSON: { "headlines": ["...", "..."] }`;
+    } else if (action === "ad_copys") {
+      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nDEFAULT LANGUAGE: English.\nPRODUCT CONTEXT:\n- Title: ${currentTitle}\n- Description: ${currentDesc}\n- Product URL: ${product_url || "(no url provided)"}\nSTYLE REQUEST: ${style}\n\nOutput ONLY JSON: { "ad_cop_ys": ["...", "..."] }`;
+    } else if (action === "headlines_similar" || action === "ad_copys_similar") {
+        const type = action.includes('headlines') ? "Headlines" : "Ad Copys";
+        prompt = `You are a Luxury Jewelry Marketing Expert. Based on these selected ${type}: ${JSON.stringify(selectedForSimilar)}.
+        TASK: Generate 5 NEW improved variations. Keep the same structure. 
+        Output ONLY JSON: { "${action.includes('headlines') ? 'headlines' : 'ad_copys'}": ["...", "..."] }`;
+    } 
+    // ACTION TRADUCTION
+    else if (action === "translate") {
+      prompt = `You are a professional luxury translator. 
+      TASK: Translate the following list of jewelry marketing texts into ${targetLang}.
+      - Maintain the premium, intimate, and persuasive tone.
+      - Keep EXACTLY the same structure, line breaks, and emojis (especially for Ad Copies).
+      - If there are URLs, do NOT translate or change them.
+      
+      TEXTS TO TRANSLATE:
+      ${JSON.stringify(itemsToTranslate)}
+      
+      Output ONLY JSON: { "translated_items": ["...", "..."] }`;
     }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
