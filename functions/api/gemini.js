@@ -7,26 +7,30 @@ export async function onRequestPost({ request, env }) {
     if (!env.GEMINI_API_KEY) return new Response(JSON.stringify({ error: "Clé API Google manquante" }), { status: 500 });
 
     // 1. DÉFINITION DU MODÈLE
+    // On garde l'ID spécifique demandé
     const modelName = "gemini-3-pro-image-preview"; 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${env.GEMINI_API_KEY}`;
 
-    // 2. ENRICHISSEMENT DU PROMPT (POUR LA QUALITÉ VISUELLE)
-    // On force le modèle à "penser" en haute résolution via le prompt
-    let qualityInstruction = "";
-    if (resolution === "2k") qualityInstruction = " High resolution (2k), highly detailed, sharp focus, high fidelity texture.";
-    if (resolution === "4k") qualityInstruction = " Ultra-high resolution (4k), masterpiece, intricate details, photorealistic, 8k textures.";
+    // 2. CONSTRUCTION DU PROMPT (Ratio & Qualité)
+    // L'API rejetant le paramètre technique, on doit être impératif dans le texte.
     
-    // Ajout d'une instruction de style photoréaliste par défaut si non précisée
-    const finalPrompt = `Generate an image: ${prompt}.${qualityInstruction} ensure strict adherence to the requested aspect ratio.`;
+    // Gestion Qualité / Résolution
+    let qualityInstruction = "";
+    if (resolution === "2k") qualityInstruction = "High resolution (2k), highly detailed, sharp focus, high fidelity texture.";
+    if (resolution === "4k") qualityInstruction = "Ultra-high resolution (4k), masterpiece, intricate details, photorealistic, 8k textures.";
+    
+    // Gestion Aspect Ratio (Crucial : au début du prompt pour priorisation)
+    const ratioText = aspectRatio ? aspectRatio : "1:1";
+    let ratioInstruction = `Aspect Ratio ${ratioText}.`;
+    
+    // On combine le tout : Format + Prompt Utilisateur + Qualité
+    const finalPrompt = `${ratioInstruction} Generate an image: ${prompt}. ${qualityInstruction}`;
 
-    // 3. CONFIGURATION TECHNIQUE (POUR LE FORMAT)
-    // C'est ici que se joue la dimension de l'image (Aspect Ratio)
+    // 3. CONFIGURATION TECHNIQUE (CORRIGÉE)
+    // On retire "aspectRatio" qui causait l'erreur 400.
     const genConfig = {
-      responseModalities: ["IMAGE"],
-      temperature: 0.9,
-      // IMPORTANT: Transmettre l'aspectRatio ici force le modèle à changer le format du canevas
-      // Valeurs acceptées généralement: "1:1", "16:9", "4:3", etc.
-      aspectRatio: aspectRatio || "1:1" 
+      responseModalities: ["IMAGE"], // Force la sortie image
+      temperature: 0.9
     };
 
     const payload = {
@@ -59,6 +63,7 @@ export async function onRequestPost({ request, env }) {
     const data = await response.json();
     
     if (data.error) {
+        // Renvoie l'erreur brute pour faciliter le débogage si une autre survient
         throw new Error(`Erreur Gemini (${data.error.code}): ${data.error.message}`);
     }
 
