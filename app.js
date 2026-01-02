@@ -124,17 +124,11 @@
     renderPaginationLoc('ad');
   };
 
-  // --- CORRECTION: toggleItemSelect plus robuste ---
   window.toggleItemSelect = (type, el) => {
-    const cb = el.querySelector('input');
-    cb.checked = !cb.checked;
-    el.classList.toggle('selected', cb.checked);
-    
+    const cb = el.querySelector('input'); cb.checked = !cb.checked; el.classList.toggle('selected', cb.checked);
     const containerId = type === 'hl' ? 'headlinesResults' : 'adsResults';
     const hasSelected = document.querySelectorAll(`#${containerId} .headline-item.selected`).length > 0;
-    
-    if(type === 'hl') $("similarActions").classList.toggle('hidden', !hasSelected); 
-    else $("similarAdsActions").classList.toggle('hidden', !hasSelected);
+    if(type === 'hl') $("similarActions").classList.toggle('hidden', !hasSelected); else $("similarAdsActions").classList.toggle('hidden', !hasSelected);
   };
 
   function renderPaginationLoc(type) {
@@ -147,61 +141,42 @@
     }
   }
 
-  /* TRANSLATION MENU */
   const toggleMenu = (id) => $(id).classList.toggle('show');
-  $("translateHlMenuBtn").onclick = (e) => {
-    e.stopPropagation(); if (!state.selectedHeadlines.length) return alert("Enregistrez d'abord.");
-    renderLangList("hl", "hlLangList"); toggleMenu("hlLangList");
-  };
-  $("translateAdMenuBtn").onclick = (e) => {
-    e.stopPropagation(); if (!state.selectedAds.length) return alert("Enregistrez d'abord.");
-    renderLangList("ad", "adLangList"); toggleMenu("adLangList");
-  };
+  $("translateHlMenuBtn").onclick = (e) => { e.stopPropagation(); if (!state.selectedHeadlines.length) return alert("Enregistrez d'abord."); renderLangList("hl", "hlLangList"); toggleMenu("hlLangList"); };
+  $("translateAdMenuBtn").onclick = (e) => { e.stopPropagation(); if (!state.selectedAds.length) return alert("Enregistrez d'abord."); renderLangList("ad", "adLangList"); toggleMenu("adLangList"); };
 
-  function renderLangList(type, containerId) {
-    $(containerId).innerHTML = Object.keys(LANGUAGES).map(l => `<div class="lang-opt" onclick="processTranslation('${type}', '${l}')">${l}</div>`).join("");
-  }
+  function renderLangList(type, containerId) { $(containerId).innerHTML = Object.keys(LANGUAGES).map(l => `<div class="lang-opt" onclick="processTranslation('${type}', '${l}')">${l}</div>`).join(""); }
 
   window.processTranslation = async (type, lang) => {
     document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
     const itemsToTranslate = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
     if (!itemsToTranslate.length) return alert("Aucun élément enregistré à traduire.");
-
     startLoading();
     let infoToTranslate = (type === 'ad') ? { title1: $("titleText").textContent, title2: $("titleText").textContent + " - Special Offer", title3: "Gift Idea - " + $("titleText").textContent, title4: $("titleText").textContent + " - Valentine's Day Gift Idea", sub: "Free Shipping Worldwide Today" } : null;
-
     try {
       const res = await fetch("/api/generate", { method: "POST", body: JSON.stringify({ action: "translate", itemsToTranslate, infoToTranslate, targetLang: lang, config: state.config, image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value }) });
       const data = await res.json();
-      
       if (type === 'hl') { state.headlinesTrans[lang] = { items: data.translated_items }; await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, headlines_trans: JSON.stringify(state.headlinesTrans) }) }); } 
       else { state.adsTrans[lang] = { items: data.translated_items, info: data.translated_info }; await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, ads_trans: JSON.stringify(state.adsTrans) }) }); }
-      
       const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
       if (histItem) histItem[type==='hl'?'headlines_trans':'ads_trans'] = JSON.stringify(type==='hl' ? state.headlinesTrans : state.adsTrans);
-
       renderTranslationTabs(type);
       const tabBtn = document.querySelector(`button[data-tab="tab-${type}-${lang.replace(/\s/g,'')}"]`);
       if(tabBtn) tabBtn.click();
-    } catch(e) { alert("Erreur Trad: " + e.message); }
-    finally { stopLoading(); }
+    } catch(e) { alert("Erreur Trad: " + e.message); } finally { stopLoading(); }
   };
 
   function renderTranslationTabs(type) {
     const tabs = type === 'hl' ? $("headlinesTabs") : $("adsTabs");
     const container = type === 'hl' ? $("headlinesTabContainer") : $("adsTabContainer");
     const transData = type === 'hl' ? state.headlinesTrans : state.adsTrans;
-
     tabs.querySelectorAll(".lang-tab").forEach(t => t.remove());
     container.querySelectorAll(".lang-tab-content").forEach(c => c.remove());
-
     Object.keys(transData).forEach(lang => {
       const tabId = `tab-${type}-${lang.replace(/\s/g,'')}`;
       const btn = document.createElement("button"); btn.className = "tab-link lang-tab"; btn.textContent = lang; btn.dataset.tab = tabId; btn.onclick = (e) => switchTab(e); tabs.appendChild(btn);
       const content = document.createElement("div"); content.id = tabId; content.className = "tab-content hidden lang-tab-content";
-      
       let html = `<div class="headlines-results">` + transData[lang].items.map(t => `<div class="headline-item no-hover"><span class="headline-text" style="white-space:pre-wrap;">${t}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${t.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
-
       if (type === 'ad' && transData[lang].info) {
           const info = transData[lang].info; const langUrl = ($("productUrlInput").value).replace("en.", LANGUAGES[lang] || "en.");
           html += `<div class="ads-info-block">` + [`TITRE 1|${info.title1}`, `TITRE 2|${info.title2}`, `TITRE 3|${info.title3}`, `TITRE 4|${info.title4}`, `SUB|${info.sub}`, `URL|${langUrl}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
@@ -217,19 +192,14 @@
     e.target.classList.add("active"); $(e.target.dataset.tab).classList.remove("hidden");
   }
 
-  // --- CORRECTION: saveSelections avec sélecteur CSS précis ---
   window.saveSelections = async (type) => {
     if (!state.currentHistoryId) return;
-    
     const containerId = type === 'hl' ? 'headlinesResults' : 'adsResults';
     const items = document.querySelectorAll(`#${containerId} .headline-item.selected .headline-text`);
     const sel = Array.from(items).map(it => it.innerText.trim());
-    
     if (sel.length === 0) return alert("Sélectionnez des éléments.");
-
     if (type === 'hl') { state.selectedHeadlines = [...new Set([...state.selectedHeadlines, ...sel])]; } 
     else { state.selectedAds = [...new Set([...state.selectedAds, ...sel])]; }
-    
     startLoading();
     try {
       const val = JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds);
@@ -248,20 +218,56 @@
     $("adsDefaultInfoBlock").innerHTML = [`TITRE 1|${n}`, `TITRE 2|${n} - Special Offer`, `TITRE 3|Gift Idea - ${n}`, `TITRE 4|${n} - Valentine's Day Gift Idea`, `SUB|Free Shipping Worldwide Today`, `URL|${u}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("");
   };
 
+  // --- CORRECTION CRITIQUE: deleteSaved ---
   window.deleteSaved = async (type, i) => {
     if(!confirm("Supprimer ?")) return;
+    
+    // 1. Suppression dans les listes locales
     const list = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
     const trans = type === 'hl' ? state.headlinesTrans : state.adsTrans;
-    list.splice(i, 1); Object.keys(trans).forEach(l => { if(trans[l].items[i]) trans[l].items.splice(i, 1); });
     
+    list.splice(i, 1);
+    
+    // Suppression dans les traductions (synchronisation)
+    Object.keys(trans).forEach(lang => {
+      if (trans[lang].items && trans[lang].items[i] !== undefined) {
+        trans[lang].items.splice(i, 1);
+      }
+    });
+
     startLoading();
     try {
-      const hStr = JSON.stringify(list); const tStr = JSON.stringify(trans);
-      await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: hStr, [type==='hl'?'headlines_trans':'ads_trans']: tStr }) });
+      // 2. Conversion explicite en STRING JSON pour l'API
+      const payload = {
+        id: state.currentHistoryId,
+        [type === 'hl' ? 'headlines' : 'ad_copys']: JSON.stringify(list),
+        [type === 'hl' ? 'headlines_trans' : 'ads_trans']: JSON.stringify(trans)
+      };
+
+      const res = await fetch("/api/history", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) throw new Error("Erreur serveur lors de la suppression");
+
+      // 3. Mise à jour du cache global pour que ça ne revienne pas au refresh
       const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
-      if (histItem) { histItem[type==='hl'?'headlines':'ad_copys'] = hStr; histItem[type==='hl'?'headlines_trans':'ads_trans'] = tStr; }
-      type === 'hl' ? (renderSavedHl(), renderTranslationTabs('hl')) : (renderSavedAds(), renderTranslationTabs('ad'));
-    } catch(e) { alert(e.message); } finally { stopLoading(); }
+      if (histItem) {
+        histItem[type === 'hl' ? 'headlines' : 'ad_copys'] = payload[type === 'hl' ? 'headlines' : 'ad_copys'];
+        histItem[type === 'hl' ? 'headlines_trans' : 'ads_trans'] = payload[type === 'hl' ? 'headlines_trans' : 'ads_trans'];
+      }
+
+      // 4. Rafraîchir l'interface
+      type === 'hl' ? renderSavedHl() : renderSavedAds();
+      renderTranslationTabs(type === 'hl' ? 'hl' : 'ad');
+      
+    } catch(e) { 
+      alert("Erreur suppression: " + e.message); 
+    } finally { 
+      stopLoading(); 
+    }
   };
 
   function init() {
@@ -277,14 +283,11 @@
       await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
       alert("Enregistré"); $("settingsModal").classList.add("hidden"); renderConfigUI();
     };
-
     $("openHeadlinesBtn").onclick = () => { if(!state.currentHistoryId) return; $("headlinesModal").classList.remove("hidden"); renderSavedHl(); renderTranslationTabs('hl'); };
     $("openAdsBtn").onclick = () => { if(!state.currentHistoryId) return; $("adsModal").classList.remove("hidden"); renderSavedAds(); renderTranslationTabs('ad'); };
     $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
     $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
-
     window.onclick = (e) => { if (e.target.classList.contains('modal')) e.target.classList.add("hidden"); document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show')); };
-
     document.querySelectorAll(".tab-link").forEach(btn => btn.onclick = (e) => switchTab(e));
     $("sendHeadlineChat").onclick = () => apiCall('headlines', { userText: $("headlineStyleInput").value });
     $("sendAdChat").onclick = () => apiCall('ad_copys', { userText: $("adStyleInput").value });
@@ -293,24 +296,20 @@
     $("saveHeadlinesBtn").onclick = () => saveSelections('hl');
     $("saveAdsBtn").onclick = () => saveSelections('ad');
     $("productUrlInput").onchange = async () => { if(state.currentHistoryId) await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, product_url: $("productUrlInput").value }) }); };
-
     $("generateBtn").onclick = () => apiCall('generate');
     $("regenTitleBtn").onclick = () => apiCall('regen_title');
     $("regenDescBtn").onclick = () => apiCall('regen_desc');
-
     $("drop").onclick = () => $("imageInput").click();
     $("imageInput").onchange = (e) => {
       const f = e.target.files[0]; if(!f) return;
       const r = new FileReader(); r.onload = (ev) => {
         state.imageMime = ev.target.result.split(";")[0].split(":")[1]; state.imageBase64 = ev.target.result.split(",")[1];
         $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden");
-        $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
-        state.currentHistoryId = null;
+        $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; state.currentHistoryId = null;
       }; r.readAsDataURL(f);
     };
     $("removeImage").onclick = (e) => { e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null; $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block"; $("generateBtn").disabled = true; };
     $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
-
     loadConfig(); loadHistory();
   }
 
@@ -334,7 +333,6 @@
     state.currentHistoryId = id; state.sessionHeadlines = []; state.sessionAds = [];
     state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
     state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
-    
     $("titleText").textContent = item.title; $("descText").textContent = item.description; $("productUrlInput").value = item.product_url || "";
     $("previewImg").src = `data:image/jpeg;base64,${item.image}`; state.imageBase64 = item.image; $("preview").classList.remove("hidden");
     $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; renderHistoryUI();
