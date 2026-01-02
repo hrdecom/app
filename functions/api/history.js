@@ -9,9 +9,20 @@ export async function onRequest(context) {
 
   if (request.method === "POST") {
     const { title, description, image, product_name, headlines, product_url, ad_copys } = await request.json();
+    // Correction ici : on force l'insertion de tableaux JSON vides par défaut
     const result = await db.prepare(
       "INSERT INTO history (title, description, image, product_name, headlines, product_url, ad_copys, headlines_trans, ads_trans) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).bind(title || "", description || "", image || "", product_name || "", headlines || "[]", product_url || "", ad_copys || "[]", "{}", "{}").run();
+    ).bind(
+      title || "", 
+      description || "", 
+      image || "", 
+      product_name || "", 
+      headlines || "[]", 
+      product_url || "", 
+      ad_copys || "[]", 
+      "{}", 
+      "{}"
+    ).run();
     return new Response(JSON.stringify({ id: result.meta.last_row_id }), { headers: { "content-type": "application/json" } });
   }
 
