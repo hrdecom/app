@@ -35,10 +35,9 @@
     savedGeneratedImages: [], 
     selectedSessionImagesIdx: [],
     // ETATS UI STUDIO
-    currentImgCategory: "Tout", 
-    selectedImgStyles: [], // Array d'objets styles sélectionnés (MULTI-SELECT)
-    // ETAT EDITION
-    editingImgStyleIndex: null // Index du style en cours de modification (null si ajout)
+    currentImgCategory: "", // Sera initialisé dans loadConfig
+    selectedImgStyles: [],
+    editingImgStyleIndex: null
   };
 
   const startLoading = () => {
@@ -64,6 +63,10 @@
       state.config = { ...DEFAULTS, ...parsed }; // Merge
       if (!state.config.imgStyles) state.config.imgStyles = [];
       if (!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
+    }
+    // Set default category to first one (No more "Tout")
+    if (state.config.imgCategories.length > 0) {
+        state.currentImgCategory = state.config.imgCategories[0];
     }
     renderConfigUI();
   }
@@ -126,7 +129,7 @@
     el.classList.toggle('selected');
   };
 
-  /* --- GESTION PARAMÈTRES IMAGES (CRUD & EDIT) --- */
+  /* --- GESTION PARAMÈTRES IMAGES --- */
   window.removeImgCategory = (i) => {
       state.config.imgCategories.splice(i, 1);
       renderConfigUI();
@@ -153,13 +156,11 @@
       
       state.editingImgStyleIndex = i;
       
-      // Remplir le formulaire
       $("newImgStyleName").value = style.name;
       $("newImgStyleCategory").value = style.category || "";
       $("newImgStylePrompt").value = style.prompt;
       $("newImgStyleFile").value = ""; 
       
-      // UI Mode Edition
       $("imgStyleFormTitle").textContent = "MODIFIER LE STYLE";
       $("addImgStyleBtn").textContent = "Mettre à jour le Style";
       $("cancelImgStyleEditBtn").classList.remove("hidden");
@@ -167,7 +168,6 @@
       if(style.refImage) $("currentRefImgPreview").classList.remove("hidden");
       else $("currentRefImgPreview").classList.add("hidden");
       
-      // Scroll vers le formulaire
       $("imgStyleEditorForm").scrollIntoView({ behavior: 'smooth' });
   };
 
@@ -197,13 +197,11 @@
           const styleData = { name, category, prompt };
           
           if(state.editingImgStyleIndex !== null) {
-              // UPDATE
               const oldStyle = state.config.imgStyles[state.editingImgStyleIndex];
               styleData.refImage = imgBase64 || oldStyle.refImage;
               state.config.imgStyles[state.editingImgStyleIndex] = styleData;
               window.cancelImgStyleEdit(); 
           } else {
-              // CREATE
               styleData.refImage = imgBase64;
               if(!state.config.imgStyles) state.config.imgStyles = [];
               state.config.imgStyles.push(styleData);
@@ -226,7 +224,8 @@
   function renderStudioCategories() {
       const container = $("imgGenCategoriesBar");
       if(!container) return;
-      const cats = ["Tout", ...(state.config.imgCategories || [])];
+      // PAS DE "TOUT"
+      const cats = [...(state.config.imgCategories || [])];
       
       container.innerHTML = cats.map(c => `
          <div class="style-tag ${state.currentImgCategory === c ? 'selected' : ''}" 
@@ -248,7 +247,6 @@
       if(!container) return;
       
       const filtered = (state.config.imgStyles || []).filter(s => {
-          if (state.currentImgCategory === "Tout") return true;
           return (s.category || "") === state.currentImgCategory;
       });
 
@@ -425,6 +423,7 @@
   }
 
   function renderGenImages() {
+      // 1. Session Results
       const sessionContainer = $("imgGenSessionResults");
       sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => {
         if (item.loading) {
@@ -447,42 +446,95 @@
         <div class="gen-image-card ${state.selectedSessionImagesIdx.includes(item) ? 'selected' : ''}" onclick="window.toggleSessionImg('${item.id}')">
            <img src="data:image/jpeg;base64,${item.image}">
            <div class="gen-image-overlay">${item.prompt}</div>
+           <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; background:rgba(255,255,255,0.8); color:black; border:none;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button>
         </div>
       `}).join("");
 
-      const savedContainer = $("imgGenSavedResults");
-      savedContainer.innerHTML = state.savedGeneratedImages.map((item, i) => `
-        <div class="gen-image-card" onclick="window.viewImage('${item.image}')">
+      // 2. Saved Results (With Original)
+      let savedHtml = "";
+      if(state.imageBase64) {
+          savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default;">
+             <img src="data:image/jpeg;base64,${state.imageBase64}">
+             <div class="gen-image-overlay" style="background:var(--text-main); color:white; font-weight:bold;">ORIGINAL</div>
+          </div>`;
+      }
+
+      savedHtml += state.savedGeneratedImages.map((item, i) => `
+        <div class="gen-image-card" draggable="true" ondragstart="dragStart(event, ${i})" ondrop="drop(event, ${i})" ondragover="allowDrop(event)">
            <img src="data:image/jpeg;base64,${item.image}">
            <div class="gen-image-overlay">${item.prompt}</div>
+           <button class="icon-btn-small" style="position:absolute; top:5px; right:35px; background:rgba(255,255,255,0.8); color:black; border:none;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button>
            <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; background:rgba(255,255,255,0.8); color:red; border:none;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button>
         </div>
       `).join("");
+      
+      $("imgGenSavedResults").innerHTML = savedHtml;
   }
+
+  // --- DRAG AND DROP LOGIC ---
+  let dragSrcIndex = null;
+  window.dragStart = (e, i) => { dragSrcIndex = i; };
+  window.allowDrop = (e) => { e.preventDefault(); };
+  window.drop = async (e, i) => {
+      e.preventDefault();
+      if (dragSrcIndex === null || dragSrcIndex === i) return;
+      // Reorder locally
+      const item = state.savedGeneratedImages.splice(dragSrcIndex, 1)[0];
+      state.savedGeneratedImages.splice(i, 0, item);
+      renderGenImages();
+      // Persist order (silent save)
+      if (state.currentHistoryId) {
+          try {
+              const payload = { id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) };
+              await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
+              const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
+              if (histItem) histItem.generated_images = payload.generated_images;
+          } catch(err) { console.error("Reorder failed", err); }
+      }
+  };
 
   window.toggleSessionImg = (id) => {
       const item = state.sessionGeneratedImages.find(x => x.id == id);
       if(!item) return;
+      
       const idx = state.selectedSessionImagesIdx.indexOf(item);
-      if (idx > -1) state.selectedSessionImagesIdx.splice(idx, 1);
-      else state.selectedSessionImagesIdx.push(item);
+      if (idx > -1) {
+          // Deselection : Retirer de la liste de selection ET des inputs
+          state.selectedSessionImagesIdx.splice(idx, 1);
+          const imgToRemove = item.image;
+          state.inputImages = state.inputImages.filter(img => img !== imgToRemove);
+      }
+      else {
+          // Selection : Ajouter à la liste ET aux inputs
+          state.selectedSessionImagesIdx.push(item);
+          state.inputImages.push(item.image);
+      }
+      renderInputImages(); // Met à jour la barre du chat
       renderGenImages();
   };
 
   window.viewImage = (b64) => {
-      const w = window.open("");
-      w.document.write(`<img src="data:image/jpeg;base64,${b64}" style="max-width:100%">`);
+      // Create Blob for better 4k handling
+      const byteCharacters = atob(b64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], {type: 'image/jpeg'});
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
   };
 
   window.saveImgSelection = async () => {
       if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
       if (state.selectedSessionImagesIdx.length === 0) return alert("Aucune image sélectionnée.");
 
+      // Conversion des items sélectionnés
       const newImages = state.selectedSessionImagesIdx.map(item => ({ 
           image: item.image, 
           prompt: item.prompt, 
           aspectRatio: item.aspectRatio 
       }));
+      
       state.savedGeneratedImages = [...newImages, ...state.savedGeneratedImages];
       state.selectedSessionImagesIdx = [];
       
