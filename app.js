@@ -8,6 +8,7 @@
     promptDesc: "DESCRIPTION: 2 paras, <=180 chars. Tone: Luxury.",
     promptHeadlines: "Viral TikTok hooks expert.",
     promptAdCopys: "Facebook Ads expert. Structure: Hook, Bullets, CTA+URL.",
+    promptTranslate: "Professional luxury translator. TASK: Translate into {targetLang}. URL: {product_url}", // Nouveau défaut
     headlineStyles: [{ name: "POV", prompt: "POV perspective." }],
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }]
   };
@@ -46,12 +47,17 @@
     const res = await fetch("/api/settings");
     const data = await res.json();
     const saved = data.find(i => i.id === 'full_config');
-    if (saved) state.config = JSON.parse(saved.value);
+    if (saved) {
+      state.config = JSON.parse(saved.value);
+      if (!state.config.promptTranslate) state.config.promptTranslate = DEFAULTS.promptTranslate;
+    }
     renderConfigUI();
   }
 
   function renderConfigUI() {
-    ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys"].forEach(id => { if($(id)) $(id).value = state.config[id] || DEFAULTS[id]; });
+    ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => { 
+      if($(id)) $(id).value = state.config[id] || DEFAULTS[id]; 
+    });
     if($("configBlacklist")) $("configBlacklist").value = state.config.blacklist || "";
     $("collectionsList").innerHTML = (state.config.collections || []).map((c, i) => `<div class="config-row collections-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${c.name}" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${c.meaning}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
@@ -212,7 +218,6 @@
     finally { if (singleCall) stopLoading(); }
   };
 
-  // --- SUPPRESSION AUTO ONGLETS VIDES ---
   function renderTranslationTabs(type) {
     const tabs = type === 'hl' ? $("headlinesTabs") : $("adsTabs");
     const container = type === 'hl' ? $("headlinesTabContainer") : $("adsTabContainer");
@@ -276,22 +281,17 @@
     } catch(e) { alert(e.message); } finally { stopLoading(); }
   };
 
-  // --- ÉDITION MANUELLE AVEC CRAYON ---
   window.editSavedItem = (index, type) => {
       const selector = type === 'hl' ? `#hl-text-${index}` : `#ad-text-${index}`;
       const el = document.querySelector(selector);
       el.contentEditable = true; el.classList.add('editing-field'); el.focus();
-      
       el.onblur = async () => {
           el.contentEditable = false; el.classList.remove('editing-field');
           const newText = el.innerText.trim();
           if (type === 'hl') state.selectedHeadlines[index] = newText;
           else state.selectedAds[index] = newText;
-
           const val = JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds);
           await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: val }) });
-          
-          // Mettre à jour le cache
           const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
           if (histItem) histItem[type==='hl'?'headlines':'ad_copys'] = val;
       };
@@ -352,7 +352,7 @@
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
     $("saveConfig").onclick = async () => {
-      ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys"].forEach(id => state.config[id] = $(id).value);
+      ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => state.config[id] = $(id).value);
       state.config.blacklist = $("configBlacklist").value;
       state.config.collections = Array.from(document.querySelectorAll('.collections-item')).map(r => ({ name: r.querySelector('.col-name').value, meaning: r.querySelector('.col-meaning').value }));
       state.config.headlineStyles = Array.from(document.querySelectorAll('.headline-style-item')).map(r => ({ name: r.querySelector('.style-name').value, prompt: r.querySelector('.style-prompt').value }));
