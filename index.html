@@ -27,63 +27,65 @@
         <button class="tab-link" data-tab="tab-blacklist">Blacklist</button>
       </div>
       
-      <div id="tab-collections" class="tab-content"><div id="collectionsList"></div><button id="addCollection" class="secondary-btn">+ Ajouter collection</button></div>
-      
-      <div id="tab-prompts" class="tab-content hidden">
-        <div class="prompt-segment"><label>1. Rôle Système</label><textarea id="promptSystem" rows="4"></textarea></div>
-        <div class="prompt-segment"><label>2. Règles pour les Titres</label><textarea id="promptTitles" rows="4"></textarea></div>
-        <div class="prompt-segment"><label>3. Règles pour les Descriptions</label><textarea id="promptDesc" rows="4"></textarea></div>
-      </div>
-      
-      <div id="tab-headlines-config" class="tab-content hidden">
-        <label>Prompt Principal Headlines</label><textarea id="promptHeadlines" rows="6"></textarea>
-        <label>Boutons de Styles</label><div id="styleButtonsEditor"></div><button id="addStyleBtn" class="secondary-btn">+ Ajouter style</button>
-      </div>
-      
-      <div id="tab-ads-config" class="tab-content hidden">
-        <label>Prompt Principal Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea>
-        <label>Boutons de Styles Ads</label><div id="adStyleButtonsEditor"></div><button id="addAdStyleBtn" class="secondary-btn">+ Ajouter style</button>
-      </div>
+      <div class="tab-container-scroll">
+          <div id="tab-collections" class="tab-content"><div id="collectionsList"></div><button id="addCollection" class="secondary-btn">+ Ajouter collection</button></div>
+          
+          <div id="tab-prompts" class="tab-content hidden">
+            <div class="prompt-segment"><label>1. Rôle Système</label><textarea id="promptSystem" rows="4"></textarea></div>
+            <div class="prompt-segment"><label>2. Règles pour les Titres</label><textarea id="promptTitles" rows="4"></textarea></div>
+            <div class="prompt-segment"><label>3. Règles pour les Descriptions</label><textarea id="promptDesc" rows="4"></textarea></div>
+          </div>
+          
+          <div id="tab-headlines-config" class="tab-content hidden">
+            <label>Prompt Principal Headlines</label><textarea id="promptHeadlines" rows="6"></textarea>
+            <label>Boutons de Styles</label><div id="styleButtonsEditor"></div><button id="addStyleBtn" class="secondary-btn">+ Ajouter style</button>
+          </div>
+          
+          <div id="tab-ads-config" class="tab-content hidden">
+            <label>Prompt Principal Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea>
+            <label>Boutons de Styles Ads</label><div id="adStyleButtonsEditor"></div><button id="addAdStyleBtn" class="secondary-btn">+ Ajouter style</button>
+          </div>
 
-      <div id="tab-img-styles" class="tab-content hidden">
-         
-         <div style="margin-bottom:20px; border-bottom:1px solid #eee; padding-bottom:15px;">
-            <label style="font-size:11px; font-weight:bold; color:#888;">GESTION DES CATÉGORIES</label>
-            <div id="imgCategoriesList" style="display:flex; flex-wrap:wrap; gap:8px; margin:10px 0;"></div>
-            <div style="display:flex; gap:10px;">
-               <input type="text" id="newImgCategoryInput" placeholder="Nouvelle catégorie..." style="padding:6px; border-radius:6px; border:1px solid #ccc; font-size:12px;">
-               <button id="addImgCategoryBtn" class="secondary-btn" style="padding:4px 10px;">+ Créer</button>
-            </div>
-         </div>
+          <div id="tab-img-styles" class="tab-content hidden">
+             
+             <div style="margin-bottom:20px; border-bottom:1px solid #eee; padding-bottom:15px;">
+                <label style="font-size:11px; font-weight:bold; color:#888;">GESTION DES CATÉGORIES</label>
+                <div id="imgCategoriesList" style="display:flex; flex-wrap:wrap; gap:8px; margin:10px 0;"></div>
+                <div style="display:flex; gap:10px;">
+                   <input type="text" id="newImgCategoryInput" placeholder="Nouvelle catégorie..." style="padding:6px; border-radius:6px; border:1px solid #ccc; font-size:12px;">
+                   <button id="addImgCategoryBtn" class="secondary-btn" style="padding:4px 10px;">+ Créer</button>
+                </div>
+             </div>
 
-         <p style="font-size:12px; color:#666; margin-bottom:10px;">Boutons de styles existants (Cliquez sur ✏️ pour modifier) :</p>
-         <div id="imgStyleEditorList"></div>
-         
-         <div id="imgStyleEditorForm" style="background:#f5f5f7; padding:15px; border-radius:12px; margin-top:15px; border:1px solid #ddd;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <label style="font-size:10px; font-weight:bold; color:#666;" id="imgStyleFormTitle">AJOUTER UN STYLE</label>
-                <button id="cancelImgStyleEditBtn" class="secondary-btn hidden" style="font-size:10px; padding:2px 8px;">Annuler</button>
-            </div>
-            <div style="display:flex; gap:10px; margin-top:5px;">
-               <input type="text" id="newImgStyleName" placeholder="Nom du bouton" style="flex:1; padding:8px; border-radius:6px; border:1px solid #ccc;">
-               <select id="newImgStyleCategory" style="padding:8px; border-radius:6px; border:1px solid #ccc; max-width:150px;">
-                  <option value="">Général</option>
-               </select>
-            </div>
-            <div style="margin-top:8px;">
-               <label style="font-size:10px; color:#666;">Image de référence (Optionnelle)</label>
-               <input type="file" id="newImgStyleFile" accept="image/*" style="font-size:11px; display:block; margin-top:3px;">
-               <div id="currentRefImgPreview" class="hidden" style="font-size:10px; color:green; margin-top:2px;">Image actuelle conservée</div>
-            </div>
-            <textarea id="newImgStylePrompt" rows="2" placeholder="Prompt (ex: Luxury packaging shot...)" style="width:100%; margin-top:8px; padding:8px; border-radius:6px; border:1px solid #ccc;"></textarea>
-            <button id="addImgStyleBtn" class="secondary-btn" style="width:100%; margin-top:8px;">+ Enregistrer le Style</button>
-         </div>
-      </div>
+             <p style="font-size:12px; color:#666; margin-bottom:10px;">Boutons de styles existants (Cliquez sur ✏️ pour modifier) :</p>
+             <div id="imgStyleEditorList"></div>
+             
+             <div id="imgStyleEditorForm" style="background:#f5f5f7; padding:15px; border-radius:12px; margin-top:15px; border:1px solid #ddd;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label style="font-size:10px; font-weight:bold; color:#666;" id="imgStyleFormTitle">AJOUTER UN STYLE</label>
+                    <button id="cancelImgStyleEditBtn" class="secondary-btn hidden" style="font-size:10px; padding:2px 8px;">Annuler</button>
+                </div>
+                <div style="display:flex; gap:10px; margin-top:5px;">
+                   <input type="text" id="newImgStyleName" placeholder="Nom du bouton" style="flex:1; padding:8px; border-radius:6px; border:1px solid #ccc;">
+                   <select id="newImgStyleCategory" style="padding:8px; border-radius:6px; border:1px solid #ccc; max-width:150px;">
+                      <option value="">Général</option>
+                   </select>
+                </div>
+                <div style="margin-top:8px;">
+                   <label style="font-size:10px; color:#666;">Image de référence (Optionnelle)</label>
+                   <input type="file" id="newImgStyleFile" accept="image/*" style="font-size:11px; display:block; margin-top:3px;">
+                   <div id="currentRefImgPreview" class="hidden" style="font-size:10px; color:green; margin-top:2px;">Image actuelle conservée</div>
+                </div>
+                <textarea id="newImgStylePrompt" rows="2" placeholder="Prompt (ex: Luxury packaging shot...)" style="width:100%; margin-top:8px; padding:8px; border-radius:6px; border:1px solid #ccc;"></textarea>
+                <button id="addImgStyleBtn" class="secondary-btn" style="width:100%; margin-top:8px;">+ Enregistrer le Style</button>
+             </div>
+          </div>
 
-      <div id="tab-translate-config" class="tab-content hidden">
-        <label>Prompt Principal Traduction</label><textarea id="promptTranslate" rows="12"></textarea>
+          <div id="tab-translate-config" class="tab-content hidden">
+            <label>Prompt Principal Traduction</label><textarea id="promptTranslate" rows="12"></textarea>
+          </div>
+          <div id="tab-blacklist" class="tab-content hidden"><textarea id="configBlacklist" rows="12"></textarea></div>
       </div>
-      <div id="tab-blacklist" class="tab-content hidden"><textarea id="configBlacklist" rows="12"></textarea></div>
       <div class="modal-footer"><button id="saveConfig" class="primary-btn">Enregistrer tout</button></div>
     </div>
   </div>
@@ -206,7 +208,8 @@
                <label style="font-size:11px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Nombre d'images</label>
                <select id="imgCount" class="settings-select">
                   <option value="1">1</option>
-                  <option value="2" selected>2</option> <option value="3">3</option>
+                  <option value="2" selected>2</option>
+                  <option value="3">3</option>
                   <option value="4">4</option>
                   <option value="5">5</option>
                </select>
@@ -228,7 +231,8 @@
                <select id="imgResolution" class="settings-select">
                   <option value="1k">1k (Standard)</option>
                   <option value="2k">2k (Haute Déf.)</option>
-                  <option value="4k" selected>4k (Ultra HD)</option> </select>
+                  <option value="4k" selected>4k (Ultra HD)</option>
+               </select>
             </div>
 
             <div style="margin-top:auto;">
