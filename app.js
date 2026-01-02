@@ -2,10 +2,7 @@
   const $ = (id) => document.getElementById(id);
 
   const DEFAULTS = {
-    collections: [
-      { name: "Initial", meaning: "Jewelry featuring 26 letter variants." },
-      { name: "Angel", meaning: "Jewelry with angelic shapes." }
-    ],
+    collections: [{ name: "Initial", meaning: "Jewelry featuring 26 letter variants." }, { name: "Angel", meaning: "Jewelry with angelic shapes." }],
     promptSystem: "Senior luxury jewelry copywriter.",
     promptTitles: "TITLE: Adjustable {Collection} Ring \"{Name}\". NO hyphens.",
     promptDesc: "DESCRIPTION: 2 paras, <=180 chars. Tone: Luxury.",
@@ -15,19 +12,24 @@
     adStyles: [{ name: "Cadeau", prompt: "Focus on gifting emotion." }]
   };
 
+  const LANGUAGES = ["Danish", "Dutch", "German", "Italian", "Polish", "Portuguese (Brazil)", "Portuguese (Portugal)", "Spanish"];
+
   let state = {
     imageBase64: null, imageMime: "image/jpeg", historyCache: [],
     config: JSON.parse(JSON.stringify(DEFAULTS)),
     currentPage: 1, pageSize: 5, searchQuery: "", currentHistoryId: null,
     timerInterval: null,
     sessionHeadlines: [], sessionAds: [],
-    hlPage: 1, adPage: 1, hlPageSize: 12, adPageSize: 12,
-    selHlStyles: [], selAdStyles: []
+    selectedHeadlines: [], selectedAds: [],
+    headlinesTrans: {}, adsTrans: {}, // format: { "German": ["..."], ... }
+    selHlStyles: [], selAdStyles: [],
+    hlPage: 1, adPage: 1,
+    currentTranslationContext: null, // "hl" or "ad"
+    selectedLangsToProcess: []
   };
 
   const startLoading = () => {
     let s = 0; $("timer").textContent = "00:00";
-    if (state.timerInterval) clearInterval(state.timerInterval);
     state.timerInterval = setInterval(() => {
       s++; const mm = String(Math.floor(s/60)).padStart(2,"0"); const ss = String(s%60).padStart(2,"0");
       $("timer").textContent = `${mm}:${ss}`;
@@ -49,37 +51,16 @@
   }
 
   function renderConfigUI() {
-    ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys"].forEach(id => {
-      $(id).value = state.config[id] || DEFAULTS[id];
-    });
+    ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys"].forEach(id => { $(id).value = state.config[id] || DEFAULTS[id]; });
     $("configBlacklist").value = state.config.blacklist || "";
-    
-    $("collectionsList").innerHTML = (state.config.collections || []).map((c, i) => `
-      <div class="config-row collections-item" style="display:flex; gap:10px; margin-bottom:10px;">
-        <input type="text" value="${c.name}" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;">
-        <textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${c.meaning}</textarea>
-        <button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>
-      </div>`).join("");
-
-    $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `
-      <div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;">
-        <input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;">
-        <textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea>
-        <button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>
-      </div>`).join("");
-
-    $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `
-      <div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;">
-        <input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;">
-        <textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea>
-        <button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>
-      </div>`).join("");
-
+    $("collectionsList").innerHTML = (state.config.collections || []).map((c, i) => `<div class="config-row collections-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${c.name}" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${c.meaning}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
+    $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
+    $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     $("collectionSelect").innerHTML = (state.config.collections || []).map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     renderStyleSelectors();
   }
 
-  $("addCollection").onclick = () => { renderConfigUI(); const div = document.createElement('div'); div.className="config-row collections-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`; $("collectionsList").appendChild(div); };
+  $("addCollection").onclick = () => { const div = document.createElement('div'); div.className="config-row collections-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`; $("collectionsList").appendChild(div); };
   $("addStyleBtn").onclick = () => { const div = document.createElement('div'); div.className="config-row headline-style-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`; $("styleButtonsEditor").appendChild(div); };
   $("addAdStyleBtn").onclick = () => { const div = document.createElement('div'); div.className="config-row ad-style-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none; cursor:pointer;">×</button>`; $("adStyleButtonsEditor").appendChild(div); };
 
@@ -87,7 +68,6 @@
     $("styleSelectorContainer").innerHTML = (state.config.headlineStyles || []).map(s => `<div class="style-tag ${state.selHlStyles.includes(s.name) ? 'selected' : ''}" onclick="toggleStyle('hl', '${s.name}', this)">${s.name}</div>`).join("");
     $("adStyleSelectorContainer").innerHTML = (state.config.adStyles || []).map(s => `<div class="style-tag ${state.selAdStyles.includes(s.name) ? 'selected' : ''}" onclick="toggleStyle('ad', '${s.name}', this)">${s.name}</div>`).join("");
   }
-
   window.toggleStyle = (type, name, el) => {
     let list = (type === 'hl') ? state.selHlStyles : state.selAdStyles;
     if (list.includes(name)) list.splice(list.indexOf(name), 1); else list.push(name);
@@ -98,12 +78,8 @@
     if (!state.imageBase64) return;
     startLoading();
     try {
-      const common = { 
-        image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value, config: state.config,
-        historyNames: state.historyCache.map(h => h.product_name),
-        currentTitle: $("titleText").textContent, currentDesc: $("descText").textContent, product_url: $("productUrlInput").value 
-      };
-
+      const common = { image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value, config: state.config, historyNames: state.historyCache.map(h => h.product_name), currentTitle: $("titleText").textContent, currentDesc: $("descText").textContent, product_url: $("productUrlInput").value };
+      
       if (action === 'ad_copys' && state.selAdStyles.length > 0) {
         const results = await Promise.all(state.selAdStyles.map(sName => {
           const sPrompt = state.config.adStyles.find(x => x.name === sName)?.prompt;
@@ -112,19 +88,16 @@
         results.forEach(res => { state.sessionAds = [...(res.ad_copys || []).map(t => ({ text: t, style: res.label })), ...state.sessionAds]; });
         state.adPage = 1; renderAds();
       } else {
-        if (action === 'headlines' && state.selHlStyles.length > 0) {
-            extra.style = state.selHlStyles.map(n => state.config.headlineStyles.find(s => s.name === n)?.prompt).join(" ") + " " + (extra.userText || "");
-        }
+        if (action === 'headlines' && state.selHlStyles.length > 0) extra.style = state.selHlStyles.map(n => state.config.headlineStyles.find(s => s.name === n)?.prompt).join(" ") + " " + (extra.userText || "");
         const res = await fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, ...extra }) });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "IA Error");
-
+        if (!res.ok) throw new Error(data.error || "Erreur IA");
         if (action === 'generate') {
           $("titleText").textContent = data.title; $("descText").textContent = data.description;
           const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name, product_url: $("productUrlInput").value }) });
           const hData = await hRes.json();
           state.currentHistoryId = hData.id;
-          state.sessionHeadlines = []; state.sessionAds = []; await loadHistory();
+          state.sessionHeadlines = []; state.sessionAds = []; state.headlinesTrans = {}; state.adsTrans = {}; await loadHistory();
         } else if (action === 'regen_title' || action === 'regen_desc') {
           if (action === 'regen_title') $("titleText").textContent = data.title; else $("descText").textContent = data.description;
           if (state.currentHistoryId) await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, title: $("titleText").textContent, description: $("descText").textContent }) });
@@ -142,46 +115,119 @@
     finally { stopLoading(); }
   }
 
+  /* RENDER RESULTS */
   const renderHeadlines = () => {
     const pag = state.sessionHeadlines.slice((state.hlPage-1)*12, state.hlPage*12);
     $("headlinesResults").innerHTML = pag.map((text, i) => `<div class="headline-item" onclick="toggleItemSelect('hl', i, this)"><input type="checkbox"><span class="headline-text">${text}</span></div>`).join("");
     renderPaginationLoc('hl');
   };
-
   const renderAds = () => {
     const pag = state.sessionAds.slice((state.adPage-1)*12, state.adPage*12);
     let html = "", lastStyle = "";
     pag.forEach((item, i) => {
-      if (item.style !== lastStyle) {
-        html += `<div style="margin: 10px 0 5px; font-size:11px; font-weight:bold; color:var(--apple-blue); border-bottom:1px solid #eee; padding-bottom:3px;">${item.style.toUpperCase()}</div>`;
-        lastStyle = item.style;
-      }
+      if (item.style !== lastStyle) { html += `<div style="margin: 10px 0 5px; font-size:11px; font-weight:bold; color:var(--apple-blue); border-bottom:1px solid #eee; padding-bottom:3px;">${item.style.toUpperCase()}</div>`; lastStyle = item.style; }
       html += `<div class="headline-item" onclick="toggleItemSelect('ad', i, this)"><input type="checkbox"><div class="headline-text" style="white-space:pre-wrap;">${item.text}</div></div>`;
     });
     $("adsResults").innerHTML = html;
     renderPaginationLoc('ad');
   };
-
   window.toggleItemSelect = (type, idx, el) => {
     const cb = el.querySelector('input'); cb.checked = !cb.checked; el.classList.toggle('selected', cb.checked);
     const has = document.querySelectorAll(type === 'hl' ? '#headlinesResults .selected' : '#adsResults .selected').length > 0;
     $(type === 'hl' ? 'similarActions' : 'similarAdsActions').classList.toggle('hidden', !has);
   };
-
   function renderPaginationLoc(type) {
     const list = type === 'hl' ? state.sessionHeadlines : state.sessionAds;
     const container = type === 'hl' ? $("headlinesLocalPagination") : $("adsLocalPagination");
     const total = Math.ceil(list.length / 12); container.innerHTML = ""; if (total <= 1) return;
     for (let i = 1; i <= total; i++) {
-      const b = document.createElement("button"); b.textContent = i;
-      if (i === (type === 'hl' ? state.hlPage : state.adPage)) b.className = "active";
+      const b = document.createElement("button"); b.textContent = i; if (i === (type === 'hl' ? state.hlPage : state.adPage)) b.className = "active";
       b.onclick = () => { if(type === 'hl') state.hlPage = i; else state.adPage = i; type === 'hl' ? renderHeadlines() : renderAds(); }; container.appendChild(b);
     }
   }
 
+  /* TRANSLATION LOGIC */
+  window.openTranslateModal = (type) => {
+    if ((type === 'hl' && state.selectedHeadlines.length === 0) || (type === 'ad' && state.selectedAds.length === 0)) return alert("Sélectionnez et enregistrez d'abord des résultats.");
+    state.currentTranslationContext = type;
+    state.selectedLangsToProcess = [];
+    $("langPickerList").innerHTML = LANGUAGES.map(l => `<div class="lang-item" onclick="this.classList.toggle('selected'); toggleLang('${l}')">${l}</div>`).join("");
+    $("langModal").classList.remove("hidden");
+  };
+
+  window.toggleLang = (l) => {
+    if (state.selectedLangsToProcess.includes(l)) state.selectedLangsToProcess = state.selectedLangsToProcess.filter(x => x !== l);
+    else state.selectedLangsToProcess.push(l);
+  };
+
+  $("confirmTranslateBtn").onclick = async () => {
+    if (state.selectedLangsToProcess.length === 0) return alert("Choisissez au moins une langue.");
+    $("langModal").classList.add("hidden");
+    startLoading();
+    
+    const type = state.currentTranslationContext;
+    const itemsToTranslate = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
+    const common = { image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value, config: state.config, action: "translate", itemsToTranslate };
+
+    try {
+      const results = await Promise.all(state.selectedLangsToProcess.map(targetLang => {
+        return fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, targetLang }) }).then(r => r.json().then(d => ({ ...d, lang: targetLang })));
+      }));
+
+      results.forEach(res => {
+        if (type === 'hl') state.headlinesTrans[res.lang] = res.translated_items;
+        else state.adsTrans[res.lang] = res.translated_items;
+      });
+
+      // Save to History
+      const key = type === 'hl' ? 'headlines_trans' : 'ads_trans';
+      const val = type === 'hl' ? state.headlinesTrans : state.adsTrans;
+      await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [key]: JSON.stringify(val) }) });
+      
+      renderTranslationTabs(type);
+    } catch(e) { alert("Erreur Trad: " + e.message); }
+    finally { stopLoading(); }
+  };
+
+  function renderTranslationTabs(type) {
+    const tabsContainer = type === 'hl' ? $("headlinesTabs") : $("adsTabs");
+    const container = type === 'hl' ? $("headlinesTabContainer") : $("adsTabContainer");
+    const transData = type === 'hl' ? state.headlinesTrans : state.adsTrans;
+
+    // Remove existing lang tabs
+    tabsContainer.querySelectorAll(".lang-tab").forEach(t => t.remove());
+    container.querySelectorAll(".lang-tab-content").forEach(c => c.remove());
+
+    Object.keys(transData).forEach(lang => {
+      const tabId = `tab-${type}-results-${lang.replace(/\s/g,'')}`;
+      const btn = document.createElement("button");
+      btn.className = "tab-link lang-tab";
+      btn.textContent = `Results ${lang}`;
+      btn.dataset.tab = tabId;
+      btn.onclick = (e) => switchTab(e, type);
+      tabsContainer.appendChild(btn);
+
+      const content = document.createElement("div");
+      content.id = tabId;
+      content.className = "tab-content hidden lang-tab-content";
+      content.innerHTML = `<div class="headlines-results">${transData[lang].map(t => `<div class="headline-item no-hover"><span class="headline-text" style="white-space:pre-wrap;">${t}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${t.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button></div>`).join("")}</div>`;
+      container.appendChild(content);
+    });
+  }
+
+  function switchTab(e, type) {
+    const modal = e.target.closest('.modal-content');
+    modal.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active"));
+    modal.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
+    e.target.classList.add("active");
+    $(e.target.dataset.tab).classList.remove("hidden");
+  }
+
+  /* BASE LOGIC */
   async function saveSelections(type) {
     if (!state.currentHistoryId) return;
-    const selected = []; document.querySelectorAll(`#${type === 'hl' ? 'headlinesResults' : 'adsResults'} .selected .headline-text`).forEach(it => {
+    const containerId = type === 'hl' ? 'headlinesResults' : 'adsResults';
+    const selected = []; document.querySelectorAll(`#${containerId} .selected .headline-text`).forEach(it => {
         const raw = it.innerText.split('\n'); selected.push(raw.length > 1 ? raw.slice(1).join('\n') : raw[0]);
     });
     const key = type === 'hl' ? 'headlines' : 'ad_copys';
@@ -207,6 +253,10 @@
   function init() {
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
+    $("closeLangModal").onclick = () => $("langModal").classList.add("hidden");
+    $("translateHeadlinesBtn").onclick = () => openTranslateModal('hl');
+    $("translateAdsBtn").onclick = () => openTranslateModal('ad');
+
     $("saveConfig").onclick = async () => {
       ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys"].forEach(id => state.config[id] = $(id).value);
       state.config.blacklist = $("configBlacklist").value;
@@ -217,25 +267,19 @@
       alert("Enregistré"); $("settingsModal").classList.add("hidden"); renderConfigUI();
     };
 
-    $("openHeadlinesBtn").onclick = () => { if(!state.currentHistoryId) return; $("headlinesModal").classList.remove("hidden"); renderSavedHl(); };
-    $("openAdsBtn").onclick = () => { if(!state.currentHistoryId) return; $("adsModal").classList.remove("hidden"); renderSavedAds(); };
+    $("openHeadlinesBtn").onclick = () => { if(!state.currentHistoryId) return; $("headlinesModal").classList.remove("hidden"); renderSavedHl(); renderTranslationTabs('hl'); };
+    $("openAdsBtn").onclick = () => { if(!state.currentHistoryId) return; $("adsModal").classList.remove("hidden"); renderSavedAds(); renderTranslationTabs('ad'); };
     $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
     $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
 
     document.querySelectorAll(".tab-link").forEach(btn => {
-      btn.onclick = (e) => {
-        const m = e.target.closest('.modal-content');
-        m.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active"));
-        m.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
-        btn.classList.add("active"); $(btn.dataset.tab).classList.remove("hidden");
-      };
+      btn.onclick = (e) => switchTab(e);
     });
 
     $("sendHeadlineChat").onclick = () => apiCall('headlines', { userText: $("headlineStyleInput").value });
     $("sendAdChat").onclick = () => apiCall('ad_copys', { userText: $("adStyleInput").value });
     $("genSimilarBtn").onclick = () => { const sel = []; document.querySelectorAll('#headlinesResults .selected .headline-text').forEach(it => sel.push(it.innerText)); apiCall('headlines_similar', { selectedForSimilar: sel }); };
-    $("genSimilarAdsBtn").onclick = () => { const sel = []; document.querySelectorAll('#adsResults .selected .headline-text').forEach(it => sel.push(it.innerText.split('\n')[1])); apiCall('ad_copys_similar', { selectedForSimilar: sel }); };
-
+    $("genSimilarAdsBtn").onclick = () => { const sel = []; document.querySelectorAll('#adsResults .selected .headline-text').forEach(it => sel.push(it.innerText)); apiCall('ad_copys_similar', { selectedForSimilar: sel }); };
     $("saveHeadlinesBtn").onclick = () => saveSelections('hl');
     $("saveAdsBtn").onclick = () => saveSelections('ad');
     $("productUrlInput").onchange = async () => { if(state.currentHistoryId) await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, product_url: $("productUrlInput").value }) }); };
@@ -252,16 +296,13 @@
         $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden");
         $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
         state.currentHistoryId = null; state.sessionHeadlines = []; state.sessionAds = []; $("productUrlInput").value = "";
-        renderHeadlines(); renderAds(); renderHistoryUI();
       }; r.readAsDataURL(f);
     };
 
     $("removeImage").onclick = (e) => {
       e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null;
-      state.sessionHeadlines = []; state.sessionAds = [];
       $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block";
       $("generateBtn").disabled = true; $("regenTitleBtn").disabled = true; $("regenDescBtn").disabled = true;
-      renderHeadlines(); renderAds(); renderHistoryUI();
     };
 
     $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
@@ -285,8 +326,11 @@
 
   window.restore = (id) => {
     const item = state.historyCache.find(i => i.id === id); if(!item) return;
-    state.currentHistoryId = id; state.sessionHeadlines = []; state.sessionAds = []; // CLEAN SESSION GENERATIONS
-    state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
+    state.currentHistoryId = id; state.sessionHeadlines = []; state.sessionAds = [];
+    state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : [];
+    state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
+    state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {};
+    state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
     $("titleText").textContent = item.title; $("descText").textContent = item.description; $("productUrlInput").value = item.product_url || "";
     $("previewImg").src = `data:image/jpeg;base64,${item.image}`; state.imageBase64 = item.image; $("preview").classList.remove("hidden");
     $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
