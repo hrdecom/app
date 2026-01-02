@@ -2,36 +2,37 @@ export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
     const { images, prompt, aspectRatio, resolution } = body; 
-    // resolution : "1k", "2k", "4k"
+    // resolution reçu du front : "1k", "2k", "4k"
 
     if (!env.GEMINI_API_KEY) return new Response(JSON.stringify({ error: "Clé API Google manquante" }), { status: 500 });
 
-    // 1. DÉFINITION DU MODÈLE
-    // On garde l'ID spécifique demandé
     const modelName = "gemini-3-pro-image-preview"; 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${env.GEMINI_API_KEY}`;
 
-    // 2. CONSTRUCTION DU PROMPT (Ratio & Qualité)
-    // L'API rejetant le paramètre technique, on doit être impératif dans le texte.
-    
-    // Gestion Qualité / Résolution
-    let qualityInstruction = "";
-    if (resolution === "2k") qualityInstruction = "High resolution (2k), highly detailed, sharp focus, high fidelity texture.";
-    if (resolution === "4k") qualityInstruction = "Ultra-high resolution (4k), masterpiece, intricate details, photorealistic, 8k textures.";
-    
-    // Gestion Aspect Ratio (Crucial : au début du prompt pour priorisation)
-    const ratioText = aspectRatio ? aspectRatio : "1:1";
-    let ratioInstruction = `Aspect Ratio ${ratioText}.`;
-    
-    // On combine le tout : Format + Prompt Utilisateur + Qualité
-    const finalPrompt = `${ratioInstruction} Generate an image: ${prompt}. ${qualityInstruction}`;
+    // --- 1. GESTION FORMAT ET RÉSOLUTION ---
+    // Conversion des valeurs pour correspondre aux Enums de l'API Gemini 3
+    let targetSize = "1K"; // Défaut
+    if (resolution === "2k") targetSize = "2K";
+    if (resolution === "4k") targetSize = "4K";
 
-    // 3. CONFIGURATION TECHNIQUE (CORRIGÉE)
-    // On retire "aspectRatio" qui causait l'erreur 400.
+    // --- 2. CONFIGURATION TECHNIQUE CORRECTE ---
+    // Pour Gemini 3 Pro Image, les paramètres d'image doivent être dans 'imageConfig'
+    // et NON à la racine de generationConfig.
     const genConfig = {
-      responseModalities: ["IMAGE"], // Force la sortie image
-      temperature: 0.9
+      responseModalities: ["IMAGE"],
+      temperature: 0.9,
+      imageConfig: {
+        aspectRatio: aspectRatio || "1:1", // ex: "16:9", "3:4"
+        imageSize: targetSize              // "1K", "2K" ou "4K"
+      }
     };
+
+    // --- 3. ENRICHISSEMENT DU PROMPT ---
+    // On garde quand même l'instruction textuelle par sécurité pour la qualité des détails
+    let qualitySuffix = "";
+    if (resolution === "4k") qualitySuffix = ", masterpiece, 4k, ultra detailed, photorealistic.";
+    
+    const finalPrompt = `Generate an image: ${prompt}${qualitySuffix}`;
 
     const payload = {
       contents: [
@@ -63,14 +64,14 @@ export async function onRequestPost({ request, env }) {
     const data = await response.json();
     
     if (data.error) {
-        // Renvoie l'erreur brute pour faciliter le débogage si une autre survient
-        throw new Error(`Erreur Gemini (${data.error.code}): ${data.error.message}`);
+        // Log détaillé pour vous aider à débugger si le format change encore
+        const msg = data.error.message || "Erreur inconnue";
+        throw new Error(`Erreur Gemini (${data.error.code}): ${msg}`);
     }
 
     const candidate = data.candidates?.[0];
     if (!candidate) throw new Error("Aucune réponse du modèle.");
 
-    // Extraction image
     const imagePart = candidate.content?.parts?.find(p => p.inlineData);
     if (!imagePart) {
         const textPart = candidate.content?.parts?.find(p => p.text);
