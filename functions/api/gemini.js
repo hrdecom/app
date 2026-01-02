@@ -3,7 +3,7 @@ export async function onRequestPost({ request, env }) {
     const body = await request.json();
     const { image, prompt, aspectRatio } = body;
 
-    if (!env.GEMINI_API_KEY) return new Response(JSON.stringify({ error: "Clé API manquante" }), { status: 500 });
+    if (!env.GEMINI_API_KEY) return new Response(JSON.stringify({ error: "Clé API Google manquante" }), { status: 500 });
 
     // Modèle Imagen 3 via l'API Google AI Studio
     const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${env.GEMINI_API_KEY}`;
