@@ -147,7 +147,6 @@
       renderConfigUI();
   };
 
-  // NOUVEAU : Fonction pour éditer
   window.editImgStyle = (i) => {
       const style = state.config.imgStyles[i];
       if(!style) return;
@@ -158,7 +157,7 @@
       $("newImgStyleName").value = style.name;
       $("newImgStyleCategory").value = style.category || "";
       $("newImgStylePrompt").value = style.prompt;
-      $("newImgStyleFile").value = ""; // Reset input file
+      $("newImgStyleFile").value = ""; 
       
       // UI Mode Edition
       $("imgStyleFormTitle").textContent = "MODIFIER LE STYLE";
@@ -186,7 +185,6 @@
   };
   $("cancelImgStyleEditBtn").onclick = window.cancelImgStyleEdit;
 
-  // Ajout OU Mise à jour
   $("addImgStyleBtn").onclick = () => {
       const name = $("newImgStyleName").value;
       const category = $("newImgStyleCategory").value;
@@ -199,17 +197,16 @@
           const styleData = { name, category, prompt };
           
           if(state.editingImgStyleIndex !== null) {
-              // UPDATE : On garde l'ancienne image si pas de nouvelle
+              // UPDATE
               const oldStyle = state.config.imgStyles[state.editingImgStyleIndex];
               styleData.refImage = imgBase64 || oldStyle.refImage;
               state.config.imgStyles[state.editingImgStyleIndex] = styleData;
-              window.cancelImgStyleEdit(); // Reset mode
+              window.cancelImgStyleEdit(); 
           } else {
               // CREATE
               styleData.refImage = imgBase64;
               if(!state.config.imgStyles) state.config.imgStyles = [];
               state.config.imgStyles.push(styleData);
-              // Reset champs
               $("newImgStyleName").value = ""; $("newImgStylePrompt").value = ""; fileInput.value = "";
           }
           renderConfigUI();
@@ -256,9 +253,7 @@
       });
 
       container.innerHTML = filtered.map((s) => {
-          // Vérifie si le style est dans la liste des sélectionnés
           const isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
-          
           return `
          <button class="style-tag ${isActive ? 'selected' : ''}" onclick="window.toggleImgStyle('${s.name}')" style="display:flex; align-items:center; gap:5px; flex-shrink:0; border:1px solid #ddd; ${isActive ? 'background:var(--apple-blue); color:white; border-color:var(--apple-blue);' : 'background:#fff;'}">
             ${s.refImage ? '<span style="width:12px; height:12px; background:#ccc; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
@@ -267,17 +262,14 @@
       `}).join("");
   }
 
-  // Toggle Multiple
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName);
       if(!style) return;
 
       const idx = state.selectedImgStyles.findIndex(s => s.name === styleName);
       if (idx > -1) {
-          // Désélection
           state.selectedImgStyles.splice(idx, 1);
       } else {
-          // Sélection (Ajout)
           state.selectedImgStyles.push(style);
       }
       renderImgStylesButtons();
@@ -310,7 +302,6 @@
           const hData = await hRes.json();
           state.currentHistoryId = hData.id;
           state.sessionHeadlines = []; state.sessionAds = []; state.selectedHeadlines = []; state.selectedAds = []; state.headlinesTrans = {}; state.adsTrans = {}; 
-          // Reset Image Gen States
           state.savedGeneratedImages = []; state.sessionGeneratedImages = []; state.inputImages = [state.imageBase64]; renderInputImages(); renderGenImages();
           await loadHistory();
         } else if (action === 'regen_title' || action === 'regen_desc') {
@@ -346,7 +337,6 @@
   
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   
-  // --- NOUVELLE LOGIQUE BATCH MULTIPLE ---
   async function callGeminiImageGen() {
       const userPrompt = $("imgGenPrompt").value;
       if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style.");
@@ -355,20 +345,14 @@
       const aspectRatio = $("imgAspectRatio").value;
       const resolution = $("imgResolution").value;
 
-      // Création des paquets de requêtes
       const batches = [];
 
-      // SCENARIO 1 : Un ou plusieurs styles sélectionnés
       if (state.selectedImgStyles.length > 0) {
           state.selectedImgStyles.forEach(style => {
-              // 1. Fusion des images (User input + Style Ref)
               let batchImages = [...state.inputImages];
               if(style.refImage) batchImages.push(style.refImage);
-
-              // 2. Fusion du prompt (User + Style)
               let batchPrompt = userPrompt ? (userPrompt + " " + style.prompt) : style.prompt;
 
-              // 3. Multiplication par le nombre demandé
               for (let i = 0; i < count; i++) {
                   batches.push({
                       prompt: batchPrompt,
@@ -379,9 +363,7 @@
                   });
               }
           });
-      } 
-      // SCENARIO 2 : Aucun style, juste le prompt utilisateur
-      else {
+      } else {
           for (let i = 0; i < count; i++) {
               batches.push({
                   prompt: userPrompt,
@@ -393,9 +375,6 @@
           }
       }
 
-      // -- MISE A JOUR UI AVANT ENVOI --
-      
-      // 1. Création placeholders
       const newItems = batches.map(b => ({
           id: Date.now() + Math.random(), 
           loading: true, 
@@ -405,13 +384,9 @@
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
 
-      // 2. Nettoyage Interface (Comme demandé)
-      state.selectedImgStyles = []; // On désélectionne tout
-      renderImgStylesButtons(); // On met à jour l'affichage des boutons
-      // $("imgGenPrompt").value = ""; // Optionnel, je laisse si besoin de réutiliser
+      state.selectedImgStyles = []; 
+      renderImgStylesButtons(); 
 
-      // -- ENVOI DES REQUÊTES (PARALLÈLE) --
-      
       newItems.forEach(async (item, index) => {
           const batchData = batches[index];
           try {
@@ -508,7 +483,6 @@
           prompt: item.prompt, 
           aspectRatio: item.aspectRatio 
       }));
-      
       state.savedGeneratedImages = [...newImages, ...state.savedGeneratedImages];
       state.selectedSessionImagesIdx = [];
       
@@ -775,6 +749,83 @@
 
   window.deleteItem = async (id) => { if(!confirm("Supprimer ?")) return; await fetch(`/api/history?id=${id}`, { method: "DELETE" }); if(state.currentHistoryId == id) state.currentHistoryId = null; loadHistory(); };
   window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
+
+  function init() {
+    $("loading").classList.add("hidden");
+    $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
+    $("closeSettings").onclick = () => {
+        $("settingsModal").classList.add("hidden");
+        // Reset form edit mode if closed
+        if(window.cancelImgStyleEdit) window.cancelImgStyleEdit();
+    };
+    $("saveConfig").onclick = async () => {
+      ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => state.config[id] = $(id).value);
+      state.config.blacklist = $("configBlacklist").value;
+      state.config.collections = Array.from(document.querySelectorAll('.collections-item')).map(r => ({ name: r.querySelector('.col-name').value, meaning: r.querySelector('.col-meaning').value }));
+      state.config.headlineStyles = Array.from(document.querySelectorAll('.headline-style-item')).map(r => ({ name: r.querySelector('.style-name').value, prompt: r.querySelector('.style-prompt').value }));
+      state.config.adStyles = Array.from(document.querySelectorAll('.ad-style-item')).map(r => ({ name: r.querySelector('.ad-style-name').value, prompt: r.querySelector('.ad-style-prompt').value }));
+      
+      await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
+      alert("Enregistré"); $("settingsModal").classList.add("hidden"); renderConfigUI();
+    };
+    $("openHeadlinesBtn").onclick = () => { if(!state.currentHistoryId) return; $("headlinesModal").classList.remove("hidden"); renderSavedHl(); renderTranslationTabs('hl'); };
+    $("openAdsBtn").onclick = () => { if(!state.currentHistoryId) return; $("adsModal").classList.remove("hidden"); renderSavedAds(); renderTranslationTabs('ad'); };
+    $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
+    $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
+    
+    // IMAGE GEN
+    $("openImgGenBtn").onclick = () => {
+        if (!state.imageBase64) return alert("Veuillez d'abord uploader une image principale.");
+        if (state.inputImages.length === 0) state.inputImages = [state.imageBase64];
+        renderInputImages();
+        $("imgGenModal").classList.remove("hidden");
+        renderStudioCategories();
+        renderImgStylesButtons();
+        renderGenImages();
+    };
+    $("closeImgGen").onclick = () => $("imgGenModal").classList.add("hidden");
+    $("sendImgGen").onclick = callGeminiImageGen;
+    $("addInputImgBtn").onclick = () => $("extraImgInput").click();
+    $("extraImgInput").onchange = (e) => {
+        const files = Array.from(e.target.files);
+        files.forEach(f => {
+            const r = new FileReader();
+            r.onload = (ev) => {
+                const b64 = ev.target.result.split(",")[1];
+                state.inputImages.push(b64);
+                renderInputImages();
+            };
+            r.readAsDataURL(f);
+        });
+    };
+    $("saveImgSelectionBtn").onclick = window.saveImgSelection;
+    
+    window.onclick = (e) => { if (e.target.classList.contains('modal')) e.target.classList.add("hidden"); document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show')); };
+    document.querySelectorAll(".tab-link").forEach(btn => btn.onclick = (e) => switchTab(e));
+    $("sendHeadlineChat").onclick = () => apiCall('headlines', { userText: $("headlineStyleInput").value });
+    $("sendAdChat").onclick = () => apiCall('ad_copys', { userText: $("adStyleInput").value });
+    $("genSimilarBtn").onclick = () => { const sel = Array.from(document.querySelectorAll('#headlinesResults .selected .headline-text')).map(it => it.innerText); apiCall('headlines_similar', { selectedForSimilar: sel }); };
+    $("genSimilarAdsBtn").onclick = () => { const sel = Array.from(document.querySelectorAll('#adsResults .selected .headline-text')).map(it => it.innerText.split('\n').pop()); apiCall('ad_copys_similar', { selectedForSimilar: sel }); };
+    $("saveHeadlinesBtn").onclick = () => saveSelections('hl');
+    $("saveAdsBtn").onclick = () => saveSelections('ad');
+    $("productUrlInput").onchange = async () => { if(state.currentHistoryId) await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, product_url: $("productUrlInput").value }) }); };
+    $("generateBtn").onclick = () => apiCall('generate');
+    $("regenTitleBtn").onclick = () => apiCall('regen_title');
+    $("regenDescBtn").onclick = () => apiCall('regen_desc');
+    $("drop").onclick = () => $("imageInput").click();
+    $("imageInput").onchange = (e) => {
+      const f = e.target.files[0]; if(!f) return;
+      const r = new FileReader(); r.onload = (ev) => {
+        state.imageMime = ev.target.result.split(";")[0].split(":")[1]; state.imageBase64 = ev.target.result.split(",")[1];
+        $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden");
+        $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; state.currentHistoryId = null;
+        state.inputImages = [state.imageBase64]; renderInputImages();
+      }; r.readAsDataURL(f);
+    };
+    $("removeImage").onclick = (e) => { e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null; $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block"; $("generateBtn").disabled = true; };
+    $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
+    loadConfig(); loadHistory();
+  }
 
   init();
 })();
