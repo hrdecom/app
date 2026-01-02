@@ -11,8 +11,8 @@
     promptTranslate: "Professional luxury translator. TASK: Translate into {targetLang}. URL: {product_url}",
     headlineStyles: [{ name: "POV", prompt: "POV perspective." }],
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }],
-    imgStyles: [], // [{ name, category, prompt, refImage }]
-    imgCategories: ["Packaging", "Ambiance", "Mannequin"] // Catégories par défaut
+    imgStyles: [], // [{ name, category, subcategory, prompt, refImage }]
+    imgCategories: ["Packaging", "Ambiance", "Mannequin"]
   };
 
   const LANGUAGES = { 
@@ -35,7 +35,7 @@
     savedGeneratedImages: [], 
     selectedSessionImagesIdx: [],
     // ETATS UI STUDIO
-    currentImgCategory: "", // Sera initialisé dans loadConfig
+    currentImgCategory: "",
     selectedImgStyles: [],
     editingImgStyleIndex: null
   };
@@ -64,7 +64,6 @@
       if (!state.config.imgStyles) state.config.imgStyles = [];
       if (!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
     }
-    // Set default category (Pas de "Tout")
     if (state.config.imgCategories.length > 0) {
         state.currentImgCategory = state.config.imgCategories[0];
     }
@@ -80,7 +79,7 @@
     $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     
-    // --- GESTION CATÉGORIES (SETTINGS) ---
+    // CATÉGORIES
     $("imgCategoriesList").innerHTML = (state.config.imgCategories || []).map((cat, i) => `
        <div class="style-tag" style="background:#eee; border:1px solid #ccc; padding:4px 10px; display:flex; gap:5px; align-items:center;">
           ${cat} <span onclick="window.removeImgCategory(${i})" style="cursor:pointer; color:red; font-weight:bold;">×</span>
@@ -92,7 +91,7 @@
     catSelect.innerHTML = `<option value="">Général</option>` + (state.config.imgCategories || []).map(c => `<option value="${c}">${c}</option>`).join("");
     if(currentVal) catSelect.value = currentVal;
 
-    // --- LISTE STYLES (SETTINGS) ---
+    // LISTE STYLES (SETTINGS)
     $("imgStyleEditorList").innerHTML = (state.config.imgStyles || []).map((s, i) => `
         <div style="display:flex; gap:10px; margin-bottom:10px; align-items:flex-start; background:#fff; padding:10px; border-radius:8px; border:1px solid #eee;">
             <div style="width:50px; height:50px; background:#eee; border-radius:6px; overflow:hidden; flex-shrink:0;">
@@ -101,7 +100,7 @@
             <div style="flex:1;">
                 <div style="display:flex; justify-content:space-between;">
                     <div style="font-weight:bold; font-size:12px;">${s.name}</div>
-                    <div style="font-size:10px; background:#f0f0f0; padding:2px 6px; border-radius:4px;">${s.category || 'Général'}</div>
+                    <div style="font-size:10px; background:#f0f0f0; padding:2px 6px; border-radius:4px;">${s.category || 'Général'} ${s.subcategory ? ' > '+s.subcategory : ''}</div>
                 </div>
                 <div style="font-size:11px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:300px;">${s.prompt}</div>
             </div>
@@ -155,6 +154,7 @@
       state.editingImgStyleIndex = i;
       $("newImgStyleName").value = style.name;
       $("newImgStyleCategory").value = style.category || "";
+      $("newImgStyleSubCategory").value = style.subcategory || ""; // NOUVEAU
       $("newImgStylePrompt").value = style.prompt;
       $("newImgStyleFile").value = ""; 
       $("imgStyleFormTitle").textContent = "MODIFIER LE STYLE";
@@ -169,6 +169,7 @@
       state.editingImgStyleIndex = null;
       $("newImgStyleName").value = "";
       $("newImgStyleCategory").value = "";
+      $("newImgStyleSubCategory").value = "";
       $("newImgStylePrompt").value = "";
       $("newImgStyleFile").value = "";
       $("imgStyleFormTitle").textContent = "AJOUTER UN STYLE";
@@ -181,12 +182,13 @@
   $("addImgStyleBtn").onclick = () => {
       const name = $("newImgStyleName").value;
       const category = $("newImgStyleCategory").value;
+      const subcategory = $("newImgStyleSubCategory").value; // NOUVEAU
       const prompt = $("newImgStylePrompt").value;
       const fileInput = $("newImgStyleFile");
       if(!name || !prompt) return alert("Nom et Prompt requis.");
 
       const saveStyle = (imgBase64) => {
-          const styleData = { name, category, prompt };
+          const styleData = { name, category, subcategory, prompt };
           if(state.editingImgStyleIndex !== null) {
               const oldStyle = state.config.imgStyles[state.editingImgStyleIndex];
               styleData.refImage = imgBase64 || oldStyle.refImage;
@@ -196,7 +198,7 @@
               styleData.refImage = imgBase64;
               if(!state.config.imgStyles) state.config.imgStyles = [];
               state.config.imgStyles.push(styleData);
-              $("newImgStyleName").value = ""; $("newImgStylePrompt").value = ""; fileInput.value = "";
+              $("newImgStyleName").value = ""; $("newImgStylePrompt").value = ""; $("newImgStyleSubCategory").value = ""; fileInput.value = "";
           }
           renderConfigUI();
       };
@@ -210,7 +212,7 @@
       }
   };
 
-  /* --- STUDIO UI LOGIC --- */
+  /* --- STUDIO UI LOGIC (Général + Sous-Catégories) --- */
   function renderStudioCategories() {
       const container = $("imgGenCategoriesBar");
       if(!container) return;
@@ -233,17 +235,49 @@
   function renderImgStylesButtons() {
       const container = $("imgGenStylesContainer");
       if(!container) return;
+      
+      // Filtre : Catégorie actuelle OU "Général"
       const filtered = (state.config.imgStyles || []).filter(s => {
-          return (s.category || "") === state.currentImgCategory;
+          return (s.category || "") === state.currentImgCategory || (s.category === "" || s.category === "Général");
       });
-      container.innerHTML = filtered.map((s) => {
-          const isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
-          return `
+
+      // Groupement par Sous-Catégorie
+      const groups = {};
+      const noSub = [];
+
+      filtered.forEach(s => {
+          if (s.subcategory) {
+              if(!groups[s.subcategory]) groups[s.subcategory] = [];
+              groups[s.subcategory].push(s);
+          } else {
+              noSub.push(s);
+          }
+      });
+
+      let html = "";
+
+      // 1. Boutons sans sous-catégorie
+      if(noSub.length > 0) {
+          html += `<div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:5px;">` + noSub.map(s => renderStyleBtn(s)).join("") + `</div>`;
+      }
+
+      // 2. Boutons groupés
+      Object.keys(groups).forEach(subKey => {
+          html += `<div style="font-size:10px; font-weight:bold; color:#888; margin-top:5px; margin-bottom:2px;">${subKey.toUpperCase()}</div>`;
+          html += `<div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:5px;">` + groups[subKey].map(s => renderStyleBtn(s)).join("") + `</div>`;
+      });
+
+      container.innerHTML = html;
+  }
+
+  function renderStyleBtn(s) {
+      const isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
+      return `
          <button class="style-tag ${isActive ? 'selected' : ''}" onclick="window.toggleImgStyle('${s.name}')" style="display:flex; align-items:center; gap:5px; flex-shrink:0; border:1px solid #ddd; ${isActive ? 'background:var(--apple-blue); color:white; border-color:var(--apple-blue);' : 'background:#fff;'}">
             ${s.refImage ? '<span style="width:12px; height:12px; background:#ccc; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
             ${s.name}
          </button>
-      `}).join("");
+      `;
   }
 
   window.toggleImgStyle = (styleName) => {
@@ -255,7 +289,7 @@
       renderImgStylesButtons();
   };
 
-  /* --- COMMON API --- */
+  /* --- COMMON API (UPDATED FOR LAZY LOAD) --- */
   async function apiCall(action, extra = {}) {
     if (!state.imageBase64) return;
     startLoading();
@@ -317,7 +351,6 @@
   
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   
-  // --- MOTEUR DE GÉNÉRATION (MULTI-BATCH PAR IMAGE) ---
   async function callGeminiImageGen() {
       const userPrompt = $("imgGenPrompt").value;
       if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style.");
@@ -326,85 +359,69 @@
       const aspectRatio = $("imgAspectRatio").value;
       const resolution = $("imgResolution").value;
 
-      // Protection Bug "Aucune image": Si input vide mais imageBase64 dispo, on remplit
       if (state.inputImages.length === 0 && state.imageBase64) {
           state.inputImages = [state.imageBase64];
           renderInputImages();
       }
 
-      // Préparation des lots de requêtes
       const batches = [];
-      
-      // Liste des images sources à traiter (si vide, on fait 1 itération "null" pour du Text-to-Image)
       const inputsToProcess = state.inputImages.length > 0 ? state.inputImages : [null];
 
-      // Boucle 1 : Pour CHAQUE image d'input (Image 1, Image 2...)
       inputsToProcess.forEach(inputImg => {
-          
-          // Définition des "tâches" pour cette image (Styles ou Prompt Manuel)
           let tasks = [];
           if (state.selectedImgStyles.length > 0) {
-              // Si styles sélectionnés -> 1 Tâche par Style
               tasks = state.selectedImgStyles.map(s => ({
                   type: 'style',
                   styleObj: s,
                   prompt: userPrompt ? (userPrompt + " " + s.prompt) : s.prompt,
                   refImage: s.refImage,
-                  label: s.name // LE NOM DU BOUTON
+                  label: s.name 
               }));
           } else {
-              // Si pas de style -> 1 Tâche Manuelle
               tasks = [{
                   type: 'manual',
                   prompt: userPrompt,
                   refImage: null,
-                  label: userPrompt // Prompt brut si manuel
+                  label: userPrompt 
               }];
           }
 
-          // Boucle 2 : Pour CHAQUE Tâche (Style X, Style Y...)
           tasks.forEach(task => {
-              
-              // Construction du Contexte (Input Image + Style Ref Image)
               let contextImages = [];
-              if (inputImg) contextImages.push(inputImg); // Image du bijou
-              if (task.refImage) contextImages.push(task.refImage); // Image du packaging
+              if (inputImg) contextImages.push(inputImg); 
+              if (task.refImage) contextImages.push(task.refImage); 
 
-              // Boucle 3 : Nombre d'images demandées (x2, x3...)
               for (let i = 0; i < count; i++) {
                   batches.push({
                       prompt: task.prompt,
                       images: contextImages,
                       aspectRatio: aspectRatio,
                       resolution: resolution,
-                      label: task.label // On passe le label pour l'UI
+                      label: task.label
                   });
               }
           });
       });
 
-      // UI : Placeholders
       const newItems = batches.map(b => ({
           id: Date.now() + Math.random(), 
           loading: true, 
-          prompt: b.label, // AFFICHE LE LABEL (Nom du bouton)
+          prompt: b.label, 
           aspectRatio: b.aspectRatio
       }));
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
 
-      // UI : Reset Selection
       state.selectedImgStyles = []; 
       renderImgStylesButtons(); 
 
-      // Execution
       newItems.forEach(async (item, index) => {
           const batchData = batches[index];
           try {
               const res = await fetch("/api/gemini", { 
                   method: "POST", 
                   body: JSON.stringify({ 
-                      prompt: batchData.prompt, // Prompt complet envoyé à l'API
+                      prompt: batchData.prompt,
                       images: batchData.images, 
                       aspectRatio: batchData.aspectRatio,
                       resolution: batchData.resolution
@@ -436,7 +453,6 @@
   }
 
   function renderGenImages() {
-      // 1. Session Results
       const sessionContainer = $("imgGenSessionResults");
       sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => {
         if (item.loading) {
@@ -463,7 +479,6 @@
         </div>
       `}).join("");
 
-      // 2. Saved Results (With Original)
       let savedHtml = "";
       if(state.imageBase64) {
           savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default;">
@@ -478,9 +493,7 @@
            <img src="data:image/jpeg;base64,${item.image}">
            <div class="gen-image-overlay">${item.prompt}</div>
            <button class="icon-btn-small" style="position:absolute; top:5px; right:55px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInput(${i})" title="Utiliser">＋</button>
-           
            <button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button>
-           
            <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:red; border:1px solid #ccc;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button>
         </div>
       `).join("");
@@ -488,16 +501,29 @@
       $("imgGenSavedResults").innerHTML = savedHtml;
   }
 
-  // --- DRAG AND DROP LOGIC ---
+  // --- DRAG AND DROP LOGIC (FLUIDE VIA CSS) ---
   let dragSrcIndex = null;
-  window.dragStart = (e, i) => { dragSrcIndex = i; };
-  window.allowDrop = (e) => { e.preventDefault(); };
+  window.dragStart = (e, i) => { 
+      dragSrcIndex = i; 
+      e.target.classList.add('dragging'); // Style visuel
+  };
+  window.allowDrop = (e) => { 
+      e.preventDefault(); 
+      const card = e.target.closest('.gen-image-card');
+      if(card) card.classList.add('drag-over');
+  };
   window.drop = async (e, i) => {
       e.preventDefault();
+      document.querySelectorAll('.gen-image-card').forEach(c => {
+          c.classList.remove('dragging');
+          c.classList.remove('drag-over');
+      });
+
       if (dragSrcIndex === null || dragSrcIndex === i) return;
       const item = state.savedGeneratedImages.splice(dragSrcIndex, 1)[0];
       state.savedGeneratedImages.splice(i, 0, item);
       renderGenImages();
+      
       if (state.currentHistoryId) {
           try {
               const payload = { id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) };
@@ -508,13 +534,11 @@
       }
   };
 
-  // --- INPUT MANAGEMENT (AJOUTER SAVED/ORIGINAL) ---
   window.addSavedToInput = (index) => {
       const item = state.savedGeneratedImages[index];
       if(item && !state.inputImages.includes(item.image)) {
           state.inputImages.push(item.image);
           renderInputImages();
-          // Basculer sur l'onglet chat pour voir l'ajout
           document.querySelector('button[data-tab="tab-img-chat"]').click();
       }
   };
@@ -530,18 +554,14 @@
   window.toggleSessionImg = (id) => {
       const item = state.sessionGeneratedImages.find(x => x.id == id);
       if(!item) return;
-      
       const idx = state.selectedSessionImagesIdx.indexOf(item);
       if (idx > -1) {
-          // Deselection
           state.selectedSessionImagesIdx.splice(idx, 1);
-          // On retire aussi de l'input si présent
           const imgToRemove = item.image;
           const inputIdx = state.inputImages.indexOf(imgToRemove);
           if (inputIdx > -1) state.inputImages.splice(inputIdx, 1);
       }
       else {
-          // Selection -> AJOUT AUTOMATIQUE AU CHAT (INPUT)
           state.selectedSessionImagesIdx.push(item);
           if (!state.inputImages.includes(item.image)) {
               state.inputImages.push(item.image);
@@ -552,7 +572,6 @@
   };
 
   window.viewImage = (b64) => {
-      // Create Blob for better 4k handling
       const byteCharacters = atob(b64);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
@@ -566,13 +585,11 @@
       if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
       if (state.selectedSessionImagesIdx.length === 0) return alert("Aucune image sélectionnée.");
 
-      // Conversion des items sélectionnés
       const newImages = state.selectedSessionImagesIdx.map(item => ({ 
           image: item.image, 
           prompt: item.prompt, 
           aspectRatio: item.aspectRatio 
       }));
-      
       state.savedGeneratedImages = [...newImages, ...state.savedGeneratedImages];
       state.selectedSessionImagesIdx = [];
       
@@ -583,8 +600,10 @@
               generated_images: JSON.stringify(state.savedGeneratedImages) 
           };
           await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
+          // Mise à jour du cache local si présent (même si incomplet)
           const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
           if (histItem) histItem.generated_images = payload.generated_images;
+          
           alert("Images enregistrées !");
           renderGenImages();
           document.querySelector('button[data-tab="tab-img-saved"]').click();
@@ -837,8 +856,11 @@
     } catch(e) { alert("Erreur suppression: " + e.message); } finally { stopLoading(); }
   };
 
+  // --- LOGIQUE HISTORIQUE OPTIMISÉE (LISTE LEGERE / DETAIL LOURD) ---
+  
   async function loadHistory() { 
       try { 
+          // Appel par défaut -> renvoie la liste légère
           const r = await fetch("/api/history"); 
           state.historyCache = await r.json(); 
           renderHistoryUI(); 
@@ -874,20 +896,48 @@
     }
   }
 
-  window.restore = (id) => {
-    const item = (state.historyCache || []).find(i => i.id === id); if(!item) return;
-    state.currentHistoryId = id; state.sessionHeadlines = []; state.sessionAds = [];
-    state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
-    state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
-    
-    state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
-    state.sessionGeneratedImages = []; 
-    
-    $("titleText").textContent = item.title; $("descText").textContent = item.description; $("productUrlInput").value = item.product_url || "";
-    $("previewImg").src = `data:image/jpeg;base64,${item.image}`; state.imageBase64 = item.image; $("preview").classList.remove("hidden");
-    $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; renderHistoryUI();
-    
-    state.inputImages = [item.image]; renderInputImages(); renderGenImages();
+  window.restore = async (id) => {
+    // 1. UI Feedback immédiat (sélection visuelle)
+    state.currentHistoryId = id;
+    renderHistoryUI();
+    startLoading();
+
+    try {
+        // 2. FETCH COMPLET DU PRODUIT (Lourd)
+        const res = await fetch(`/api/history?id=${id}`);
+        const item = await res.json();
+
+        // 3. Mise à jour de l'état
+        state.sessionHeadlines = []; state.sessionAds = [];
+        state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; 
+        state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
+        state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; 
+        state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
+        
+        // CHARGEMENT IMAGES SAUVEGARDÉES (Crucial pour correction bug disparition)
+        state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
+        state.sessionGeneratedImages = []; 
+        
+        // 4. Mise à jour UI
+        $("titleText").textContent = item.title; 
+        $("descText").textContent = item.description; 
+        $("productUrlInput").value = item.product_url || "";
+        $("previewImg").src = `data:image/jpeg;base64,${item.image}`; 
+        state.imageBase64 = item.image; 
+        $("preview").classList.remove("hidden");
+        $("dropPlaceholder").style.display = "none"; 
+        $("generateBtn").disabled = false;
+        
+        // Reset Inputs Generateur
+        state.inputImages = [item.image]; 
+        renderInputImages(); 
+        renderGenImages();
+
+    } catch(e) {
+        alert("Erreur chargement: " + e.message);
+    } finally {
+        stopLoading();
+    }
   };
 
   window.deleteItem = async (id) => { 
