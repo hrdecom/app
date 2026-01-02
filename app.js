@@ -184,7 +184,6 @@
   window.processTranslation = async (type, lang, singleCall = true) => {
     const itemsToTranslate = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
     if (!(itemsToTranslate || []).length) return;
-    
     const targetUrl = formatLangUrl($("productUrlInput").value, LANGUAGES[lang]);
 
     if (singleCall) startLoading();
@@ -213,13 +212,12 @@
     finally { if (singleCall) stopLoading(); }
   };
 
-  // --- MISE À JOUR : SUPPRESSION AUTOMATIQUE DES ONGLETS VIDES ---
+  // --- SUPPRESSION AUTO ONGLETS VIDES ---
   function renderTranslationTabs(type) {
     const tabs = type === 'hl' ? $("headlinesTabs") : $("adsTabs");
     const container = type === 'hl' ? $("headlinesTabContainer") : $("adsTabContainer");
     let transData = type === 'hl' ? state.headlinesTrans : state.adsTrans;
 
-    // Vérification et suppression des langues vides
     let hasChanges = false;
     Object.keys(transData).forEach(lang => {
       if (!transData[lang].items || transData[lang].items.length === 0) {
@@ -278,35 +276,58 @@
     } catch(e) { alert(e.message); } finally { stopLoading(); }
   };
 
-  // --- MISE À JOUR : ÉDITION DES ÉLÉMENTS ENREGISTRÉS ---
-  const makeEditable = (el, type, index) => {
-      el.contentEditable = true; el.focus();
+  // --- ÉDITION MANUELLE AVEC CRAYON ---
+  window.editSavedItem = (index, type) => {
+      const selector = type === 'hl' ? `#hl-text-${index}` : `#ad-text-${index}`;
+      const el = document.querySelector(selector);
+      el.contentEditable = true; el.classList.add('editing-field'); el.focus();
+      
       el.onblur = async () => {
-          el.contentEditable = false;
+          el.contentEditable = false; el.classList.remove('editing-field');
           const newText = el.innerText.trim();
           if (type === 'hl') state.selectedHeadlines[index] = newText;
           else state.selectedAds[index] = newText;
-          
+
           const val = JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds);
           await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: val }) });
-          alert("Modifié !");
+          
+          // Mettre à jour le cache
+          const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
+          if (histItem) histItem[type==='hl'?'headlines':'ad_copys'] = val;
       };
   };
 
   const renderSavedHl = () => {
     const list = state.selectedHeadlines || [];
-    $("headlinesSavedList").innerHTML = list.map((h, i) => `<div class="headline-item no-hover"><span class="headline-text" onclick="window.editSaved(this, 'hl', ${i})">${h}</span><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('hl',${i})">×</button></div></div>`).join("");
+    $("headlinesSavedList").innerHTML = list.map((h, i) => `
+      <div class="headline-item no-hover">
+        <span class="headline-text" id="hl-text-${i}">${h}</span>
+        <div style="display:flex;gap:5px;">
+          <button class="icon-btn-small" onclick="window.editSavedItem(${i}, 'hl')">✏️</button>
+          <button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/'/g,"\\'")}\`)">📋</button>
+          <button class="icon-btn-small" style="color:red" onclick="deleteSaved('hl',${i})">×</button>
+        </div>
+      </div>`).join("");
   };
 
   const renderSavedAds = () => {
     const list = state.selectedAds || [];
-    $("adsSavedList").innerHTML = list.map((h, i) => `<div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;justify-content:space-between;width:100%"><strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('ad',${i})">×</button></div></div><span class="headline-text" style="white-space:pre-wrap;" onclick="window.editSaved(this, 'ad', ${i})">${h}</span></div>`).join("");
+    $("adsSavedList").innerHTML = list.map((h, i) => `
+      <div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;">
+        <div style="display:flex;justify-content:space-between;width:100%">
+          <strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong>
+          <div style="display:flex;gap:5px;">
+            <button class="icon-btn-small" onclick="window.editSavedItem(${i}, 'ad')">✏️</button>
+            <button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button>
+            <button class="icon-btn-small" style="color:red" onclick="deleteSaved('ad',${i})">×</button>
+          </div>
+        </div>
+        <span class="headline-text" id="ad-text-${i}" style="white-space:pre-wrap;">${h}</span>
+      </div>`).join("");
     const n = $("titleText").textContent;
     const u = formatLangUrl($("productUrlInput").value, "en.");
     $("adsDefaultInfoBlock").innerHTML = [`TITRE 1|${n}`, `TITRE 2|${n} - Special Offer`, `TITRE 3|Gift Idea - ${n}`, `TITRE 4|${n} - Valentine's Day Gift Idea`, `SUB|Free Shipping Worldwide Today`, `URL|${u}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("");
   };
-
-  window.editSaved = (el, type, index) => makeEditable(el, type, index);
 
   window.deleteSaved = async (type, i) => {
     if(!confirm("Supprimer ?")) return;
@@ -320,7 +341,7 @@
       const payload = { id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: JSON.stringify(list), [type==='hl'?'headlines_trans':'ads_trans']: JSON.stringify(trans) };
       await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
       const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
-      if (histItem) { histItem[type==='hl'?'headlines':'ad_copys'] = payload[type==='hl'?'headlines':'ad_copys']; histItem[type==='hl'?'headlines_trans':'ads_trans'] = payload[type==='hl'?'headlines_trans':'ads_trans']; }
+      if (histItem) { histItem[type === 'hl' ? 'headlines' : 'ad_copys'] = payload[type === 'hl' ? 'headlines' : 'ad_copys']; histItem[type === 'hl' ? 'headlines_trans' : 'ads_trans'] = payload[type === 'hl' ? 'headlines_trans' : 'ads_trans']; }
       if (type === 'hl') { state.selectedHeadlines = list; renderSavedHl(); } else { state.selectedAds = list; renderSavedAds(); }
       renderTranslationTabs(type);
     } catch(e) { alert("Erreur suppression: " + e.message); } finally { stopLoading(); }
