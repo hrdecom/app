@@ -127,9 +127,8 @@
     finally { stopLoading(); }
   }
 
-  /* --- LOGIQUE GENERATION IMAGES (NOUVEAU) --- */
+  /* --- LOGIQUE GENERATION IMAGES (AMÉLIORÉE) --- */
   
-  // Rendu de la barre des images d'entrée (input context)
   function renderInputImages() {
     const container = $("inputImagesPreview");
     if (state.inputImages.length === 0) { container.classList.add("hidden"); return; }
@@ -144,55 +143,100 @@
   
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   
-  // Appel API dédié Gemini Images
   async function callGeminiImageGen() {
       const prompt = $("imgGenPrompt").value;
       if (!prompt) return alert("Veuillez entrer une description.");
       
-      startLoading();
-      try {
-          // Utilise le fichier api/gemini.js existant mis à jour
-          const res = await fetch("/api/gemini", { 
-              method: "POST", 
-              body: JSON.stringify({ 
-                  prompt: prompt,
-                  images: state.inputImages, // Envoi du tableau d'images contextuelles
-                  aspectRatio: $("imgAspectRatio").value,
-                  resolution: $("imgResolution").value
-              }) 
+      const count = parseInt($("imgCount").value) || 1;
+      const aspectRatio = $("imgAspectRatio").value;
+      const resolution = $("imgResolution").value;
+
+      // 1. Création des Placeholders (Loading)
+      const newItems = [];
+      for(let i=0; i<count; i++) {
+          newItems.push({ 
+              id: Date.now() + Math.random(), 
+              loading: true, 
+              prompt: prompt, 
+              aspectRatio: aspectRatio 
           });
-          
-          const data = await res.json();
-          if (data.error) throw new Error(data.error);
-          
-          // Ajout à la session
-          state.sessionGeneratedImages.unshift({ 
-              image: data.image, 
-              prompt: prompt,
-              aspectRatio: $("imgAspectRatio").value 
-          });
-          
-          renderGenImages();
-          $("imgGenPrompt").value = "";
-      } catch(e) {
-          alert("Erreur Génération Image: " + e.message);
-      } finally {
-          stopLoading();
       }
+      
+      // Ajout en haut de la liste
+      state.sessionGeneratedImages.unshift(...newItems);
+      renderGenImages();
+      
+      // Nettoyage champ prompt pour permettre autre requête immédiate
+      $("imgGenPrompt").value = "";
+
+      // 2. Lancement des requêtes parallèles (Non bloquant)
+      newItems.forEach(async (item) => {
+          try {
+              const res = await fetch("/api/gemini", { 
+                  method: "POST", 
+                  body: JSON.stringify({ 
+                      prompt: item.prompt,
+                      images: state.inputImages,
+                      aspectRatio: item.aspectRatio,
+                      resolution: resolution
+                  }) 
+              });
+              
+              const data = await res.json();
+              
+              // Mise à jour de l'item spécifique dans le state
+              const targetItem = state.sessionGeneratedImages.find(x => x.id === item.id);
+              if (targetItem) {
+                  if (data.error) {
+                      targetItem.loading = false;
+                      targetItem.error = data.error;
+                  } else {
+                      targetItem.loading = false;
+                      targetItem.image = data.image;
+                  }
+                  renderGenImages();
+              }
+          } catch(e) {
+              const targetItem = state.sessionGeneratedImages.find(x => x.id === item.id);
+              if (targetItem) {
+                  targetItem.loading = false;
+                  targetItem.error = e.message;
+                  renderGenImages();
+              }
+          }
+      });
   }
 
-  // Rendu de la grille d'images (Session & Sauvegardées)
   function renderGenImages() {
-      // Session
       const sessionContainer = $("imgGenSessionResults");
-      sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => `
-        <div class="gen-image-card ${state.selectedSessionImagesIdx.includes(i) ? 'selected' : ''}" onclick="window.toggleSessionImg(${i})">
+      sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => {
+        // CAS 1: LOADING
+        if (item.loading) {
+            return `
+            <div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#eee; height:150px; flex-direction:column; gap:10px;">
+               <div class="spinner" style="width:20px; height:20px; border-width:2px;"></div>
+               <span style="font-size:10px; color:#666;">Génération...</span>
+               <div class="gen-image-overlay">${item.prompt}</div>
+            </div>`;
+        }
+        // CAS 2: ERROR
+        if (item.error) {
+            return `
+            <div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#ffebeb; height:150px; flex-direction:column; gap:5px; padding:10px; text-align:center;">
+               <span style="font-size:20px;">⚠️</span>
+               <span style="font-size:10px; color:red;">Erreur</span>
+               <div class="gen-image-overlay" style="color:red;">${item.error}</div>
+            </div>`;
+        }
+        // CAS 3: SUCCESS IMAGE
+        return `
+        <div class="gen-image-card ${state.selectedSessionImagesIdx.includes(item) ? 'selected' : ''}" onclick="window.toggleSessionImg('${item.id}')">
            <img src="data:image/jpeg;base64,${item.image}">
            <div class="gen-image-overlay">${item.prompt}</div>
         </div>
-      `).join("");
+      `}).join("");
 
-      // Sauvegardées
+      // Rendu Sauvegardées
       const savedContainer = $("imgGenSavedResults");
       savedContainer.innerHTML = state.savedGeneratedImages.map((item, i) => `
         <div class="gen-image-card" onclick="window.viewImage('${item.image}')">
@@ -203,10 +247,14 @@
       `).join("");
   }
 
-  window.toggleSessionImg = (i) => {
-      const idx = state.selectedSessionImagesIdx.indexOf(i);
+  // Modification : On track les objets sélectionnés par ID et non par index (car la liste bouge avec l'asynchrone)
+  window.toggleSessionImg = (id) => {
+      const item = state.sessionGeneratedImages.find(x => x.id == id);
+      if(!item) return;
+      
+      const idx = state.selectedSessionImagesIdx.indexOf(item);
       if (idx > -1) state.selectedSessionImagesIdx.splice(idx, 1);
-      else state.selectedSessionImagesIdx.push(i);
+      else state.selectedSessionImagesIdx.push(item);
       renderGenImages();
   };
 
@@ -215,18 +263,21 @@
       w.document.write(`<img src="data:image/jpeg;base64,${b64}" style="max-width:100%">`);
   };
 
-  // Sauvegarde dans DB
   window.saveImgSelection = async () => {
       if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
       if (state.selectedSessionImagesIdx.length === 0) return alert("Aucune image sélectionnée.");
 
-      const newImages = state.selectedSessionImagesIdx.map(i => state.sessionGeneratedImages[i]);
-      state.savedGeneratedImages = [...newImages, ...state.savedGeneratedImages];
+      // On ajoute directement les objets images (sans les flags loading/id temporaire si on veut nettoyer)
+      const newImages = state.selectedSessionImagesIdx.map(item => ({ 
+          image: item.image, 
+          prompt: item.prompt, 
+          aspectRatio: item.aspectRatio 
+      }));
       
-      // Nettoyage session
+      state.savedGeneratedImages = [...newImages, ...state.savedGeneratedImages];
       state.selectedSessionImagesIdx = [];
       
-      startLoading();
+      startLoading(); // Ici on garde le loading global car c'est une action de sauvegarde DB
       try {
           const payload = { 
               id: state.currentHistoryId, 
@@ -234,13 +285,11 @@
           };
           await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
           
-          // Mise à jour cache local
           const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
           if (histItem) histItem.generated_images = payload.generated_images;
           
           alert("Images enregistrées !");
           renderGenImages();
-          // Basculer vers l'onglet sauvegardé
           document.querySelector('button[data-tab="tab-img-saved"]').click();
       } catch(e) {
           alert("Erreur sauvegarde: " + e.message);
