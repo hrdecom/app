@@ -11,7 +11,8 @@
     promptTranslate: "Professional luxury translator. TASK: Translate into {targetLang}. URL: {product_url}",
     headlineStyles: [{ name: "POV", prompt: "POV perspective." }],
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }],
-    imgStyles: [] // Nouveau : [{ name, prompt, refImage: "base64..." }]
+    imgStyles: [], // [{ name, category, prompt, refImage }]
+    imgCategories: ["Packaging", "Ambiance", "Mannequin"] // Catégories par défaut
   };
 
   const LANGUAGES = { 
@@ -32,7 +33,10 @@
     inputImages: [], 
     sessionGeneratedImages: [], 
     savedGeneratedImages: [], 
-    selectedSessionImagesIdx: [] 
+    selectedSessionImagesIdx: [],
+    // ETATS UI STUDIO
+    currentImgCategory: "Tout", // Filtre actif
+    activeImgStyle: null // Style actuellement sélectionné (Objet)
   };
 
   const startLoading = () => {
@@ -54,9 +58,12 @@
     const data = await res.json();
     const saved = data.find(i => i.id === 'full_config');
     if (saved) {
-      state.config = JSON.parse(saved.value);
-      if (!state.config.promptTranslate) state.config.promptTranslate = DEFAULTS.promptTranslate;
+      const parsed = JSON.parse(saved.value);
+      state.config = { ...DEFAULTS, ...parsed }; // Merge pour éviter perte si nouveaux champs
+      
+      // Assurer les arrays
       if (!state.config.imgStyles) state.config.imgStyles = [];
+      if (!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
     }
     renderConfigUI();
   }
@@ -70,14 +77,28 @@
     $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     
-    // Rendu Liste Styles Images (Settings)
+    // --- GESTION CATÉGORIES (SETTINGS) ---
+    $("imgCategoriesList").innerHTML = (state.config.imgCategories || []).map((cat, i) => `
+       <div class="style-tag" style="background:#eee; border:1px solid #ccc; padding:4px 10px; display:flex; gap:5px; align-items:center;">
+          ${cat} <span onclick="window.removeImgCategory(${i})" style="cursor:pointer; color:red; font-weight:bold;">×</span>
+       </div>
+    `).join("");
+
+    // Update Select pour création style
+    const catSelect = $("newImgStyleCategory");
+    catSelect.innerHTML = `<option value="">Général</option>` + (state.config.imgCategories || []).map(c => `<option value="${c}">${c}</option>`).join("");
+
+    // --- LISTE STYLES (SETTINGS) ---
     $("imgStyleEditorList").innerHTML = (state.config.imgStyles || []).map((s, i) => `
         <div style="display:flex; gap:10px; margin-bottom:10px; align-items:flex-start; background:#fff; padding:10px; border-radius:8px; border:1px solid #eee;">
             <div style="width:50px; height:50px; background:#eee; border-radius:6px; overflow:hidden; flex-shrink:0;">
                 ${s.refImage ? `<img src="data:image/jpeg;base64,${s.refImage}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="display:flex;justify-content:center;align-items:center;height:100%;font-size:10px;">No Img</span>'}
             </div>
             <div style="flex:1;">
-                <div style="font-weight:bold; font-size:12px;">${s.name}</div>
+                <div style="display:flex; justify-content:space-between;">
+                    <div style="font-weight:bold; font-size:12px;">${s.name}</div>
+                    <div style="font-size:10px; background:#f0f0f0; padding:2px 6px; border-radius:4px;">${s.category || 'Général'}</div>
+                </div>
                 <div style="font-size:11px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:300px;">${s.prompt}</div>
             </div>
             <button onclick="window.removeImgStyle(${i})" style="color:red; border:none; background:none;">×</button>
@@ -86,6 +107,8 @@
 
     $("collectionSelect").innerHTML = (state.config.collections || []).map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     renderStyleSelectors();
+    // Update Studio UI as well if config changes
+    renderStudioCategories();
     renderImgStylesButtons();
   }
 
@@ -99,7 +122,20 @@
     el.classList.toggle('selected');
   };
 
-  // Gestion Styles Images (Configuration)
+  /* --- GESTION PARAMÈTRES IMAGES --- */
+  window.removeImgCategory = (i) => {
+      state.config.imgCategories.splice(i, 1);
+      renderConfigUI();
+  };
+  $("addImgCategoryBtn").onclick = () => {
+      const val = $("newImgCategoryInput").value.trim();
+      if(val && !state.config.imgCategories.includes(val)) {
+          state.config.imgCategories.push(val);
+          $("newImgCategoryInput").value = "";
+          renderConfigUI();
+      }
+  };
+
   window.removeImgStyle = (i) => {
       state.config.imgStyles.splice(i, 1);
       renderConfigUI();
@@ -107,6 +143,7 @@
 
   $("addImgStyleBtn").onclick = () => {
       const name = $("newImgStyleName").value;
+      const category = $("newImgStyleCategory").value;
       const prompt = $("newImgStylePrompt").value;
       const fileInput = $("newImgStyleFile");
       
@@ -117,46 +154,76 @@
           r.onload = (e) => {
               const b64 = e.target.result.split(",")[1];
               if(!state.config.imgStyles) state.config.imgStyles = [];
-              state.config.imgStyles.push({ name, prompt, refImage: b64 });
+              state.config.imgStyles.push({ name, category, prompt, refImage: b64 });
               $("newImgStyleName").value = ""; $("newImgStylePrompt").value = ""; fileInput.value = "";
               renderConfigUI();
           };
           r.readAsDataURL(fileInput.files[0]);
       } else {
-          // Permettre d'ajouter sans image si voulu
           if(!state.config.imgStyles) state.config.imgStyles = [];
-          state.config.imgStyles.push({ name, prompt, refImage: null });
+          state.config.imgStyles.push({ name, category, prompt, refImage: null });
           $("newImgStyleName").value = ""; $("newImgStylePrompt").value = "";
           renderConfigUI();
       }
   };
 
-  // Rendu des boutons Styles dans le Studio Gemini
-  function renderImgStylesButtons() {
-      const container = $("imgGenStylesContainer");
+  /* --- STUDIO UI LOGIC --- */
+  
+  // 1. Rendu des onglets catégories
+  function renderStudioCategories() {
+      const container = $("imgGenCategoriesBar");
       if(!container) return;
-      container.innerHTML = (state.config.imgStyles || []).map((s, i) => `
-         <button class="style-tag" onclick="window.applyImgStyle(${i})" style="display:flex; align-items:center; gap:5px; flex-shrink:0;">
-            ${s.refImage ? '<span style="width:10px; height:10px; background:#ccc; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
-            ${s.name}
-         </button>
+      const cats = ["Tout", ...(state.config.imgCategories || [])];
+      
+      container.innerHTML = cats.map(c => `
+         <div class="style-tag ${state.currentImgCategory === c ? 'selected' : ''}" 
+              onclick="window.setImgCategory('${c}')"
+              style="font-size:10px; padding:4px 10px; border-radius:12px;">
+            ${c.toUpperCase()}
+         </div>
       `).join("");
   }
 
-  // Application du style dans le Studio (Prompt + Image Injection)
-  window.applyImgStyle = (index) => {
-      const style = state.config.imgStyles[index];
-      if (!style) return;
+  window.setImgCategory = (c) => {
+      state.currentImgCategory = c;
+      renderStudioCategories();
+      renderImgStylesButtons();
+  };
 
-      // 1. Ajouter le prompt
-      const currentPrompt = $("imgGenPrompt").value;
-      $("imgGenPrompt").value = currentPrompt ? (currentPrompt + " " + style.prompt) : style.prompt;
+  // 2. Rendu des boutons de styles (Filtrés)
+  function renderImgStylesButtons() {
+      const container = $("imgGenStylesContainer");
+      if(!container) return;
       
-      // 2. Ajouter l'image de référence si elle existe
-      if (style.refImage) {
-          state.inputImages.push(style.refImage);
-          renderInputImages();
+      const filtered = (state.config.imgStyles || []).filter(s => {
+          if (state.currentImgCategory === "Tout") return true;
+          return (s.category || "") === state.currentImgCategory;
+      });
+
+      container.innerHTML = filtered.map((s) => {
+          // On vérifie si ce style est "actif"
+          const isActive = state.activeImgStyle && state.activeImgStyle.name === s.name;
+          
+          return `
+         <button class="style-tag ${isActive ? 'selected' : ''}" onclick="window.toggleImgStyle('${s.name}')" style="display:flex; align-items:center; gap:5px; flex-shrink:0; border:1px solid #ddd; ${isActive ? 'background:var(--apple-blue); color:white; border-color:var(--apple-blue);' : 'background:#fff;'}">
+            ${s.refImage ? '<span style="width:12px; height:12px; background:#ccc; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
+            ${s.name}
+         </button>
+      `}).join("");
+  }
+
+  // 3. Toggle Logic (Sélection unique)
+  window.toggleImgStyle = (styleName) => {
+      const style = state.config.imgStyles.find(s => s.name === styleName);
+      
+      if (state.activeImgStyle && state.activeImgStyle.name === styleName) {
+          // Désélection
+          state.activeImgStyle = null;
+      } else {
+          // Sélection (remplace le précédent)
+          state.activeImgStyle = style;
       }
+      renderImgStylesButtons();
   };
 
   /* --- COMMON API --- */
@@ -223,26 +290,45 @@
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   
   async function callGeminiImageGen() {
-      const prompt = $("imgGenPrompt").value;
-      if (!prompt) return alert("Veuillez entrer une description.");
+      const userPrompt = $("imgGenPrompt").value;
+      if (!userPrompt && !state.activeImgStyle) return alert("Veuillez entrer une description ou sélectionner un style.");
       
       const count = parseInt($("imgCount").value) || 1;
       const aspectRatio = $("imgAspectRatio").value;
       const resolution = $("imgResolution").value;
+
+      // --- CONSTRUCTION DU CONTEXTE FINAL ---
+      // 1. Prompt : User Input + Style Prompt
+      let finalPrompt = userPrompt;
+      if (state.activeImgStyle && state.activeImgStyle.prompt) {
+          finalPrompt += " " + state.activeImgStyle.prompt;
+      }
+
+      // 2. Images : User Uploads + Style Ref Image
+      let finalImages = [...state.inputImages];
+      if (state.activeImgStyle && state.activeImgStyle.refImage) {
+          finalImages.push(state.activeImgStyle.refImage);
+      }
+      // --------------------------------------
 
       const newItems = [];
       for(let i=0; i<count; i++) {
           newItems.push({ 
               id: Date.now() + Math.random(), 
               loading: true, 
-              prompt: prompt, 
+              prompt: finalPrompt, // On affiche le prompt complet dans l'historique
               aspectRatio: aspectRatio 
           });
       }
       
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
-      $("imgGenPrompt").value = "";
+      
+      // RESET UI : On garde le prompt user visible ? Non, on clear souvent pour éviter re-clic accidentel
+      // Mais on DESELECTIONNE le style obligatoirement comme demandé
+      state.activeImgStyle = null; 
+      renderImgStylesButtons();
+      // $("imgGenPrompt").value = ""; // Optionnel, je laisse le prompt user si besoin de re-iterer
 
       newItems.forEach(async (item) => {
           try {
@@ -250,7 +336,7 @@
                   method: "POST", 
                   body: JSON.stringify({ 
                       prompt: item.prompt,
-                      images: state.inputImages,
+                      images: finalImages, // On envoie le tableau fusionné
                       aspectRatio: item.aspectRatio,
                       resolution: resolution
                   }) 
@@ -615,7 +701,7 @@
       state.config.headlineStyles = Array.from(document.querySelectorAll('.headline-style-item')).map(r => ({ name: r.querySelector('.style-name').value, prompt: r.querySelector('.style-prompt').value }));
       state.config.adStyles = Array.from(document.querySelectorAll('.ad-style-item')).map(r => ({ name: r.querySelector('.ad-style-name').value, prompt: r.querySelector('.ad-style-prompt').value }));
       
-      // La config imgStyles est déjà mise à jour dans le state via les fonctions d'ajout
+      // La config imgStyles et imgCategories est déjà mise à jour via les fonctions d'ajout/suppression
       
       await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
       alert("Enregistré"); $("settingsModal").classList.add("hidden"); renderConfigUI();
@@ -632,7 +718,9 @@
         if (state.inputImages.length === 0) state.inputImages = [state.imageBase64];
         renderInputImages();
         $("imgGenModal").classList.remove("hidden");
-        renderImgStylesButtons(); // Render des boutons de style
+        // Init Studio UI
+        renderStudioCategories();
+        renderImgStylesButtons();
         renderGenImages();
     };
     $("closeImgGen").onclick = () => $("imgGenModal").classList.add("hidden");
