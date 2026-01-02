@@ -12,7 +12,17 @@
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }]
   };
 
-  const LANGUAGES = { "Danish": "dn.", "Dutch": "du.", "German": "de.", "Italian": "it.", "Polish": "pl.", "Portuguese (Brazil)": "pt-br.", "Portuguese (Portugal)": "pt.", "Spanish": "es." };
+  // Configuration des sous-domaines par langue
+  const LANGUAGES = { 
+    "Danish": "dn.", 
+    "Dutch": "du.", 
+    "German": "de.", 
+    "Italian": "it.", 
+    "Polish": "pl.", 
+    "Portuguese (Brazil)": "pt-br.", 
+    "Portuguese (Portugal)": "pt.", 
+    "Spanish": "es." 
+  };
 
   let state = {
     imageBase64: null, imageMime: "image/jpeg", historyCache: [],
@@ -37,9 +47,7 @@
     const res = await fetch("/api/settings");
     const data = await res.json();
     const saved = data.find(i => i.id === 'full_config');
-    if (saved) {
-      state.config = JSON.parse(saved.value);
-    }
+    if (saved) { state.config = JSON.parse(saved.value); }
     renderConfigUI();
   }
 
@@ -67,7 +75,8 @@
     if (!state.imageBase64) return;
     startLoading();
     try {
-      const common = { image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value, config: state.config, historyNames: state.historyCache.map(h => h.product_name), currentTitle: $("titleText").textContent, currentDesc: $("descText").textContent, product_url: $("productUrlInput").value };
+      const productUrl = $("productUrlInput").value || "https://en.riccardiparis.com";
+      const common = { image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value, config: state.config, historyNames: state.historyCache.map(h => h.product_name), currentTitle: $("titleText").textContent, currentDesc: $("descText").textContent, product_url: productUrl };
       
       if (action === 'ad_copys' && state.selAdStyles.length > 0) {
         const results = await Promise.all(state.selAdStyles.map(sName => {
@@ -84,7 +93,7 @@
 
         if (action === 'generate') {
           $("titleText").textContent = data.title; $("descText").textContent = data.description;
-          const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name, product_url: $("productUrlInput").value }) });
+          const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name, product_url: productUrl }) });
           const hData = await hRes.json();
           state.currentHistoryId = hData.id;
           state.sessionHeadlines = []; state.sessionAds = []; state.selectedHeadlines = []; state.selectedAds = []; state.headlinesTrans = {}; state.adsTrans = {}; 
@@ -141,44 +150,135 @@
     }
   }
 
+  // Fonctions de traduction avec sélection multiple
   const toggleMenu = (id) => $(id).classList.toggle('show');
+  
+  function renderLangList(type, containerId) {
+    $(containerId).innerHTML = `
+      <div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:11px; font-weight:bold;">SÉLECTIONNER</span>
+        <button class="primary-btn" style="padding:4px 8px; font-size:10px;" onclick="window.runBatchTranslation('${type}')">Traduire</button>
+      </div>
+      <div style="max-height:300px; overflow-y:auto;">
+        ${Object.keys(LANGUAGES).map(l => `
+          <div class="lang-opt" style="display:flex; align-items:center; gap:10px;" onclick="event.stopPropagation();">
+            <input type="checkbox" class="lang-cb-${type}" value="${l}" id="cb-${type}-${l}">
+            <label for="cb-${type}-${l}" style="flex:1; cursor:pointer;">${l}</label>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }
+
   $("translateHlMenuBtn").onclick = (e) => { e.stopPropagation(); if (!state.selectedHeadlines.length) return alert("Enregistrez d'abord."); renderLangList("hl", "hlLangList"); toggleMenu("hlLangList"); };
   $("translateAdMenuBtn").onclick = (e) => { e.stopPropagation(); if (!state.selectedAds.length) return alert("Enregistrez d'abord."); renderLangList("ad", "adLangList"); toggleMenu("adLangList"); };
 
-  function renderLangList(type, containerId) { $(containerId).innerHTML = Object.keys(LANGUAGES).map(l => `<div class="lang-opt" onclick="processTranslation('${type}', '${l}')">${l}</div>`).join(""); }
-
-  window.processTranslation = async (type, lang) => {
+  window.runBatchTranslation = async (type) => {
+    const checkboxes = document.querySelectorAll(`.lang-cb-${type}:checked`);
+    const selectedLangs = Array.from(checkboxes).map(cb => cb.value);
+    if (selectedLangs.length === 0) return alert("Sélectionnez au moins une langue.");
+    
     document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
-    const itemsToTranslate = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
-    if (!(itemsToTranslate || []).length) return alert("Aucun élément enregistré à traduire.");
     startLoading();
-    let infoToTranslate = (type === 'ad') ? { title1: $("titleText").textContent, title2: $("titleText").textContent + " - Special Offer", title3: "Gift Idea - " + $("titleText").textContent, title4: $("titleText").textContent + " - Valentine's Day Gift Idea", sub: "Free Shipping Worldwide Today" } : null;
+
     try {
-      const res = await fetch("/api/generate", { method: "POST", body: JSON.stringify({ action: "translate", itemsToTranslate, infoToTranslate, targetLang: lang, config: state.config, image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value }) });
-      const data = await res.json();
-      if (type === 'hl') { state.headlinesTrans[lang] = { items: data.translated_items }; await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, headlines_trans: JSON.stringify(state.headlinesTrans) }) }); } 
-      else { state.adsTrans[lang] = { items: data.translated_items, info: data.translated_info }; await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, ads_trans: JSON.stringify(state.adsTrans) }) }); }
-      const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
-      if (histItem) histItem[type==='hl'?'headlines_trans':'ads_trans'] = JSON.stringify(type==='hl' ? state.headlinesTrans : state.adsTrans);
+      // Exécution séquentielle ou parallèle selon les quotas API, ici parallèle pour vitesse
+      await Promise.all(selectedLangs.map(lang => processTranslation(type, lang, false)));
+      alert("Traductions terminées");
       renderTranslationTabs(type);
-      const tabBtn = document.querySelector(`button[data-tab="tab-${type}-${lang.replace(/\s/g,'')}"]`);
-      if(tabBtn) tabBtn.click();
-    } catch(e) { alert("Erreur Trad: " + e.message); } finally { stopLoading(); }
+    } catch(e) {
+      alert("Erreur lors des traductions groupées: " + e.message);
+    } finally {
+      stopLoading();
+    }
+  };
+
+  window.processTranslation = async (type, lang, singleCall = true) => {
+    const itemsToTranslate = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
+    const currentUrl = $("productUrlInput").value || "https://en.riccardiparis.com";
+    
+    // Remplacement du sous-domaine pour l'URL transmise à l'IA
+    const targetSub = LANGUAGES[lang] || "en.";
+    const localizedUrl = currentUrl.replace(/https:\/\/[a-z-]+\./, `https://${targetSub}`);
+
+    if (singleCall) startLoading();
+    
+    let infoToTranslate = (type === 'ad') ? { 
+      title1: $("titleText").textContent, 
+      title2: $("titleText").textContent + " - Special Offer", 
+      title3: "Gift Idea - " + $("titleText").textContent, 
+      title4: $("titleText").textContent + " - Valentine's Day Gift Idea", 
+      sub: "Free Shipping Worldwide Today" 
+    } : null;
+
+    try {
+      const res = await fetch("/api/generate", { 
+        method: "POST", 
+        body: JSON.stringify({ 
+          action: "translate", 
+          itemsToTranslate, 
+          infoToTranslate, 
+          targetLang: lang, 
+          config: state.config, 
+          image: state.imageBase64, 
+          media_type: state.imageMime, 
+          collection: $("collectionSelect").value,
+          product_url: localizedUrl // URL avec le bon sous-domaine
+        }) 
+      });
+      const data = await res.json();
+      
+      if (type === 'hl') { 
+        state.headlinesTrans[lang] = { items: data.translated_items }; 
+      } else { 
+        state.adsTrans[lang] = { items: data.translated_items, info: data.translated_info }; 
+      }
+
+      // Sauvegarde Persistante
+      const payload = { 
+        id: state.currentHistoryId, 
+        [type === 'hl' ? 'headlines_trans' : 'ads_trans']: JSON.stringify(type === 'hl' ? state.headlinesTrans : state.adsTrans) 
+      };
+      await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
+      
+      const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
+      if (histItem) histItem[type==='hl'?'headlines_trans':'ads_trans'] = payload[type==='hl'?'headlines_trans':'ads_trans'];
+
+      if (singleCall) {
+        renderTranslationTabs(type);
+        const tabBtn = document.querySelector(`button[data-tab="tab-${type}-${lang.replace(/\s/g,'')}"]`);
+        if(tabBtn) tabBtn.click();
+      }
+    } catch(e) { 
+      if (singleCall) alert("Erreur Trad: " + e.message); 
+      else throw e;
+    } finally { 
+      if (singleCall) stopLoading(); 
+    }
   };
 
   function renderTranslationTabs(type) {
     const tabs = type === 'hl' ? $("headlinesTabs") : $("adsTabs");
     const container = type === 'hl' ? $("headlinesTabContainer") : $("adsTabContainer");
     const transData = type === 'hl' ? state.headlinesTrans : state.adsTrans;
+    const currentUrl = $("productUrlInput").value || "https://en.riccardiparis.com";
+
     tabs.querySelectorAll(".lang-tab").forEach(t => t.remove());
     container.querySelectorAll(".lang-tab-content").forEach(c => c.remove());
+
     Object.keys(transData || {}).forEach(lang => {
       const tabId = `tab-${type}-${lang.replace(/\s/g,'')}`;
       const btn = document.createElement("button"); btn.className = "tab-link lang-tab"; btn.textContent = lang; btn.dataset.tab = tabId; btn.onclick = (e) => switchTab(e); tabs.appendChild(btn);
       const content = document.createElement("div"); content.id = tabId; content.className = "tab-content hidden lang-tab-content";
+      
       let html = `<div class="headlines-results">` + (transData[lang].items || []).map(t => `<div class="headline-item no-hover"><span class="headline-text" style="white-space:pre-wrap;">${t}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${t.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
+
       if (type === 'ad' && transData[lang].info) {
-          const info = transData[lang].info; const langUrl = ($("productUrlInput").value).replace("en.", LANGUAGES[lang] || "en.");
+          const info = transData[lang].info; 
+          // Remplacement du sous-domaine pour l'affichage de l'URL localisée dans le bloc du bas
+          const targetSub = LANGUAGES[lang] || "en.";
+          const langUrl = currentUrl.replace(/https:\/\/[a-z-]+\./, `https://${targetSub}`);
+
           html += `<div class="ads-info-block">` + [`TITRE 1|${info.title1}`, `TITRE 2|${info.title2}`, `TITRE 3|${info.title3}`, `TITRE 4|${info.title4}`, `SUB|${info.sub}`, `URL|${langUrl}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
       }
       content.innerHTML = html; container.appendChild(content);
@@ -219,26 +319,21 @@
   const renderSavedAds = () => {
     const list = state.selectedAds || [];
     $("adsSavedList").innerHTML = list.map((h, i) => `<div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;"><div style="display:flex;justify-content:space-between;width:100%"><strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong><div style="display:flex;gap:5px;"><button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button><button class="icon-btn-small" style="color:red" onclick="deleteSaved('ad',${i})">×</button></div></div><span class="headline-text" style="white-space:pre-wrap;">${h}</span></div>`).join("");
-    const n = $("titleText").textContent, u = $("productUrlInput").value;
+    const n = $("titleText").textContent, u = $("productUrlInput").value || "https://en.riccardiparis.com";
     $("adsDefaultInfoBlock").innerHTML = [`TITRE 1|${n}`, `TITRE 2|${n} - Special Offer`, `TITRE 3|Gift Idea - ${n}`, `TITRE 4|${n} - Valentine's Day Gift Idea`, `SUB|Free Shipping Worldwide Today`, `URL|${u}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("");
   };
 
   window.deleteSaved = async (type, i) => {
     if(!confirm("Supprimer ?")) return;
-    
     let list = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
     let trans = type === 'hl' ? state.headlinesTrans : state.adsTrans;
-    
     if (!list) return;
-
     list.splice(i, 1);
-    
     Object.keys(trans || {}).forEach(lang => {
       if (trans[lang].items && trans[lang].items[i] !== undefined) {
         trans[lang].items.splice(i, 1);
       }
     });
-
     startLoading();
     try {
       const payload = {
@@ -246,30 +341,21 @@
         [type === 'hl' ? 'headlines' : 'ad_copys']: JSON.stringify(list),
         [type === 'hl' ? 'headlines_trans' : 'ads_trans']: JSON.stringify(trans)
       };
-
       const res = await fetch("/api/history", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-
       if (!res.ok) throw new Error("Erreur serveur");
-
       const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
       if (histItem) {
         histItem[type === 'hl' ? 'headlines' : 'ad_copys'] = payload[type === 'hl' ? 'headlines' : 'ad_copys'];
         histItem[type === 'hl' ? 'headlines_trans' : 'ads_trans'] = payload[type === 'hl' ? 'headlines_trans' : 'ads_trans'];
       }
-
       if (type === 'hl') { state.selectedHeadlines = list; renderSavedHl(); } 
       else { state.selectedAds = list; renderSavedAds(); }
       renderTranslationTabs(type);
-      
-    } catch(e) { 
-      alert("Erreur suppression: " + e.message); 
-    } finally { 
-      stopLoading(); 
-    }
+    } catch(e) { alert("Erreur suppression: " + e.message); } finally { stopLoading(); }
   };
 
   function init() {
