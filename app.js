@@ -8,7 +8,7 @@
     promptDesc: "DESCRIPTION: 2 paras, <=180 chars. Tone: Luxury.",
     promptHeadlines: "Viral TikTok hooks expert.",
     promptAdCopys: "Facebook Ads expert. Structure: Hook, Bullets, CTA+URL.",
-    promptTranslate: "Professional luxury translator. TASK: Translate into {targetLang}. URL: {product_url}", // Nouveau défaut
+    promptTranslate: "Professional luxury translator. TASK: Translate into {targetLang}. URL: {product_url}",
     headlineStyles: [{ name: "POV", prompt: "POV perspective." }],
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }]
   };
@@ -26,7 +26,12 @@
     selectedHeadlines: [], selectedAds: [],
     headlinesTrans: {}, adsTrans: {},
     selHlStyles: [], selAdStyles: [],
-    hlPage: 1, adPage: 1
+    hlPage: 1, adPage: 1,
+    // NOUVEAUX ÉTATS POUR LA GÉNÉRATION D'IMAGES
+    inputImages: [], // Liste d'images base64 pour le contexte
+    sessionGeneratedImages: [], // Images générées dans la session (non sauvegardées)
+    savedGeneratedImages: [], // Images sélectionnées et sauvegardées
+    selectedSessionImagesIdx: [] // Index sélectionnés dans la session
   };
 
   const startLoading = () => {
@@ -102,6 +107,8 @@
           const hData = await hRes.json();
           state.currentHistoryId = hData.id;
           state.sessionHeadlines = []; state.sessionAds = []; state.selectedHeadlines = []; state.selectedAds = []; state.headlinesTrans = {}; state.adsTrans = {}; 
+          // Reset Image Gen States
+          state.savedGeneratedImages = []; state.sessionGeneratedImages = []; state.inputImages = [state.imageBase64]; renderInputImages(); renderGenImages();
           await loadHistory();
         } else if (action === 'regen_title' || action === 'regen_desc') {
           if (action === 'regen_title') $("titleText").textContent = data.title; else $("descText").textContent = data.description;
@@ -119,6 +126,143 @@
     } catch(e) { alert("Erreur: " + e.message); }
     finally { stopLoading(); }
   }
+
+  /* --- LOGIQUE GENERATION IMAGES (NOUVEAU) --- */
+  
+  // Rendu de la barre des images d'entrée (input context)
+  function renderInputImages() {
+    const container = $("inputImagesPreview");
+    if (state.inputImages.length === 0) { container.classList.add("hidden"); return; }
+    container.classList.remove("hidden");
+    container.innerHTML = state.inputImages.map((img, i) => `
+        <div class="input-img-wrapper">
+            <img src="data:image/jpeg;base64,${img}" class="input-img-thumb">
+            <div class="remove-input-img" onclick="window.removeInputImg(${i})">×</div>
+        </div>
+    `).join("");
+  }
+  
+  window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
+  
+  // Appel API dédié Gemini Images
+  async function callGeminiImageGen() {
+      const prompt = $("imgGenPrompt").value;
+      if (!prompt) return alert("Veuillez entrer une description.");
+      
+      startLoading();
+      try {
+          // Utilise le fichier api/gemini.js existant mis à jour
+          const res = await fetch("/api/gemini", { 
+              method: "POST", 
+              body: JSON.stringify({ 
+                  prompt: prompt,
+                  images: state.inputImages, // Envoi du tableau d'images contextuelles
+                  aspectRatio: $("imgAspectRatio").value,
+                  resolution: $("imgResolution").value
+              }) 
+          });
+          
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+          
+          // Ajout à la session
+          state.sessionGeneratedImages.unshift({ 
+              image: data.image, 
+              prompt: prompt,
+              aspectRatio: $("imgAspectRatio").value 
+          });
+          
+          renderGenImages();
+          $("imgGenPrompt").value = "";
+      } catch(e) {
+          alert("Erreur Génération Image: " + e.message);
+      } finally {
+          stopLoading();
+      }
+  }
+
+  // Rendu de la grille d'images (Session & Sauvegardées)
+  function renderGenImages() {
+      // Session
+      const sessionContainer = $("imgGenSessionResults");
+      sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => `
+        <div class="gen-image-card ${state.selectedSessionImagesIdx.includes(i) ? 'selected' : ''}" onclick="window.toggleSessionImg(${i})">
+           <img src="data:image/jpeg;base64,${item.image}">
+           <div class="gen-image-overlay">${item.prompt}</div>
+        </div>
+      `).join("");
+
+      // Sauvegardées
+      const savedContainer = $("imgGenSavedResults");
+      savedContainer.innerHTML = state.savedGeneratedImages.map((item, i) => `
+        <div class="gen-image-card" onclick="window.viewImage('${item.image}')">
+           <img src="data:image/jpeg;base64,${item.image}">
+           <div class="gen-image-overlay">${item.prompt}</div>
+           <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; background:rgba(255,255,255,0.8); color:red; border:none;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button>
+        </div>
+      `).join("");
+  }
+
+  window.toggleSessionImg = (i) => {
+      const idx = state.selectedSessionImagesIdx.indexOf(i);
+      if (idx > -1) state.selectedSessionImagesIdx.splice(idx, 1);
+      else state.selectedSessionImagesIdx.push(i);
+      renderGenImages();
+  };
+
+  window.viewImage = (b64) => {
+      const w = window.open("");
+      w.document.write(`<img src="data:image/jpeg;base64,${b64}" style="max-width:100%">`);
+  };
+
+  // Sauvegarde dans DB
+  window.saveImgSelection = async () => {
+      if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
+      if (state.selectedSessionImagesIdx.length === 0) return alert("Aucune image sélectionnée.");
+
+      const newImages = state.selectedSessionImagesIdx.map(i => state.sessionGeneratedImages[i]);
+      state.savedGeneratedImages = [...newImages, ...state.savedGeneratedImages];
+      
+      // Nettoyage session
+      state.selectedSessionImagesIdx = [];
+      
+      startLoading();
+      try {
+          const payload = { 
+              id: state.currentHistoryId, 
+              generated_images: JSON.stringify(state.savedGeneratedImages) 
+          };
+          await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
+          
+          // Mise à jour cache local
+          const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
+          if (histItem) histItem.generated_images = payload.generated_images;
+          
+          alert("Images enregistrées !");
+          renderGenImages();
+          // Basculer vers l'onglet sauvegardé
+          document.querySelector('button[data-tab="tab-img-saved"]').click();
+      } catch(e) {
+          alert("Erreur sauvegarde: " + e.message);
+      } finally {
+          stopLoading();
+      }
+  };
+
+  window.deleteSavedImage = async (index) => {
+      if(!confirm("Supprimer cette image ?")) return;
+      state.savedGeneratedImages.splice(index, 1);
+      startLoading();
+      try {
+          const payload = { id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) };
+          await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
+          const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
+          if (histItem) histItem.generated_images = payload.generated_images;
+          renderGenImages();
+      } catch(e) { alert(e.message); } finally { stopLoading(); }
+  };
+  
+  /* --- FIN LOGIQUE IMAGES --- */
 
   const renderHeadlines = () => {
     const list = state.sessionHeadlines || [];
@@ -364,6 +508,33 @@
     $("openAdsBtn").onclick = () => { if(!state.currentHistoryId) return; $("adsModal").classList.remove("hidden"); renderSavedAds(); renderTranslationTabs('ad'); };
     $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
     $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
+    
+    // Nouveaux Event Listeners pour Images
+    $("openImgGenBtn").onclick = () => {
+        if (!state.imageBase64) return alert("Veuillez d'abord uploader une image principale.");
+        // Init input images if empty
+        if (state.inputImages.length === 0) state.inputImages = [state.imageBase64];
+        renderInputImages();
+        $("imgGenModal").classList.remove("hidden");
+        renderGenImages();
+    };
+    $("closeImgGen").onclick = () => $("imgGenModal").classList.add("hidden");
+    $("sendImgGen").onclick = callGeminiImageGen;
+    $("addInputImgBtn").onclick = () => $("extraImgInput").click();
+    $("extraImgInput").onchange = (e) => {
+        const files = Array.from(e.target.files);
+        files.forEach(f => {
+            const r = new FileReader();
+            r.onload = (ev) => {
+                const b64 = ev.target.result.split(",")[1];
+                state.inputImages.push(b64);
+                renderInputImages();
+            };
+            r.readAsDataURL(f);
+        });
+    };
+    $("saveImgSelectionBtn").onclick = window.saveImgSelection;
+    
     window.onclick = (e) => { if (e.target.classList.contains('modal')) e.target.classList.add("hidden"); document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show')); };
     document.querySelectorAll(".tab-link").forEach(btn => btn.onclick = (e) => switchTab(e));
     $("sendHeadlineChat").onclick = () => apiCall('headlines', { userText: $("headlineStyleInput").value });
@@ -383,6 +554,8 @@
         state.imageMime = ev.target.result.split(";")[0].split(":")[1]; state.imageBase64 = ev.target.result.split(",")[1];
         $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden");
         $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; state.currentHistoryId = null;
+        // Reset Img Gen
+        state.inputImages = [state.imageBase64]; renderInputImages();
       }; r.readAsDataURL(f);
     };
     $("removeImage").onclick = (e) => { e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null; $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block"; $("generateBtn").disabled = true; };
@@ -410,9 +583,17 @@
     state.currentHistoryId = id; state.sessionHeadlines = []; state.sessionAds = [];
     state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
     state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
+    
+    // RESTORE GENERATED IMAGES
+    state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
+    state.sessionGeneratedImages = []; // Reset session on restore
+    
     $("titleText").textContent = item.title; $("descText").textContent = item.description; $("productUrlInput").value = item.product_url || "";
     $("previewImg").src = `data:image/jpeg;base64,${item.image}`; state.imageBase64 = item.image; $("preview").classList.remove("hidden");
     $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; renderHistoryUI();
+    
+    // Re-init inputs for generator
+    state.inputImages = [item.image]; renderInputImages(); renderGenImages();
   };
 
   window.deleteItem = async (id) => { if(!confirm("Supprimer ?")) return; await fetch(`/api/history?id=${id}`, { method: "DELETE" }); if(state.currentHistoryId == id) state.currentHistoryId = null; loadHistory(); };
