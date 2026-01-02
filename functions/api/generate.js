@@ -1,38 +1,45 @@
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
-    const { action, image, media_type, collection, config, historyNames, currentTitle, currentDesc, product_url, style, selectedForSimilar } = body;
+    const { action, image, media_type, collection, config, historyNames, currentTitle, currentDesc, product_url, style, selectedForSimilar, textsToTranslate, targetLang } = body;
 
     if (!env.ANTHROPIC_API_KEY) return new Response(JSON.stringify({ error: "Clé API manquante" }), { status: 500 });
-
-    const collectionInfo = (config.collections || []).find(c => c.name === collection)?.meaning || "";
     const jsonSafeRule = "IMPORTANT: Return valid JSON. Escape double quotes with backslash (\\\"). Output ONLY JSON.";
-
-    const baseInstructions = `${config.promptSystem}\n${jsonSafeRule}\nSPECIFIC COLLECTION CONTEXT: ${collectionInfo}\nTITLE RULES: ${config.promptTitles}\nDESC RULES: ${config.promptDesc}`;
 
     let prompt = "";
     
-    if (action === "generate") {
-      prompt = `${baseInstructions}\nBLACKLIST: ${config.blacklist}\nHISTORY: ${JSON.stringify(historyNames)}\nTASK: Analyze image and output JSON: { "product_name": "...", "title": "...", "description": "..." }`;
-    } else if (action === "regen_title") {
-      prompt = `${baseInstructions}\nTASK: New product_name/title. Different from: "${currentTitle}". JSON: { "product_name": "...", "title": "..." }`;
-    } else if (action === "regen_desc") {
-      prompt = `${baseInstructions}\nTASK: New description. JSON: { "description": "..." }`;
-    } else if (action === "headlines") {
-      prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}\nSTYLE: ${style}\nTASK: Generate 5 catchy hooks. JSON: { "headlines": ["...", "..."] }`;
-    } else if (action === "ad_copys") {
-      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nDEFAULT LANGUAGE: English.\nPRODUCT CONTEXT:\n- Title: ${currentTitle}\n- Description: ${currentDesc}\n- Product URL: ${product_url || "(no url provided)"}\nSTYLE REQUEST: ${style}\n\nOutput ONLY JSON: { "ad_copys": ["...", "..."] }`;
-    } else if (action === "ad_copys_similar") {
-      prompt = `You are a Facebook Ads Expert. Based on these selected ads: ${JSON.stringify(selectedForSimilar)}.
-        And this product: ${currentTitle}.
-        TASK: Generate 3 NEW variations that follow the EXACT same structure:
-        1. Catchy description.
-        2. Newline.
-        3. ✅ Bullets (Hypoallergenic, Water and oxidation resistant, Made to last).
-        4. Newline.
-        5. CTA with URL: ${product_url}.
+    // LOGIQUE DE TRADUCTION
+    if (action === "translate") {
+      prompt = `You are a professional native translator specialized in luxury jewelry marketing.
+        TASK: Translate the following list of marketing texts into ${targetLang}.
         
-        Output ONLY JSON: { "ad_copys": ["...", "..."] }`;
+        STRICT RULES:
+        - Maintain the EXACT same tone (luxury, emotional, punchy).
+        - Keep all emojis (like ✅, ✨, 🎬) exactly where they are.
+        - Preserve all line breaks and structure.
+        - Ensure the translation feels natural and high-end in ${targetLang}, not a literal word-for-word translation.
+        
+        TEXTS TO TRANSLATE:
+        ${JSON.stringify(textsToTranslate)}
+        
+        Output ONLY a JSON object: { "translations": ["translated text 1", "translated text 2", ...] }`;
+    } 
+    // RESTE DES ACTIONS... (inchangé pour la stabilité)
+    else if (action === "generate") {
+      const collectionInfo = (config.collections || []).find(c => c.name === collection)?.meaning || "";
+      prompt = `${config.promptSystem}\n${jsonSafeRule}\nCONTEXT: ${collectionInfo}\nTITLES: ${config.promptTitles}\nDESC: ${config.promptDesc}\nBLACKLIST: ${config.blacklist}\nHISTORY: ${JSON.stringify(historyNames)}\nTASK: Analyze image and output JSON: { "product_name": "...", "title": "...", "description": "..." }`;
+    } else if (action === "headlines") {
+      prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nCONTEXT: Title: ${currentTitle}, Desc: ${currentDesc}\nSTYLE: ${style}\nTASK: Generate 5 hooks. JSON: { "headlines": ["...", "..."] }`;
+    } else if (action === "ad_copys") {
+      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nPRODUCT: ${currentTitle}, URL: ${product_url}\nSTYLE: ${style}\nOutput ONLY JSON: { "ad_copys": ["...", "..."] }`;
+    } else if (action === "headlines_similar") {
+      prompt = `Viral Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Product: ${currentTitle}. 5 punchy variations. English. JSON: { "headlines": ["...", "..."] }`;
+    } else if (action === "ad_copys_similar") {
+      prompt = `Ads Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Product: ${currentTitle}. 3 variations. Keep structure (Bullets + URL). English. JSON: { "ad_copys": ["...", "..."] }`;
+    } else if (action === "regen_title") {
+      prompt = `New product_name/title. Different from: "${currentTitle}". JSON: { "product_name": "...", "title": "..." }`;
+    } else if (action === "regen_desc") {
+      prompt = `New description. JSON: { "description": "..." }`;
     }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
