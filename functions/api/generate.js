@@ -23,19 +23,11 @@ export async function onRequestPost({ request, env }) {
     } else if (action === "headlines_similar") {
       prompt = `Viral Copywriting Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Task: 5 improved varied versions. English. JSON: { "headlines": ["...", "..."] }`;
     } else if (action === "translate") {
-      prompt = `Professional luxury translator and transcreation expert. 
-      TASK: Translate/Adapt items into ${targetLang}. 
+      // UTILISATION DU PROMPT DYNAMIQUE DEPUIS LES PARAMÈTRES
+      let userPrompt = config.promptTranslate || "Translate into {targetLang}";
+      userPrompt = userPrompt.replace(/{targetLang}/g, targetLang).replace(/{product_url}/g, product_url);
       
-      LOCALIZATION RULES:
-      1. DO NOT TRANSLATE LITERALLY. Adapt idioms and metaphors to resonate naturally in ${targetLang}.
-      2. PERSUASION: Tone must remain luxury and punchy.
-      3. CHARACTER COUNT: Keep similar length to original text.
-      4. URLs: You MUST use this exact URL: ${product_url}. Do not modify or translate it.
-      5. FORMAT: Keep emojis and line breaks.
-
-      ITEMS TO TRANSLATE: ${JSON.stringify(itemsToTranslate)}
-      ${infoToTranslate ? `INFO: ${JSON.stringify(infoToTranslate)}` : ''}
-      Output JSON: { "translated_items": [...], "translated_info": { "title1": "...", "title2": "...", "title3": "...", "title4": "...", "sub": "..." } }`;
+      prompt = `${userPrompt}\n${jsonSafeRule}\nITEMS TO TRANSLATE: ${JSON.stringify(itemsToTranslate)}\n${infoToTranslate ? `INFO: ${JSON.stringify(infoToTranslate)}` : ''}\nOutput JSON: { "translated_items": [...], "translated_info": { "title1": "...", "title2": "...", "title3": "...", "title4": "...", "sub": "..." } }`;
     }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
