@@ -64,7 +64,7 @@
       if (!state.config.imgStyles) state.config.imgStyles = [];
       if (!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
     }
-    // Set default category to first one (No more "Tout")
+    // Set default category (Pas de "Tout")
     if (state.config.imgCategories.length > 0) {
         state.currentImgCategory = state.config.imgCategories[0];
     }
@@ -87,7 +87,6 @@
        </div>
     `).join("");
 
-    // Update Select pour création style
     const catSelect = $("newImgStyleCategory");
     const currentVal = catSelect.value;
     catSelect.innerHTML = `<option value="">Général</option>` + (state.config.imgCategories || []).map(c => `<option value="${c}">${c}</option>`).join("");
@@ -153,21 +152,16 @@
   window.editImgStyle = (i) => {
       const style = state.config.imgStyles[i];
       if(!style) return;
-      
       state.editingImgStyleIndex = i;
-      
       $("newImgStyleName").value = style.name;
       $("newImgStyleCategory").value = style.category || "";
       $("newImgStylePrompt").value = style.prompt;
       $("newImgStyleFile").value = ""; 
-      
       $("imgStyleFormTitle").textContent = "MODIFIER LE STYLE";
       $("addImgStyleBtn").textContent = "Mettre à jour le Style";
       $("cancelImgStyleEditBtn").classList.remove("hidden");
-      
       if(style.refImage) $("currentRefImgPreview").classList.remove("hidden");
       else $("currentRefImgPreview").classList.add("hidden");
-      
       $("imgStyleEditorForm").scrollIntoView({ behavior: 'smooth' });
   };
 
@@ -177,7 +171,6 @@
       $("newImgStyleCategory").value = "";
       $("newImgStylePrompt").value = "";
       $("newImgStyleFile").value = "";
-      
       $("imgStyleFormTitle").textContent = "AJOUTER UN STYLE";
       $("addImgStyleBtn").textContent = "+ Enregistrer le Style";
       $("cancelImgStyleEditBtn").classList.add("hidden");
@@ -190,12 +183,10 @@
       const category = $("newImgStyleCategory").value;
       const prompt = $("newImgStylePrompt").value;
       const fileInput = $("newImgStyleFile");
-      
       if(!name || !prompt) return alert("Nom et Prompt requis.");
 
       const saveStyle = (imgBase64) => {
           const styleData = { name, category, prompt };
-          
           if(state.editingImgStyleIndex !== null) {
               const oldStyle = state.config.imgStyles[state.editingImgStyleIndex];
               styleData.refImage = imgBase64 || oldStyle.refImage;
@@ -220,13 +211,10 @@
   };
 
   /* --- STUDIO UI LOGIC --- */
-  
   function renderStudioCategories() {
       const container = $("imgGenCategoriesBar");
       if(!container) return;
-      // PAS DE "TOUT"
       const cats = [...(state.config.imgCategories || [])];
-      
       container.innerHTML = cats.map(c => `
          <div class="style-tag ${state.currentImgCategory === c ? 'selected' : ''}" 
               onclick="window.setImgCategory('${c}')"
@@ -245,11 +233,9 @@
   function renderImgStylesButtons() {
       const container = $("imgGenStylesContainer");
       if(!container) return;
-      
       const filtered = (state.config.imgStyles || []).filter(s => {
           return (s.category || "") === state.currentImgCategory;
       });
-
       container.innerHTML = filtered.map((s) => {
           const isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
           return `
@@ -263,13 +249,9 @@
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName);
       if(!style) return;
-
       const idx = state.selectedImgStyles.findIndex(s => s.name === styleName);
-      if (idx > -1) {
-          state.selectedImgStyles.splice(idx, 1);
-      } else {
-          state.selectedImgStyles.push(style);
-      }
+      if (idx > -1) { state.selectedImgStyles.splice(idx, 1); } 
+      else { state.selectedImgStyles.push(style); }
       renderImgStylesButtons();
   };
 
@@ -335,6 +317,7 @@
   
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   
+  // --- MOTEUR DE GÉNÉRATION (MULTI-BATCH PAR IMAGE) ---
   async function callGeminiImageGen() {
       const userPrompt = $("imgGenPrompt").value;
       if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style.");
@@ -343,55 +326,85 @@
       const aspectRatio = $("imgAspectRatio").value;
       const resolution = $("imgResolution").value;
 
+      // Protection Bug "Aucune image": Si input vide mais imageBase64 dispo, on remplit
+      if (state.inputImages.length === 0 && state.imageBase64) {
+          state.inputImages = [state.imageBase64];
+          renderInputImages();
+      }
+
+      // Préparation des lots de requêtes
       const batches = [];
+      
+      // Liste des images sources à traiter (si vide, on fait 1 itération "null" pour du Text-to-Image)
+      const inputsToProcess = state.inputImages.length > 0 ? state.inputImages : [null];
 
-      if (state.selectedImgStyles.length > 0) {
-          state.selectedImgStyles.forEach(style => {
-              let batchImages = [...state.inputImages];
-              if(style.refImage) batchImages.push(style.refImage);
-              let batchPrompt = userPrompt ? (userPrompt + " " + style.prompt) : style.prompt;
+      // Boucle 1 : Pour CHAQUE image d'input (Image 1, Image 2...)
+      inputsToProcess.forEach(inputImg => {
+          
+          // Définition des "tâches" pour cette image (Styles ou Prompt Manuel)
+          let tasks = [];
+          if (state.selectedImgStyles.length > 0) {
+              // Si styles sélectionnés -> 1 Tâche par Style
+              tasks = state.selectedImgStyles.map(s => ({
+                  type: 'style',
+                  styleObj: s,
+                  prompt: userPrompt ? (userPrompt + " " + s.prompt) : s.prompt,
+                  refImage: s.refImage,
+                  label: s.name // LE NOM DU BOUTON
+              }));
+          } else {
+              // Si pas de style -> 1 Tâche Manuelle
+              tasks = [{
+                  type: 'manual',
+                  prompt: userPrompt,
+                  refImage: null,
+                  label: userPrompt // Prompt brut si manuel
+              }];
+          }
 
+          // Boucle 2 : Pour CHAQUE Tâche (Style X, Style Y...)
+          tasks.forEach(task => {
+              
+              // Construction du Contexte (Input Image + Style Ref Image)
+              let contextImages = [];
+              if (inputImg) contextImages.push(inputImg); // Image du bijou
+              if (task.refImage) contextImages.push(task.refImage); // Image du packaging
+
+              // Boucle 3 : Nombre d'images demandées (x2, x3...)
               for (let i = 0; i < count; i++) {
                   batches.push({
-                      prompt: batchPrompt,
-                      images: batchImages,
+                      prompt: task.prompt,
+                      images: contextImages,
                       aspectRatio: aspectRatio,
                       resolution: resolution,
-                      styleName: style.name
+                      label: task.label // On passe le label pour l'UI
                   });
               }
           });
-      } else {
-          for (let i = 0; i < count; i++) {
-              batches.push({
-                  prompt: userPrompt,
-                  images: [...state.inputImages],
-                  aspectRatio: aspectRatio,
-                  resolution: resolution,
-                  styleName: null
-              });
-          }
-      }
+      });
 
+      // UI : Placeholders
       const newItems = batches.map(b => ({
           id: Date.now() + Math.random(), 
           loading: true, 
-          prompt: b.prompt,
+          prompt: b.label, // AFFICHE LE LABEL (Nom du bouton)
           aspectRatio: b.aspectRatio
       }));
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
 
+      // UI : Reset Selection
       state.selectedImgStyles = []; 
       renderImgStylesButtons(); 
 
+      // Execution
       newItems.forEach(async (item, index) => {
           const batchData = batches[index];
           try {
               const res = await fetch("/api/gemini", { 
                   method: "POST", 
                   body: JSON.stringify({ 
-                      prompt: batchData.prompt,
+                      prompt: batchData.prompt, // Prompt complet envoyé à l'API
                       images: batchData.images, 
                       aspectRatio: batchData.aspectRatio,
                       resolution: batchData.resolution
@@ -446,7 +459,7 @@
         <div class="gen-image-card ${state.selectedSessionImagesIdx.includes(item) ? 'selected' : ''}" onclick="window.toggleSessionImg('${item.id}')">
            <img src="data:image/jpeg;base64,${item.image}">
            <div class="gen-image-overlay">${item.prompt}</div>
-           <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; background:rgba(255,255,255,0.8); color:black; border:none;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button>
+           <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button>
         </div>
       `}).join("");
 
@@ -456,6 +469,7 @@
           savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default;">
              <img src="data:image/jpeg;base64,${state.imageBase64}">
              <div class="gen-image-overlay" style="background:var(--text-main); color:white; font-weight:bold;">ORIGINAL</div>
+             <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInputOrig()" title="Utiliser">＋</button>
           </div>`;
       }
 
@@ -463,8 +477,11 @@
         <div class="gen-image-card" draggable="true" ondragstart="dragStart(event, ${i})" ondrop="drop(event, ${i})" ondragover="allowDrop(event)">
            <img src="data:image/jpeg;base64,${item.image}">
            <div class="gen-image-overlay">${item.prompt}</div>
-           <button class="icon-btn-small" style="position:absolute; top:5px; right:35px; background:rgba(255,255,255,0.8); color:black; border:none;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button>
-           <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; background:rgba(255,255,255,0.8); color:red; border:none;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button>
+           <button class="icon-btn-small" style="position:absolute; top:5px; right:55px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInput(${i})" title="Utiliser">＋</button>
+           
+           <button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button>
+           
+           <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:red; border:1px solid #ccc;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button>
         </div>
       `).join("");
       
@@ -478,18 +495,35 @@
   window.drop = async (e, i) => {
       e.preventDefault();
       if (dragSrcIndex === null || dragSrcIndex === i) return;
-      // Reorder locally
       const item = state.savedGeneratedImages.splice(dragSrcIndex, 1)[0];
       state.savedGeneratedImages.splice(i, 0, item);
       renderGenImages();
-      // Persist order (silent save)
       if (state.currentHistoryId) {
           try {
               const payload = { id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) };
               await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
               const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
               if (histItem) histItem.generated_images = payload.generated_images;
-          } catch(err) { console.error("Reorder failed", err); }
+          } catch(err) {}
+      }
+  };
+
+  // --- INPUT MANAGEMENT (AJOUTER SAVED/ORIGINAL) ---
+  window.addSavedToInput = (index) => {
+      const item = state.savedGeneratedImages[index];
+      if(item && !state.inputImages.includes(item.image)) {
+          state.inputImages.push(item.image);
+          renderInputImages();
+          // Basculer sur l'onglet chat pour voir l'ajout
+          document.querySelector('button[data-tab="tab-img-chat"]').click();
+      }
+  };
+
+  window.addSavedToInputOrig = () => {
+      if(state.imageBase64 && !state.inputImages.includes(state.imageBase64)) {
+          state.inputImages.push(state.imageBase64);
+          renderInputImages();
+          document.querySelector('button[data-tab="tab-img-chat"]').click();
       }
   };
 
@@ -499,17 +533,21 @@
       
       const idx = state.selectedSessionImagesIdx.indexOf(item);
       if (idx > -1) {
-          // Deselection : Retirer de la liste de selection ET des inputs
+          // Deselection
           state.selectedSessionImagesIdx.splice(idx, 1);
+          // On retire aussi de l'input si présent
           const imgToRemove = item.image;
-          state.inputImages = state.inputImages.filter(img => img !== imgToRemove);
+          const inputIdx = state.inputImages.indexOf(imgToRemove);
+          if (inputIdx > -1) state.inputImages.splice(inputIdx, 1);
       }
       else {
-          // Selection : Ajouter à la liste ET aux inputs
+          // Selection -> AJOUT AUTOMATIQUE AU CHAT (INPUT)
           state.selectedSessionImagesIdx.push(item);
-          state.inputImages.push(item.image);
+          if (!state.inputImages.includes(item.image)) {
+              state.inputImages.push(item.image);
+          }
       }
-      renderInputImages(); // Met à jour la barre du chat
+      renderInputImages(); 
       renderGenImages();
   };
 
@@ -799,8 +837,6 @@
     } catch(e) { alert("Erreur suppression: " + e.message); } finally { stopLoading(); }
   };
 
-  // RESTAURATION DES FONCTIONS MANQUANTES DE L'HISTORIQUE
-  
   async function loadHistory() { 
       try { 
           const r = await fetch("/api/history"); 
@@ -844,15 +880,13 @@
     state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
     state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
     
-    // RESTORE GENERATED IMAGES
     state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
-    state.sessionGeneratedImages = []; // Reset session on restore
+    state.sessionGeneratedImages = []; 
     
     $("titleText").textContent = item.title; $("descText").textContent = item.description; $("productUrlInput").value = item.product_url || "";
     $("previewImg").src = `data:image/jpeg;base64,${item.image}`; state.imageBase64 = item.image; $("preview").classList.remove("hidden");
     $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; renderHistoryUI();
     
-    // Re-init inputs for generator
     state.inputImages = [item.image]; renderInputImages(); renderGenImages();
   };
 
