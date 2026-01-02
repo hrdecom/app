@@ -19,23 +19,16 @@ export async function onRequestPost({ request, env }) {
     } else if (action === "headlines") {
       prompt = `${config.promptHeadlines}\n${jsonSafeRule}\nLANGUAGE: English.\nCONTEXT: Title: ${currentTitle}\nSTYLE: ${style}\nTASK: 5 hooks. JSON: { "headlines": ["...", "..."] }`;
     } else if (action === "ad_copys") {
-      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nDEFAULT LANGUAGE: English.\nPRODUCT: ${currentTitle}\nSTYLE: ${style}\nTASK: Generate 3 variations following the structure. JSON: { "ad_copys": ["...", "..."] }`;
+      prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nDEFAULT LANGUAGE: English.\nPRODUCT: ${currentTitle}\nSTYLE: ${style}\nTASK: Generate 3 variations. JSON: { "ad_copys": ["...", "..."] }`;
     } else if (action === "headlines_similar") {
       prompt = `Viral Copywriting Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Task: 5 improved varied versions. English. JSON: { "headlines": ["...", "..."] }`;
     } else if (action === "ad_copys_similar") {
-      prompt = `Facebook Ads Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Task: 3 improved variations following structure. English. JSON: { "ad_copys": ["...", "..."] }`;
-    } 
-    // TRADUCTION AMELIORÉE
-    else if (action === "translate") {
-      prompt = `You are a professional luxury translator. 
-      TASK: Translate these items into ${targetLang}.
-      - Maintain premium tone.
-      - Keep emojis and line breaks exactly as provided.
-      
-      ITEMS TO TRANSLATE: ${JSON.stringify(itemsToTranslate)}
-      ${infoToTranslate ? `INFO BLOCK TO TRANSLATE: ${JSON.stringify(infoToTranslate)}` : ''}
-      
-      Output ONLY JSON: { "translated_items": [...], "translated_info": { "title1": "...", "title2": "...", "title3": "...", "title4": "...", "sub": "..." } }`;
+      prompt = `Facebook Ads Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Task: 3 variations following strict structure. English. JSON: { "ad_copys": ["...", "..."] }`;
+    } else if (action === "translate") {
+      prompt = `Professional luxury translator. TASK: Translate items into ${targetLang}. Keep structure, line breaks, emojis. Do NOT change URLs.
+      ITEMS: ${JSON.stringify(itemsToTranslate)}
+      ${infoToTranslate ? `INFO: ${JSON.stringify(infoToTranslate)}` : ''}
+      Output JSON: { "translated_items": [...], "translated_info": { "title1": "...", "title2": "...", "title3": "...", "title4": "...", "sub": "..." } }`;
     }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
