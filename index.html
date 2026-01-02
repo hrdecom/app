@@ -27,21 +27,30 @@
       </div>
       <div id="tab-collections" class="tab-content"><div id="collectionsList"></div><button id="addCollection" class="secondary-btn">+ Ajouter collection</button></div>
       <div id="tab-prompts" class="tab-content hidden">
-        <div class="prompt-segment"><label>Rôle Système</label><textarea id="promptSystem" rows="4"></textarea></div>
-        <div class="prompt-segment"><label>Titres</label><textarea id="promptTitles" rows="4"></textarea></div>
-        <div class="prompt-segment"><label>Descriptions</label><textarea id="promptDesc" rows="4"></textarea></div>
+        <div class="prompt-segment"><label>1. Rôle Système</label><textarea id="promptSystem" rows="4"></textarea></div>
+        <div class="prompt-segment"><label>2. Règles pour les Titres</label><textarea id="promptTitles" rows="4"></textarea></div>
+        <div class="prompt-segment"><label>3. Règles pour les Descriptions</label><textarea id="promptDesc" rows="4"></textarea></div>
       </div>
       <div id="tab-headlines-config" class="tab-content hidden">
-        <label>Prompt Principal Headlines</label><textarea id="promptHeadlines" rows="6"></textarea>
-        <label>Boutons de Styles</label><div id="styleButtonsEditor"></div><button id="addStyleBtn" class="secondary-btn">+ Ajouter style</button>
+        <label>Prompt Headlines</label><textarea id="promptHeadlines" rows="6"></textarea>
+        <label>Styles Headlines</label><div id="styleButtonsEditor"></div><button id="addStyleBtn" class="secondary-btn">+ Ajouter style</button>
       </div>
       <div id="tab-ads-config" class="tab-content hidden">
-        <label>Prompt Principal Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea>
-        <label>Boutons de Styles Ads</label><div id="adStyleButtonsEditor"></div><button id="addAdStyleBtn" class="secondary-btn">+ Ajouter style</button>
+        <label>Prompt Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea>
+        <label>Styles Ads</label><div id="adStyleButtonsEditor"></div><button id="addAdStyleBtn" class="secondary-btn">+ Ajouter style</button>
       </div>
       <div id="tab-blacklist" class="tab-content hidden"><textarea id="configBlacklist" rows="12"></textarea></div>
       <div class="modal-footer"><button id="saveConfig" class="primary-btn">Enregistrer tout</button></div>
     </div>
+  </div>
+
+  <!-- MODAL TRADUCTION SÉLECTEUR -->
+  <div id="langModal" class="modal hidden">
+      <div class="modal-content" style="max-width: 400px; height: auto;">
+          <div class="modal-header"><h2>Traduire en...</h2><button id="closeLangModal" class="close-btn">×</button></div>
+          <div class="tab-content" id="langPickerList"></div>
+          <div class="modal-footer"><button id="confirmTranslateBtn" class="primary-btn" style="width:100%">Lancer la traduction</button></div>
+      </div>
   </div>
 
   <!-- MODAL HEADLINES -->
@@ -49,10 +58,7 @@
     <div class="modal-content">
       <div class="modal-header">
           <h2>Headlines</h2>
-          <div class="dropdown">
-              <button id="translateHlMenuBtn" class="secondary-btn">🌍 Traduire...</button>
-              <div id="hlLangList" class="dropdown-content"></div>
-          </div>
+          <button id="translateHlBtn" class="secondary-btn">🌍 Traduire...</button>
           <button id="closeHeadlines" class="close-btn">×</button>
       </div>
       <div class="tabs" id="headlinesTabs">
@@ -74,7 +80,7 @@
             <div id="headlinesSavedList" class="headlines-results"></div>
           </div>
       </div>
-      <div class="chat-container"><div class="chat-bar"><input type="text" id="headlineStyleInput" placeholder="Précisez votre demande..."/><button id="sendHeadlineChat">↑</button></div></div>
+      <div class="chat-container"><div class="chat-bar"><input type="text" id="headlineStyleInput" placeholder="Style..."/><button id="sendHeadlineChat">↑</button></div></div>
       <div class="modal-footer"><button id="saveHeadlinesBtn" class="primary-btn">Enregistrer sélections</button></div>
     </div>
   </div>
@@ -84,10 +90,7 @@
     <div class="modal-content">
       <div class="modal-header">
           <h2>Ad Copys</h2>
-          <div class="dropdown">
-              <button id="translateAdMenuBtn" class="secondary-btn">🌍 Traduire...</button>
-              <div id="adLangList" class="dropdown-content"></div>
-          </div>
+          <button id="translateAdsBtn" class="secondary-btn">🌍 Traduire...</button>
           <button id="closeAds" class="close-btn">×</button>
       </div>
       <div class="tabs" id="adsTabs">
@@ -135,7 +138,7 @@
       </section>
       <section class="card"><div class="card-head"><h3>Titre</h3><button id="copyTitle">⌘C</button></div><pre id="titleText"></pre></section>
       <section class="card"><div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div><pre id="descText"></pre>
-        <div style="margin-top:15px;"><label style="font-size:10px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Product URL</label><input type="text" id="productUrlInput" placeholder="https://en.riccardiparis.com/..."/></div>
+        <div style="margin-top:15px;"><label style="font-size:10px; font-weight:bold; color:var(--text-muted);">Product URL</label><input type="text" id="productUrlInput" placeholder="https://en.riccardiparis.com/..."/></div>
         <div style="display:flex; gap:10px; margin-top:15px;"><button id="openHeadlinesBtn" class="secondary-btn" style="flex:1;">🎬 Headlines</button><button id="openAdsBtn" class="secondary-btn" style="flex:1;">📢 Ad Copys</button></div>
       </section>
     </div>
