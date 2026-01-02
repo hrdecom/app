@@ -27,16 +27,16 @@
       </div>
       <div id="tab-collections" class="tab-content"><div id="collectionsList"></div><button id="addCollection" class="secondary-btn">+ Ajouter collection</button></div>
       <div id="tab-prompts" class="tab-content hidden">
-        <div class="prompt-segment"><label>1. Rôle Système</label><textarea id="promptSystem" rows="4"></textarea></div>
-        <div class="prompt-segment"><label>2. Règles pour les Titres</label><textarea id="promptTitles" rows="4"></textarea></div>
-        <div class="prompt-segment"><label>3. Règles pour les Descriptions</label><textarea id="promptDesc" rows="4"></textarea></div>
+        <div class="prompt-segment"><label>Rôle Système</label><textarea id="promptSystem" rows="4"></textarea></div>
+        <div class="prompt-segment"><label>Titres</label><textarea id="promptTitles" rows="4"></textarea></div>
+        <div class="prompt-segment"><label>Descriptions</label><textarea id="promptDesc" rows="4"></textarea></div>
       </div>
       <div id="tab-headlines-config" class="tab-content hidden">
-        <label>Prompt Principal Headlines</label><textarea id="promptHeadlines" rows="6"></textarea>
+        <label>Prompt Headlines</label><textarea id="promptHeadlines" rows="6"></textarea>
         <label>Boutons de Styles</label><div id="styleButtonsEditor"></div><button id="addStyleBtn" class="secondary-btn">+ Ajouter un style</button>
       </div>
       <div id="tab-ads-config" class="tab-content hidden">
-        <label>Prompt Principal Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea>
+        <label>Prompt Ad Copys</label><textarea id="promptAdCopys" rows="6"></textarea>
         <label>Boutons de Styles Ads</label><div id="adStyleButtonsEditor"></div><button id="addAdStyleBtn" class="secondary-btn">+ Ajouter un style ad</button>
       </div>
       <div id="tab-blacklist" class="tab-content hidden"><textarea id="configBlacklist" rows="12"></textarea></div>
@@ -44,33 +44,22 @@
     </div>
   </div>
 
-  <!-- MODAL TRADUCTION (SÉLECTEUR) -->
-  <div id="langModal" class="modal hidden">
-      <div class="modal-content" style="max-width: 400px;">
-          <div class="modal-header"><h2>Traduire en...</h2><button id="closeLangModal" class="close-btn">×</button></div>
-          <div class="tab-content">
-              <div id="langPickerList" class="lang-grid">
-                  <!-- Langues injectées par JS -->
-              </div>
-          </div>
-          <div class="modal-footer"><button id="confirmTranslateBtn" class="primary-btn" style="width:100%">Lancer la traduction</button></div>
-      </div>
-  </div>
-
   <!-- MODAL HEADLINES -->
   <div id="headlinesModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
-          <h2>Headlines Vidéos</h2>
-          <button id="translateHeadlinesBtn" class="secondary-btn" style="font-size:11px; margin-right:10px;">🌍 Traduire les résultats</button>
+          <h2>Headlines</h2>
+          <div class="dropdown">
+              <button id="translateHlMenuBtn" class="secondary-btn">🌍 Traduire...</button>
+              <div id="hlLangList" class="dropdown-content"></div>
+          </div>
           <button id="closeHeadlines" class="close-btn">×</button>
       </div>
       <div class="tabs" id="headlinesTabs">
         <button class="tab-link active" data-tab="tab-gen-headlines">Générer</button>
         <button class="tab-link" data-tab="tab-saved-headlines">Enregistrées</button>
-        <!-- Onglets langues ici -->
       </div>
-      <div id="headlinesTabContainer">
+      <div id="headlinesTabContainer" class="tab-container-scroll">
           <div id="tab-gen-headlines" class="tab-content">
             <div class="style-selector" id="styleSelectorContainer"></div>
             <div id="headlinesResults" class="headlines-results"></div>
@@ -95,15 +84,17 @@
     <div class="modal-content">
       <div class="modal-header">
           <h2>Ad Copys</h2>
-          <button id="translateAdsBtn" class="secondary-btn" style="font-size:11px; margin-right:10px;">🌍 Traduire les résultats</button>
+          <div class="dropdown">
+              <button id="translateAdMenuBtn" class="secondary-btn">🌍 Traduire...</button>
+              <div id="adLangList" class="dropdown-content"></div>
+          </div>
           <button id="closeAds" class="close-btn">×</button>
       </div>
       <div class="tabs" id="adsTabs">
         <button class="tab-link active" data-tab="tab-gen-ads">Générer</button>
         <button class="tab-link" data-tab="tab-saved-ads">Enregistrés</button>
-        <!-- Onglets langues ici -->
       </div>
-      <div id="adsTabContainer">
+      <div id="adsTabContainer" class="tab-container-scroll">
           <div id="tab-gen-ads" class="tab-content">
             <div class="style-selector" id="adStyleSelectorContainer"></div>
             <div id="adsResults" class="headlines-results"></div>
@@ -124,10 +115,7 @@
     </div>
   </div>
 
-  <div id="loading" class="loading hidden">
-    <div class="spinner"></div>
-    <div><strong>Action en cours...</strong><div id="timer">00:00</div></div>
-  </div>
+  <div id="loading" class="loading hidden"><div class="spinner"></div><div><strong>Action en cours...</strong><div id="timer">00:00</div></div></div>
 
   <section class="workspace">
     <div class="left">
@@ -147,7 +135,7 @@
       </section>
       <section class="card"><div class="card-head"><h3>Titre</h3><button id="copyTitle">⌘C</button></div><pre id="titleText"></pre></section>
       <section class="card"><div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div><pre id="descText"></pre>
-        <div style="margin-top:15px;"><label style="font-size:10px; font-weight:bold; color:var(--text-muted);">Product URL</label><input type="text" id="productUrlInput" placeholder="Lien boutique..."/></div>
+        <div style="margin-top:15px;"><label style="font-size:10px; font-weight:bold; color:var(--text-muted);">Product URL</label><input type="text" id="productUrlInput" placeholder="https://en.riccardiparis.com/..."/></div>
         <div style="display:flex; gap:10px; margin-top:15px;"><button id="openHeadlinesBtn" class="secondary-btn" style="flex:1;">🎬 Headlines</button><button id="openAdsBtn" class="secondary-btn" style="flex:1;">📢 Ad Copys</button></div>
       </section>
     </div>
