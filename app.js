@@ -2,14 +2,14 @@
   const $ = (id) => document.getElementById(id);
 
   const DEFAULTS = {
-    collections: [{ name: "Initial", meaning: "Jewelry featuring 26 letter variants." }],
+    collections: [{ name: "Initial", meaning: "Letter jewelry." }],
     promptSystem: "Senior luxury jewelry copywriter.",
     promptTitles: "TITLE: Adjustable {Collection} Ring \"{Name}\". NO hyphens.",
     promptDesc: "DESCRIPTION: 2 paras, <=180 chars. Tone: Luxury.",
     promptHeadlines: "Viral TikTok hooks expert.",
     promptAdCopys: "Facebook Ads expert. Structure: Hook, Bullets, CTA+URL.",
-    headlineStyles: [{ name: "POV", prompt: "Write from a POV perspective." }],
-    adStyles: [{ name: "Cadeau", prompt: "Focus on gifting emotion." }]
+    headlineStyles: [{ name: "POV", prompt: "POV perspective." }],
+    adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }]
   };
 
   const LANGUAGES = { "Danish": "dn.", "Dutch": "du.", "German": "de.", "Italian": "it.", "Polish": "pl.", "Portuguese (Brazil)": "pt-br.", "Portuguese (Portugal)": "pt.", "Spanish": "es." };
@@ -18,32 +18,38 @@
     imageBase64: null, imageMime: "image/jpeg", historyCache: [],
     config: JSON.parse(JSON.stringify(DEFAULTS)),
     currentPage: 1, pageSize: 5, searchQuery: "", currentHistoryId: null,
-    timerInterval: null,
-    sessionHeadlines: [], sessionAds: [],
+    timerInterval: null, sessionHeadlines: [], sessionAds: [],
     selectedHeadlines: [], selectedAds: [],
     headlinesTrans: {}, adsTrans: {},
     selHlStyles: [], selAdStyles: [],
-    hlPage: 1, adPage: 1
+    hlPage: 1, adPage: 1,
+    transLangs: []
   };
 
   const startLoading = () => {
-    let s = 0; $("timer").textContent = "00:00";
+    let s = 0; if ($("timer")) $("timer").textContent = "00:00";
     if (state.timerInterval) clearInterval(state.timerInterval);
-    state.timerInterval = setInterval(() => { s++; const mm = String(Math.floor(s/60)).padStart(2,"0"); const ss = String(s%60).padStart(2,"0"); $("timer").textContent = `${mm}:${ss}`; }, 1000);
-    $("loading").classList.remove("hidden");
+    state.timerInterval = setInterval(() => { s++; if ($("timer")) { const mm = String(Math.floor(s/60)).padStart(2,"0"); const ss = String(s%60).padStart(2,"0"); $("timer").textContent = `${mm}:${ss}`; } }, 1000);
+    if ($("loading")) $("loading").classList.remove("hidden");
   };
-  const stopLoading = () => { clearInterval(state.timerInterval); $("loading").classList.add("hidden"); };
+
+  const stopLoading = () => {
+    if (state.timerInterval) clearInterval(state.timerInterval);
+    if ($("loading")) $("loading").classList.add("hidden");
+  };
 
   async function loadConfig() {
-    const res = await fetch("/api/settings");
-    const data = await res.json();
-    const saved = data.find(i => i.id === 'full_config');
-    if (saved) {
-      state.config = JSON.parse(saved.value);
-      if (!state.config.headlineStyles) state.config.headlineStyles = [...DEFAULTS.headlineStyles];
-      if (!state.config.adStyles) state.config.adStyles = [...DEFAULTS.adStyles];
-    }
-    renderConfigUI();
+    try {
+        const res = await fetch("/api/settings");
+        const data = await res.json();
+        const saved = data.find(i => i.id === 'full_config');
+        if (saved) {
+          state.config = JSON.parse(saved.value);
+          if (!state.config.headlineStyles) state.config.headlineStyles = [...DEFAULTS.headlineStyles];
+          if (!state.config.adStyles) state.config.adStyles = [...DEFAULTS.adStyles];
+        }
+        renderConfigUI();
+    } catch (e) { console.error("Config fail", e); }
   }
 
   function renderConfigUI() {
@@ -56,14 +62,11 @@
     renderStyleSelectors();
   }
 
-  $("addCollection").onclick = () => { const div = document.createElement('div'); div.className="config-row collections-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button>`; $("collectionsList").appendChild(div); };
-  $("addStyleBtn").onclick = () => { const div = document.createElement('div'); div.className="config-row headline-style-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button>`; $("styleButtonsEditor").appendChild(div); };
-  $("addAdStyleBtn").onclick = () => { const div = document.createElement('div'); div.className="config-row ad-style-item"; div.style="display:flex; gap:10px; margin-bottom:10px;"; div.innerHTML=`<input type="text" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;"></textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button>`; $("adStyleButtonsEditor").appendChild(div); };
-
   function renderStyleSelectors() {
     $("styleSelectorContainer").innerHTML = (state.config.headlineStyles || []).map(s => `<div class="style-tag ${state.selHlStyles.includes(s.name) ? 'selected' : ''}" onclick="toggleStyle('hl', '${s.name}', this)">${s.name}</div>`).join("");
     $("adStyleSelectorContainer").innerHTML = (state.config.adStyles || []).map(s => `<div class="style-tag ${state.selAdStyles.includes(s.name) ? 'selected' : ''}" onclick="toggleStyle('ad', '${s.name}', this)">${s.name}</div>`).join("");
   }
+
   window.toggleStyle = (type, name, el) => {
     let list = (type === 'hl') ? state.selHlStyles : state.selAdStyles;
     if (list.includes(name)) list.splice(list.indexOf(name), 1); else list.push(name);
@@ -107,7 +110,6 @@
           state.adPage = 1; renderAds();
         }
       }
-      $("regenTitleBtn").disabled = $("regenDescBtn").disabled = false;
     } catch(e) { alert("Erreur: " + e.message); }
     finally { stopLoading(); }
   }
@@ -142,39 +144,56 @@
     }
   }
 
-  /* TRANSLATION LOGIC */
-  window.processTranslation = async (type, lang) => {
-    document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
+  /* TRANSLATION */
+  window.openTranslateModal = (type) => {
+    state.currentTranslationContext = type;
+    state.transLangs = [];
+    $("langPickerList").innerHTML = Object.keys(LANGUAGES).map(l => `<div class="lang-item" onclick="this.classList.toggle('selected'); toggleL('${l}')">${l}</div>`).join("");
+    $("langModal").classList.remove("hidden");
+  };
+  window.toggleL = (l) => { if(state.transLangs.includes(l)) state.transLangs = state.transLangs.filter(x => x!==l); else state.transLangs.push(l); };
+  
+  $("confirmTranslateBtn").onclick = async () => {
+    if(!state.transLangs.length) return;
+    $("langModal").classList.add("hidden");
     startLoading();
+    const type = state.currentTranslationContext;
     const itemsToTranslate = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
     let infoToTranslate = (type === 'ad') ? { title1: $("titleText").textContent, title2: $("titleText").textContent + " - Special Offer", title3: "Gift Idea - " + $("titleText").textContent, title4: $("titleText").textContent + " - Valentine's Day Gift Idea", sub: "Free Shipping Worldwide Today" } : null;
 
     try {
-      const res = await fetch("/api/generate", { method: "POST", body: JSON.stringify({ action: "translate", itemsToTranslate, infoToTranslate, targetLang: lang, config: state.config, image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value }) });
-      const data = await res.json();
-      if (type === 'hl') { state.headlinesTrans[lang] = { items: data.translated_items }; await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, headlines_trans: JSON.stringify(state.headlinesTrans) }) }); } 
-      else { state.adsTrans[lang] = { items: data.translated_items, info: data.translated_info }; await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, ads_trans: JSON.stringify(state.adsTrans) }) }); }
-      renderTranslationTabs(type);
-    } catch(e) { alert("Erreur Trad: " + e.message); }
+        await Promise.all(state.transLangs.map(async lang => {
+            const res = await fetch("/api/generate", { method: "POST", body: JSON.stringify({ action: "translate", itemsToTranslate, infoToTranslate, targetLang: lang, config: state.config, image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value }) });
+            const data = await res.json();
+            if(type==='hl') state.headlinesTrans[lang] = { items: data.translated_items };
+            else state.adsTrans[lang] = { items: data.translated_items, info: data.translated_info };
+        }));
+        const key = type === 'hl' ? 'headlines_trans' : 'ads_trans';
+        const val = type === 'hl' ? state.headlinesTrans : state.adsTrans;
+        await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [key]: JSON.stringify(val) }) });
+        renderTranslationTabs(type);
+    } catch(e) { alert(e.message); }
     finally { stopLoading(); }
   };
 
   function renderTranslationTabs(type) {
     const tabs = type === 'hl' ? $("headlinesTabs") : $("adsTabs");
     const container = type === 'hl' ? $("headlinesTabContainer") : $("adsTabContainer");
-    const transData = type === 'hl' ? state.headlinesTrans : state.adsTrans;
+    const data = type === 'hl' ? state.headlinesTrans : state.adsTrans;
     tabs.querySelectorAll(".lang-tab").forEach(t => t.remove());
     container.querySelectorAll(".lang-tab-content").forEach(c => c.remove());
-    Object.keys(transData).forEach(lang => {
-      const tabId = `tab-${type}-${lang.replace(/\s/g,'')}`;
-      const btn = document.createElement("button"); btn.className = "tab-link lang-tab"; btn.textContent = lang; btn.dataset.tab = tabId; btn.onclick = (e) => switchTab(e); tabs.appendChild(btn);
-      const content = document.createElement("div"); content.id = tabId; content.className = "tab-content hidden lang-tab-content";
-      let html = `<div class="headlines-results">` + transData[lang].items.map(t => `<div class="headline-item no-hover"><span class="headline-text" style="white-space:pre-wrap;">${t}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${t.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
-      if (type === 'ad' && transData[lang].info) {
-          const info = transData[lang].info; const langUrl = ($("productUrlInput").value).replace("en.", LANGUAGES[lang] || "en.");
-          html += `<div class="ads-info-block">` + [`TITRE 1|${info.title1}`, `TITRE 2|${info.title2}`, `TITRE 3|${info.title3}`, `TITRE 4|${info.title4}`, `SUB|${info.sub}`, `URL|${langUrl}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1]}\`)">📋</button></div>`).join("") + `</div>`;
-      }
-      content.innerHTML = html; container.appendChild(content);
+
+    Object.keys(data).forEach(lang => {
+        const tabId = `tab-${type}-${lang.replace(/\s/g,'')}`;
+        const btn = document.createElement("button"); btn.className = "tab-link lang-tab"; btn.textContent = lang; btn.dataset.tab = tabId;
+        btn.onclick = (e) => switchTab(e); tabs.appendChild(btn);
+        const content = document.createElement("div"); content.id = tabId; content.className = "tab-content hidden lang-tab-content";
+        let html = `<div class="headlines-results">` + data[lang].items.map(t => `<div class="headline-item no-hover"><span class="headline-text" style="white-space:pre-wrap;">${t}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${t.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
+        if (type === 'ad' && data[lang].info) {
+            const info = data[lang].info; const langUrl = ($("productUrlInput").value).replace("en.", LANGUAGES[lang] || "en.");
+            html += `<div class="ads-info-block">` + [`TITRE 1|${info.title1}`, `TITRE 2|${info.title2}`, `TITRE 3|${info.title3}`, `TITRE 4|${info.title4}`, `SUB|${info.sub}`, `URL|${langUrl}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
+        }
+        content.innerHTML = html; container.appendChild(content);
     });
   }
 
@@ -205,18 +224,16 @@
     if(!confirm("Supprimer ?")) return;
     const list = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
     const trans = type === 'hl' ? state.headlinesTrans : state.adsTrans;
-    list.splice(i, 1);
-    Object.keys(trans).forEach(lang => { if(trans[lang].items[i]) trans[lang].items.splice(i, 1); });
-    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type === 'hl' ? 'headlines' : 'ad_copys']: JSON.stringify(list), [type === 'hl' ? 'headlines_trans' : 'ads_trans']: JSON.stringify(trans) }) });
+    list.splice(i, 1); Object.keys(trans).forEach(l => { if(trans[l].items[i]) trans[l].items.splice(i, 1); });
+    await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: JSON.stringify(list), [type==='hl'?'headlines_trans':'ads_trans']: JSON.stringify(trans) }) });
     type === 'hl' ? (renderSavedHl(), renderTranslationTabs('hl')) : (renderSavedAds(), renderTranslationTabs('ad'));
   };
-
-  window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
 
   function init() {
     $("loading").classList.add("hidden");
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => $("settingsModal").classList.add("hidden");
+    $("closeLangModal").onclick = () => $("langModal").classList.add("hidden");
     $("saveConfig").onclick = async () => {
       ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys"].forEach(id => state.config[id] = $(id).value);
       state.config.blacklist = $("configBlacklist").value;
@@ -231,21 +248,16 @@
     $("openAdsBtn").onclick = () => { if(!state.currentHistoryId) return; $("adsModal").classList.remove("hidden"); renderSavedAds(); renderTranslationTabs('ad'); };
     $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
     $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
-
-    $("translateHlMenuBtn").onclick = (e) => { e.stopPropagation(); $("hlLangList").classList.toggle('show'); };
-    $("translateAdMenuBtn").onclick = (e) => { e.stopPropagation(); $("adLangList").classList.toggle('show'); };
-    window.onclick = (e) => { if (e.target.classList.contains('modal')) e.target.classList.add("hidden"); document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show')); };
+    $("translateHlBtn").onclick = () => openTranslateModal('hl');
+    $("translateAdsBtn").onclick = () => openTranslateModal('ad');
 
     document.querySelectorAll(".tab-link").forEach(btn => btn.onclick = (e) => switchTab(e));
-
     $("sendHeadlineChat").onclick = () => apiCall('headlines', { userText: $("headlineStyleInput").value });
     $("sendAdChat").onclick = () => apiCall('ad_copys', { userText: $("adStyleInput").value });
-    $("genSimilarBtn").onclick = () => { const sel = []; document.querySelectorAll('#headlinesResults .selected .headline-text').forEach(it => sel.push(it.innerText)); apiCall('headlines_similar', { selectedForSimilar: sel }); };
-    $("genSimilarAdsBtn").onclick = () => { const sel = []; document.querySelectorAll('#adsResults .selected .headline-text').forEach(it => sel.push(it.innerText.split('\n').pop())); apiCall('ad_copys_similar', { selectedForSimilar: sel }); };
-
+    $("genSimilarBtn").onclick = () => { const sel = Array.from(document.querySelectorAll('#headlinesResults .selected .headline-text')).map(it => it.innerText); apiCall('headlines_similar', { selectedForSimilar: sel }); };
+    $("genSimilarAdsBtn").onclick = () => { const sel = Array.from(document.querySelectorAll('#adsResults .selected .headline-text')).map(it => it.innerText.split('\n').pop()); apiCall('ad_copys_similar', { selectedForSimilar: sel }); };
     $("saveHeadlinesBtn").onclick = () => saveSelections('hl');
     $("saveAdsBtn").onclick = () => saveSelections('ad');
-    $("productUrlInput").onchange = async () => { if(state.currentHistoryId) await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, product_url: $("productUrlInput").value }) }); };
 
     $("generateBtn").onclick = () => apiCall('generate');
     $("regenTitleBtn").onclick = () => apiCall('regen_title');
@@ -258,21 +270,16 @@
         state.imageMime = ev.target.result.split(";")[0].split(":")[1]; state.imageBase64 = ev.target.result.split(",")[1];
         $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden");
         $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
-        state.currentHistoryId = null; state.sessionHeadlines = []; state.sessionAds = [];
+        state.currentHistoryId = null;
       }; r.readAsDataURL(f);
     };
-
-    $("removeImage").onclick = (e) => {
-      e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null;
-      $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block";
-      $("generateBtn").disabled = true; $("regenTitleBtn").disabled = true; $("regenDescBtn").disabled = true;
-    };
-
+    $("removeImage").onclick = (e) => { e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null; $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block"; $("generateBtn").disabled = true; };
     $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
+
     loadConfig(); loadHistory();
   }
 
-  async function loadHistory() { const r = await fetch("/api/history"); state.historyCache = await r.json(); renderHistoryUI(); }
+  async function loadHistory() { try { const r = await fetch("/api/history"); state.historyCache = await r.json(); renderHistoryUI(); } catch(e){} }
   function renderHistoryUI() {
     const filtered = state.historyCache.filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
     const start = (state.currentPage - 1) * 5; const pag = filtered.slice(start, start + 5);
@@ -298,6 +305,7 @@
   };
 
   window.deleteItem = async (id) => { if(!confirm("Supprimer ?")) return; await fetch(`/api/history?id=${id}`, { method: "DELETE" }); if(state.currentHistoryId == id) state.currentHistoryId = null; loadHistory(); };
+  window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
 
   init();
 })();
