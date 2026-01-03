@@ -48,46 +48,57 @@
 
           <div id="tab-img-styles" class="tab-content hidden" style="padding:0; background:#F2F2F7;">
              <div class="tree-toolbar">
-                <input type="text" id="newCatName" placeholder="Nouvelle Catégorie..." style="flex:1;">
-                <button id="addCategoryBtn" class="primary-btn small-btn">+ Catégorie</button>
+                <input type="text" id="newCatName" placeholder="Nom nouvelle Catégorie..." style="flex:1;">
+                <button id="addCategoryBtn" class="primary-btn small-btn">+ Ajouter</button>
              </div>
-             <div class="tree-editor-container" id="treeEditor">
-                <div style="padding:40px; text-align:center; color:#999; font-weight:500;">Chargement de la structure...</div>
+             <div class="tree-editor-wrapper">
+                <div class="tree-editor-container" id="treeEditor">
+                    <div style="padding:40px; text-align:center; color:#999; font-weight:500;">Chargement de la structure...</div>
+                </div>
              </div>
 
-             <div id="nodeEditorOverlay" class="hidden" style="position:absolute; inset:0; background:rgba(255,255,255,0.95); backdrop-filter:blur(10px); z-index:10; display:flex; flex-direction:column; padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <h3 id="nodeEditorTitle" style="margin:0;">Éditer</h3>
-                    <button id="cancelNodeBtn" class="secondary-btn" style="padding:4px 10px;">Fermer</button>
-                </div>
+             <div id="nodeEditorOverlay" class="hidden" style="position:absolute; inset:0; background:rgba(255,255,255,0.6); backdrop-filter:blur(20px); z-index:10; display:flex; flex-direction:column; padding:20px; align-items: center; justify-content: center;">
                 
-                <input type="hidden" id="editNodeId">
-                <input type="hidden" id="editNodeType">
-                
-                <div style="background:#fff; padding:20px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,0.05); border:1px solid #eee;">
-                    <label>Nom</label>
-                    <input type="text" id="editNodeName" class="settings-select" style="margin-bottom:15px;">
-                    
-                    <div id="editPromptContainer" class="hidden">
-                        <label>Prompt IA</label>
-                        <textarea id="editNodePrompt" rows="3" class="settings-select" style="margin-bottom:15px;"></textarea>
-                        
-                        <label>Image de référence (Optionnel)</label>
-                        <div style="display:flex; gap:10px; align-items:center; margin-bottom:15px;">
-                            <div id="editNodeImgPreview" style="width:50px; height:50px; background:#f0f0f0; border-radius:8px; overflow:hidden; border:1px solid #ddd;"></div>
-                            <input type="file" id="editNodeFile" accept="image/*">
-                        </div>
-                        
-                        <label>Mode</label>
-                        <select id="editNodeMode" class="settings-select">
-                            <option value="auto">⚡ Auto (Envoi direct)</option>
-                            <option value="manual">📝 Manuel (Ajout texte)</option>
-                        </select>
+                <div style="background:#fff; width: 100%; max-width: 500px; border-radius:18px; box-shadow:0 10px 40px rgba(0,0,0,0.15); border:1px solid #e5e5e5; overflow: hidden; display:flex; flex-direction:column;">
+                    <div style="padding: 15px 20px; border-bottom: 1px solid #eee; display:flex; justify-content:space-between; align-items:center; background: #fbfbfd;">
+                         <h3 id="nodeEditorTitle" style="margin:0; font-size: 16px;">Éditer</h3>
+                         <button id="cancelNodeBtn" style="background:none; border:none; color:#007AFF; font-weight:600; cursor:pointer;">Annuler</button>
                     </div>
 
-                    <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
-                        <button id="deleteNodeBtn" class="secondary-btn" style="color:red; border-color:#ffcccc;">Supprimer</button>
-                        <button id="saveNodeBtn" class="primary-btn">Enregistrer</button>
+                    <div style="padding:20px; display:flex; flex-direction:column; gap: 15px;">
+                        <input type="hidden" id="editNodeId">
+                        <input type="hidden" id="editNodeType">
+                        
+                        <div>
+                            <label style="display:block; font-size:12px; font-weight:600; color:#888; margin-bottom:5px; text-transform:uppercase;">Nom</label>
+                            <input type="text" id="editNodeName" class="ios-input" placeholder="Nom de l'élément">
+                        </div>
+                        
+                        <div id="editPromptContainer" class="hidden">
+                            <label style="display:block; font-size:12px; font-weight:600; color:#888; margin-bottom:5px; text-transform:uppercase;">Prompt IA</label>
+                            <textarea id="editNodePrompt" rows="3" class="ios-input" placeholder="Prompt en anglais..."></textarea>
+                            
+                            <div style="margin-top:15px;">
+                                <label style="display:block; font-size:12px; font-weight:600; color:#888; margin-bottom:5px; text-transform:uppercase;">Image Référence</label>
+                                <div style="display:flex; gap:10px; align-items:center;">
+                                    <div id="editNodeImgPreview" style="width:50px; height:50px; background:#f0f0f0; border-radius:8px; overflow:hidden; border:1px solid #ddd; flex-shrink:0;"></div>
+                                    <input type="file" id="editNodeFile" accept="image/*" style="font-size:12px;">
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top:15px;">
+                                <label style="display:block; font-size:12px; font-weight:600; color:#888; margin-bottom:5px; text-transform:uppercase;">Mode</label>
+                                <select id="editNodeMode" class="ios-input">
+                                    <option value="auto">⚡ Auto (Envoi direct)</option>
+                                    <option value="manual">📝 Manuel (Ajout texte)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="padding: 15px 20px; background: #fbfbfd; border-top: 1px solid #eee; display:flex; justify-content:space-between;">
+                         <button id="deleteNodeBtn" style="color:#FF3B30; background:none; border:none; font-weight:600; cursor:pointer;">Supprimer</button>
+                         <button id="saveNodeBtn" class="primary-btn" style="padding: 6px 16px; border-radius: 20px;">Enregistrer</button>
                     </div>
                 </div>
              </div>
