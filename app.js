@@ -38,10 +38,12 @@
     selectedSessionImagesIdx: [],
     // ETATS UI STUDIO
     currentImgCategory: "",
+    currentStudioGroup: "", // NOUVEAU : Groupe sélectionné dans le menu déroulant
+    activeFolderId: null,   // NOUVEAU : Dossier sélectionné pour afficher ses styles
     selectedImgStyles: [], 
     manualImgStyles: [],   
     editingImgStyleIndex: null,
-    expandedFolders: [] // Pour ouvrir/fermer les dossiers
+    expandedFolders: [] // Pour ouvrir/fermer les dossiers (Legacy config)
   };
 
   const startLoading = () => {
@@ -280,67 +282,97 @@
 
   window.setImgCategory = (c) => {
       state.currentImgCategory = c;
-      state.expandedFolders = []; // Reset folders on tab change
+      state.activeFolderId = null; // Reset folder on cat change
+      state.currentStudioGroup = ""; // Reset group on cat change
       renderStudioCategories();
       renderImgStylesButtons();
   };
 
+  window.setStudioGroup = (g) => {
+      state.currentStudioGroup = g;
+      state.activeFolderId = null; // Reset folder on group change
+      renderImgStylesButtons();
+  };
+
+  window.setStudioFolder = (fid) => {
+      // Toggle logic or switch logic?
+      // Si on clique sur le même, on peut désélectionner, ou juste garder. 
+      // Ici on switch simplement.
+      state.activeFolderId = (state.activeFolderId === fid) ? null : fid;
+      renderImgStylesButtons();
+  };
+
+  // NOUVELLE VERSION : Groupes en Dropdown, Dossiers en Boutons, Styles en dessous
   function renderImgStylesButtons() {
       const container = $("imgGenStylesContainer");
       if(!container) return;
-      
+
       // 1. Filtrer les Dossiers pour la catégorie active
       const activeFolders = (state.config.imgFolders || []).filter(f => f.category === state.currentImgCategory);
 
-      // 2. Grouper par "Group" (Sections)
-      const groupsMap = {};
-      activeFolders.forEach(f => {
-          if(!groupsMap[f.group]) groupsMap[f.group] = [];
-          groupsMap[f.group].push(f);
-      });
+      // 2. Extraire les Groupes disponibles dans ces dossiers
+      const availableGroups = [...new Set(activeFolders.map(f => f.group))].sort();
+      
+      // Auto-select first group if none selected or invalid
+      if (!state.currentStudioGroup || !availableGroups.includes(state.currentStudioGroup)) {
+          if (availableGroups.length > 0) state.currentStudioGroup = availableGroups[0];
+          else state.currentStudioGroup = "";
+      }
 
       let html = "";
 
-      // 3. Rendu par Groupe
-      Object.keys(groupsMap).forEach(groupName => {
-          html += `<div style="font-size:10px; font-weight:bold; color:#888; margin-top:8px; margin-bottom:4px; text-transform:uppercase; border-bottom:1px solid #eee; padding-bottom:2px;">${groupName}</div>`;
-          
-          // Rendu des Dossiers dans ce groupe
-          groupsMap[groupName].forEach(folder => {
-             const isExpanded = state.expandedFolders.includes(folder.id);
-             
-             // Trouver les enfants
-             const children = (state.config.imgStyles || []).filter(s => s.folderId === folder.id);
-             const hasActiveChild = children.some(s => 
-                 (s.mode === 'manual' && state.manualImgStyles.includes(s.name)) ||
-                 (s.mode !== 'manual' && state.selectedImgStyles.some(sel => sel.name === s.name))
-             );
+      // A. RENDU DU DROPDOWN (Groupe)
+      if (availableGroups.length > 0) {
+          html += `
+          <div style="margin-bottom:10px;">
+             <select onchange="window.setStudioGroup(this.value)" class="settings-select" style="margin-top:0; padding:6px; font-weight:bold;">
+                ${availableGroups.map(g => `<option value="${g}" ${g === state.currentStudioGroup ? 'selected' : ''}>${g}</option>`).join("")}
+             </select>
+          </div>
+          `;
+      } else {
+          html += `<div style="font-size:11px; color:#888; padding:10px;">Aucun dossier dans cette catégorie.</div>`;
+      }
 
-             html += renderFolderBtn(folder, isExpanded, hasActiveChild);
-
-             if(isExpanded && children.length > 0) {
-                 html += `<div style="display:flex; flex-wrap:wrap; gap:6px; padding:8px; background:#f9f9f9; border-left:2px solid #ddd; margin-left:10px; margin-bottom:5px;">` +
-                         children.map(s => renderStyleBtn(s)).join("") +
-                         `</div>`;
-             }
+      // B. RENDU DES DOSSIERS (Boutons Tags) du Groupe Actif
+      const groupFolders = activeFolders.filter(f => f.group === state.currentStudioGroup);
+      
+      if (groupFolders.length > 0) {
+          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">`;
+          groupFolders.forEach(folder => {
+              const isActive = state.activeFolderId === folder.id;
+              // On utilise le style 'style-tag' pour ressembler aux prompts
+              html += `
+                <button onclick="window.setStudioFolder('${folder.id}')" 
+                        class="style-tag ${isActive ? 'selected' : ''}" 
+                        style="font-weight:bold; padding:6px 12px; font-size:11px;">
+                   📁 ${folder.name}
+                </button>
+              `;
           });
-      });
+          html += `</div>`;
+      }
+
+      // C. RENDU DES STYLES (Enfants du Dossier Actif)
+      if (state.activeFolderId) {
+          const folderStyles = (state.config.imgStyles || []).filter(s => s.folderId === state.activeFolderId);
+          
+          html += `<div style="background:#f9f9f9; border:1px solid #eee; border-radius:12px; padding:12px;">
+             <div style="font-size:10px; font-weight:bold; color:#888; margin-bottom:8px; text-transform:uppercase;">Prompts Disponibles</div>
+             <div style="display:flex; flex-wrap:wrap; gap:8px;">`;
+          
+          if (folderStyles.length === 0) {
+              html += `<span style="font-size:11px; color:#999;">Aucun prompt dans ce dossier.</span>`;
+          } else {
+              folderStyles.forEach(s => {
+                  html += renderStyleBtn(s);
+              });
+          }
+          
+          html += `</div></div>`;
+      }
 
       container.innerHTML = html;
-  }
-
-  function renderFolderBtn(folder, isExpanded, isActive) {
-      const bgColor = isActive ? '#E1F0FF' : '#fff';
-      const arrow = isExpanded ? '▼' : '▶';
-      
-      return `
-         <button class="folder-btn-click" 
-            data-folder="${folder.id}"
-            style="width:100%; text-align:left; display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid #eee; background:${bgColor}; padding:6px 10px; border-radius:8px; margin-bottom:2px; transition: all 0.2s; font-weight:500; color:#333; cursor:pointer; font-size:12px;">
-            <span>📁 ${folder.name}</span>
-            <span style="font-size:10px; color:#888;">${arrow}</span>
-         </button>
-      `;
   }
 
   function renderStyleBtn(s) {
@@ -355,7 +387,6 @@
       const bgColor = isActive ? '#007AFF' : '#fff';
       const color = isActive ? '#fff' : '#1d1d1f';
       
-      // IMPORTANT : Utilisation de data-name pour le clic
       return `
          <button class="style-tag style-btn-click" 
             data-name="${s.name.replace(/"/g, '&quot;')}"
@@ -374,20 +405,8 @@
           const name = btn.getAttribute('data-name');
           if (name) window.toggleImgStyle(name);
       }
-      // 2. Bouton Folder (Parent)
-      const fBtn = e.target.closest('.folder-btn-click');
-      if (fBtn) {
-          const fid = fBtn.getAttribute('data-folder');
-          if (fid) window.toggleFolder(fid);
-      }
+      // Note: Les clics dossiers sont gérés via onclick inline dans le HTML généré
   });
-
-  window.toggleFolder = (fid) => {
-      const idx = state.expandedFolders.indexOf(fid);
-      if(idx > -1) state.expandedFolders.splice(idx, 1);
-      else state.expandedFolders.push(fid);
-      renderImgStylesButtons();
-  };
 
   // --- LOGIQUE TOGGLE STYLE ---
   window.toggleImgStyle = (styleName) => {
@@ -433,8 +452,6 @@
       renderImgStylesButtons();
   };
 
-  // ... (LE RESTE DU CODE APP.JS RESTE IDENTIQUE A LA VERSION PRECEDENTE, JE NE LE REPETE PAS POUR GAGNER DE LA PLACE MAIS IL FAUT LE GARDER : apiCall, callGeminiImageGen, restore, etc.)
-  
   /* --- COMMON API --- */
   async function apiCall(action, extra = {}) {
     if (!state.imageBase64) return;
