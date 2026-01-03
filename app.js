@@ -61,7 +61,7 @@
     const saved = data.find(i => i.id === 'full_config');
     if (saved) {
       const parsed = JSON.parse(saved.value);
-      state.config = { ...DEFAULTS, ...parsed }; 
+      state.config = { ...DEFAULTS, ...parsed }; // Merge
       if (!state.config.imgStyles) state.config.imgStyles = [];
       if (!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
     }
@@ -286,7 +286,6 @@
       const color = isActive ? '#fff' : '#1d1d1f';
       const shadow = isActive ? 'box-shadow: 0 2px 5px rgba(0,122,255,0.3);' : 'box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
 
-      // IMPORTANT : la classe "style-btn-click" permet l'écoute d'événement global
       return `
          <button class="style-tag style-btn-click" 
             data-name="${s.name.replace(/"/g, '&quot;')}"
@@ -300,7 +299,6 @@
 
   // --- EVENT LISTENER ROBUSTE POUR LES CLICS ---
   document.addEventListener('click', function(e) {
-      // On cherche le bouton le plus proche avec la classe
       const btn = e.target.closest('.style-btn-click');
       if (btn) {
           const name = btn.getAttribute('data-name');
@@ -323,14 +321,11 @@
           if (idx > -1) {
               // DESACTIVATION
               state.manualImgStyles.splice(idx, 1);
-              
               if (currentText.includes(promptClean)) {
-                  // On retire le prompt proprement
                   const parts = currentText.split(promptClean);
                   currentText = parts.map(p => p.trim()).filter(p => p).join(" ");
                   $("imgGenPrompt").value = currentText;
               }
-
               if (style.refImage) {
                   const imgIdx = state.inputImages.indexOf(style.refImage);
                   if (imgIdx > -1) state.inputImages.splice(imgIdx, 1);
@@ -339,11 +334,9 @@
           } else {
               // ACTIVATION
               state.manualImgStyles.push(styleName);
-              
               if (!currentText.includes(promptClean)) {
                   $("imgGenPrompt").value = (currentText + " " + promptClean).trim();
               }
-
               if (style.refImage && !state.inputImages.includes(style.refImage)) {
                   state.inputImages.push(style.refImage);
                   renderInputImages();
@@ -422,7 +415,6 @@
   
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   
-  // --- MOTEUR DE GÉNÉRATION ---
   async function callGeminiImageGen() {
       const userPrompt = $("imgGenPrompt").value;
       if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style.");
@@ -484,10 +476,10 @@
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
 
-      // NETTOYAGE UI (POST-SEND)
+      // NETTOYAGE UI
       state.selectedImgStyles = []; 
       state.manualImgStyles = [];
-      $("imgGenPrompt").value = ""; // ON VIDE
+      $("imgGenPrompt").value = ""; 
       renderImgStylesButtons(); 
 
       // EXECUTION
@@ -566,7 +558,6 @@
       }
 
       savedHtml += state.savedGeneratedImages.map((item, i) => {
-          // SELECTION VISUELLE : BORDURE BLEUE
           const isSelected = state.inputImages.includes(item.image);
           const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : '';
 
@@ -888,4 +879,3 @@
 
   init();
 })();
-}
