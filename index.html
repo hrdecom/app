@@ -47,64 +47,68 @@
           </div>
 
           <div id="tab-img-styles" class="tab-content hidden">
-             <div style="margin-bottom:20px; border-bottom:1px solid #eee; padding-bottom:15px;">
-                <label style="font-size:11px; font-weight:bold; color:#888;">GESTION DES CATÉGORIES PRINCIPALES</label>
-                <div id="imgCategoriesList" style="display:flex; flex-wrap:wrap; gap:8px; margin:10px 0;"></div>
-                <div style="display:flex; gap:10px;">
-                   <input type="text" id="newImgCategoryInput" placeholder="Nouvelle catégorie..." style="padding:6px; border-radius:6px; border:1px solid #ccc; font-size:12px;">
-                   <button id="addImgCategoryBtn" class="secondary-btn" style="padding:4px 10px;">+ Créer</button>
-                </div>
-             </div>
-
-             <p style="font-size:12px; color:#666; margin-bottom:10px;">Boutons de styles existants (Cliquez sur ✏️ pour modifier) :</p>
-             <div id="imgStyleEditorList"></div>
              
-             <div id="imgStyleEditorForm" style="background:#f5f5f7; padding:15px; border-radius:12px; margin-top:15px; border:1px solid #ddd;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <label style="font-size:10px; font-weight:bold; color:#666;" id="imgStyleFormTitle">AJOUTER UN STYLE</label>
-                    <button id="cancelImgStyleEditBtn" class="secondary-btn hidden" style="font-size:10px; padding:2px 8px;">Annuler</button>
+             <div class="config-section">
+                <label>1. GROUPES (Sections Visuelles)</label>
+                <div id="imgGroupsList" class="tags-container"></div>
+                <div style="display:flex; gap:10px; margin-top:5px;">
+                   <input type="text" id="newImgGroupInput" placeholder="Nouveau groupe (ex: Couleurs)" style="flex:1;">
+                   <button id="addImgGroupBtn" class="secondary-btn">+ Créer Groupe</button>
                 </div>
-                
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:8px;">
-                   <div>
-                       <label style="font-size:10px; color:#666;">Nom du bouton</label>
-                       <input type="text" id="newImgStyleName" placeholder="Ex: Sur fond noir" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
-                   </div>
-                   <div>
-                       <label style="font-size:10px; color:#666;">Catégorie Principale</label>
-                       <select id="newImgStyleCategory" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
-                          <option value="">Général</option>
-                       </select>
-                   </div>
-                </div>
-
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:8px;">
-                    <div>
-                        <label style="font-size:10px; color:#666;">Sous-bouton / Groupe (Ex: "Couleurs")</label>
-                        <input type="text" id="newImgStyleSubCategory" placeholder="Nom du bouton parent..." style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
-                    </div>
-                    <div>
-                        <label style="font-size:10px; color:#666;">Mode d'application</label>
-                        <select id="newImgStyleMode" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc; font-weight:bold;">
-                           <option value="auto">⚡ Auto (Envoi direct)</option>
-                           <option value="manual">📝 Manuel (Écrit dans le chat)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div style="margin-top:8px;">
-                   <label style="font-size:10px; color:#666;">Image de référence (Optionnelle)</label>
-                   <input type="file" id="newImgStyleFile" accept="image/*" style="font-size:11px; display:block; margin-top:3px;">
-                   <div id="currentRefImgPreview" class="hidden" style="font-size:10px; color:green; margin-top:2px;">Image actuelle conservée</div>
-                </div>
-                
-                <div style="margin-top:8px;">
-                    <label style="font-size:10px; color:#666;">Prompt</label>
-                    <textarea id="newImgStylePrompt" rows="2" placeholder="Prompt (ex: Luxury packaging shot...)" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;"></textarea>
-                </div>
-                
-                <button id="addImgStyleBtn" class="secondary-btn" style="width:100%; margin-top:12px;">+ Enregistrer le Style</button>
              </div>
+
+             <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+
+             <div class="config-section">
+                <label>2. BOUTONS À CHOIX MULTIPLE (Dossiers)</label>
+                <div id="imgFoldersList" class="list-container"></div>
+                
+                <div class="add-box">
+                    <span style="font-size:10px; font-weight:bold; color:#666; margin-bottom:5px; display:block;">NOUVEAU DOSSIER</span>
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" id="newFolderInput" placeholder="Nom (ex: Or Jaune)" style="flex:1;">
+                        <select id="newFolderCategory" style="flex:1;"><option value="">Catégorie...</option></select>
+                        <select id="newFolderGroup" style="flex:1;"><option value="">Groupe...</option></select>
+                        <button id="addFolderBtn" class="primary-btn" style="padding:5px 10px;">Ajouter</button>
+                    </div>
+                </div>
+             </div>
+
+             <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+
+             <div class="config-section">
+                <label>3. BOUTONS PROMPTS (Actions)</label>
+                <p style="font-size:11px; color:#888; margin-bottom:10px;">Ces boutons seront placés DANS un dossier ci-dessus.</p>
+                <div id="imgStyleEditorList" class="list-container"></div>
+                
+                <div id="imgStyleEditorForm" class="add-box">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <label style="font-size:10px; font-weight:bold; color:#007AFF;" id="imgStyleFormTitle">AJOUTER UN PROMPT</label>
+                        <button id="cancelImgStyleEditBtn" class="secondary-btn hidden" style="font-size:10px; padding:2px 8px;">Annuler</button>
+                    </div>
+                    
+                    <div style="display:grid; grid-template-columns: 2fr 1fr; gap:10px; margin-bottom:10px;">
+                       <input type="text" id="newImgStyleName" placeholder="Nom du bouton (ex: Brillant)" style="width:100%;">
+                       <select id="newImgStyleFolder" style="width:100%; font-weight:bold;">
+                          <option value="">Choisir un Dossier...</option>
+                       </select>
+                    </div>
+
+                    <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                        <select id="newImgStyleMode" style="flex:1;">
+                           <option value="auto">⚡ Auto (Envoi direct)</option>
+                           <option value="manual">📝 Manuel (Ajout texte)</option>
+                        </select>
+                        <input type="file" id="newImgStyleFile" accept="image/*" style="font-size:11px; flex:1;">
+                        <div id="currentRefImgPreview" class="hidden" style="font-size:10px; color:green;">Img OK</div>
+                    </div>
+                    
+                    <textarea id="newImgStylePrompt" rows="2" placeholder="Prompt IA..." style="width:100%;"></textarea>
+                    
+                    <button id="addImgStyleBtn" class="secondary-btn" style="width:100%; margin-top:10px;">+ Enregistrer le Prompt</button>
+                </div>
+             </div>
+
           </div>
 
           <div id="tab-translate-config" class="tab-content hidden">
@@ -212,7 +216,7 @@
         <div class="chat-container">
            <div id="imgGenCategoriesBar" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #f0f0f0;"></div>
            
-           <div id="imgGenStylesContainer" style="display:flex; flex-direction:column; gap:10px; overflow-y:auto; padding:5px 5px 15px 5px; margin-bottom:10px; border-bottom:1px solid #f0f0f0; max-height: 250px;"></div>
+           <div id="imgGenStylesContainer" style="display:flex; flex-direction:column; gap:15px; overflow-y:auto; padding:5px 5px 15px 5px; margin-bottom:10px; border-bottom:1px solid #f0f0f0; max-height: 250px;"></div>
 
            <div id="inputImagesPreview" class="input-images-bar hidden"></div>
            
