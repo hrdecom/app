@@ -78,9 +78,18 @@
                    </div>
                 </div>
 
-                <div style="margin-top:8px;">
-                    <label style="font-size:10px; color:#666;">Sous-Catégorie (Optionnel)</label>
-                    <input type="text" id="newImgStyleSubCategory" placeholder="Ex: Changement de couleur, Mise en situation..." style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:8px;">
+                    <div>
+                        <label style="font-size:10px; color:#666;">Sous-Catégorie (Optionnel)</label>
+                        <input type="text" id="newImgStyleSubCategory" placeholder="Ex: Couleur, Mise en situation..." style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
+                    </div>
+                    <div>
+                        <label style="font-size:10px; color:#666;">Mode d'application</label>
+                        <select id="newImgStyleMode" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc; font-weight:bold;">
+                           <option value="auto">⚡ Auto (Caché & Rapide)</option>
+                           <option value="manual">📝 Manuel (Écrit dans le chat)</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div style="margin-top:8px;">
