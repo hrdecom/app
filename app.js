@@ -1,13 +1,14 @@
 (() => {
   const $ = (id) => document.getElementById(id);
 
-  // SVG ICONS (Vectoriels)
+  // SVG ICONS (Vectoriels & Complets)
   const ICONS = {
     folder: `<svg viewBox="0 0 24 24" class="icon-svg"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>`,
     group: `<svg viewBox="0 0 24 24" class="icon-svg"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>`,
     style: `<svg viewBox="0 0 24 24" class="icon-svg"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
     edit: `<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`,
-    add: `<svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>`
+    add: `<svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>`,
+    trash: `<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`
   };
 
   const DEFAULTS = {
@@ -105,13 +106,11 @@
           container.appendChild(catNode);
           const childrenContainer = catNode.querySelector('.tree-children');
 
-          // MIXED CONTENT FOR CATEGORY LEVEL (Groups + Folders + Styles)
-          // On récupère tout ce qui appartient à la catégorie, peu importe le type, et on trie.
+          // MIXED CONTENT FOR CATEGORY LEVEL
           const groups = (state.config.imgGroups||[]).filter(g => g.categoryId === cat.id);
           const folders = (state.config.imgFolders||[]).filter(f => f.parentType === 'category' && f.parentId === cat.id);
           const styles = (state.config.imgStyles||[]).filter(s => s.parentType === 'category' && s.parentId === cat.id);
 
-          // On ajoute une propriété 'dataType' temporaire pour le rendu récursif
           const mixedContent = [
               ...groups.map(g => ({...g, dataType: 'group'})),
               ...folders.map(f => ({...f, dataType: 'folder'})),
@@ -119,7 +118,6 @@
           ].sort((a,b) => (a.order||0) - (b.order||0));
           
           mixedContent.forEach(item => {
-             // Si c'est un groupe, on doit rendre ses enfants (mixte aussi)
              if(item.dataType === 'group') {
                  const grpNode = createTreeNode("group", item, cat.id);
                  childrenContainer.appendChild(grpNode);
@@ -171,24 +169,25 @@
       if (type === "style") icon = ICONS.style;
       
       let addBtns = "";
-      // Boutons "+" pour les conteneurs
-      if (type === "category") addBtns = `<button class="action-btn-ios" onclick="window.addNode('group', '${data.id}')" title="Ajouter Groupe">${ICONS.group}</button> <button class="action-btn-ios" onclick="window.addNode('folder', '${data.id}', 'category')" title="Ajouter Dossier">${ICONS.folder}</button> <button class="action-btn-ios" onclick="window.addNode('style', '${data.id}', 'category')" title="Ajouter Style">${ICONS.style}</button>`;
-      if (type === "group") addBtns = `<button class="action-btn-ios" onclick="window.addNode('folder', '${data.id}', 'group')" title="Ajouter Dossier">${ICONS.folder}</button> <button class="action-btn-ios" onclick="window.addNode('style', '${data.id}', 'group')" title="Ajouter Style">${ICONS.style}</button>`;
-      if (type === "folder") addBtns = `<button class="action-btn-ios" onclick="window.addNode('style', '${data.id}', 'folder')" title="Ajouter Style">${ICONS.style}</button>`;
+      // Boutons "+" pour les conteneurs uniquement
+      if (type === "category") addBtns = `<button class="action-btn-ios" onclick="window.addNode('group', '${data.id}')" title="Ajouter Groupe">${ICONS.group}</button> <button class="action-btn-ios" onclick="window.addNode('folder', '${data.id}', 'category')" title="Ajouter Btn Multiple">${ICONS.folder}</button> <button class="action-btn-ios" onclick="window.addNode('style', '${data.id}', 'category')" title="Ajouter Btn Simple">${ICONS.style}</button>`;
+      if (type === "group") addBtns = `<button class="action-btn-ios" onclick="window.addNode('folder', '${data.id}', 'group')" title="Ajouter Btn Multiple">${ICONS.folder}</button> <button class="action-btn-ios" onclick="window.addNode('style', '${data.id}', 'group')" title="Ajouter Btn Simple">${ICONS.style}</button>`;
+      if (type === "folder") addBtns = `<button class="action-btn-ios" onclick="window.addNode('style', '${data.id}', 'folder')" title="Ajouter Btn Simple">${ICONS.style}</button>`;
 
       el.innerHTML = `
         <div class="tree-header">
-            ${icon}
+            ${icon ? icon : ''}
             <span class="t-label">${data.name}</span>
             <div class="t-actions">
                 ${addBtns}
                 <button class="action-btn-ios" onclick="window.editNode('${type}', '${data.id}')">${ICONS.edit}</button>
+                <button class="action-btn-ios btn-delete" onclick="window.deleteNodeDirect('${type}', '${data.id}')">${ICONS.trash}</button>
             </div>
         </div>
         <div class="tree-children"></div>
       `;
 
-      // --- DRAG & DROP LOGIC ROBUSTE ---
+      // --- DRAG & DROP LOGIC ---
       const header = el.querySelector('.tree-header');
       
       el.addEventListener('dragstart', (e) => {
@@ -219,22 +218,32 @@
           const src = state.draggedItem.type;
           const dest = type;
 
-          // ZONE DETECTION
-          // Empêcher nesting dans un 'style' (bouton simple) car ce n'est pas un conteneur
+          // REGLE STRICTE DE SECURITE: Empêcher de sortir du cadre "Catégorie"
+          // Si on essaie de drop sur une catégorie (racine) sans être en mode nesting, on l'interdit si c'est un bouton/folder
+          if (dest === 'category' && (src !== 'category')) {
+              // Sur une catégorie, seul le nesting (drag-over-center) est autorisé pour les enfants
+              // On force le calcul de la zone center
+          }
+
+          // Autorisations de Nesting
           let canNest = false;
           if (dest === 'category') canNest = true;
           if (dest === 'group' && (src === 'folder' || src === 'style')) canNest = true;
           if (dest === 'folder' && src === 'style') canNest = true;
 
           if (y < height * 0.3) {
+              // Si on est sur une catégorie, "top" signifie "au dessus de la catégorie", donc hors contexte -> INTERDIT pour les enfants
+              if (dest === 'category' && src !== 'category') return; 
               header.classList.add('drag-over-top');
           } else if (y > height * 0.7) {
+              // Pareil pour "bottom"
+              if (dest === 'category' && src !== 'category') return; 
               header.classList.add('drag-over-bottom');
           } else {
               if (canNest) {
                   header.classList.add('drag-over-center');
               } else {
-                  // Si pas nesting possible, split en 2
+                  if (dest === 'category' && src !== 'category') return;
                   if (y < height * 0.5) header.classList.add('drag-over-top');
                   else header.classList.add('drag-over-bottom');
               }
@@ -250,6 +259,12 @@
           let action = 'nest';
           if (header.classList.contains('drag-over-top')) action = 'before';
           if (header.classList.contains('drag-over-bottom')) action = 'after';
+          
+          // Si aucune classe n'est mise (drop interdit), on ne fait rien
+          if (!header.classList.contains('drag-over-top') && !header.classList.contains('drag-over-bottom') && !header.classList.contains('drag-over-center')) {
+              return;
+          }
+
           header.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
           
           if(state.draggedItem && state.draggedItem.id !== data.id) {
@@ -259,9 +274,7 @@
       return el;
   }
 
-  // --- LOGIQUE TRI UNIVERSEL (MIXTE) ---
   window.moveNode = (src, dest, action) => {
-      // 1. Récupérer l'objet source (peu importe son type)
       const getList = (t) => {
           if (t === 'category') return state.config.imgCategories;
           if (t === 'group') return state.config.imgGroups;
@@ -274,114 +287,83 @@
       const srcItem = srcList.find(x => x.id === src.id);
       if (!srcItem) return;
 
-      // 2. Déterminer le Contexte de Destination
-      // Si on nest, le contexte est le dest lui-même.
-      // Si on reorder, le contexte est le parent du dest.
-      
       let targetParentId = null;
-      let targetParentType = null; // 'category', 'group', 'folder'
+      let targetParentType = null;
       let targetCategoryId = null;
 
       const destItem = getList(dest.type).find(x => x.id === dest.id);
 
       if (action === 'nest') {
           if (dest.type === 'category') { targetCategoryId = dest.id; targetParentType = 'category'; targetParentId = dest.id; }
-          else if (dest.type === 'group') { targetParentId = dest.id; targetParentType = 'group'; } // Group inside Cat handled by parent
+          else if (dest.type === 'group') { targetParentId = dest.id; targetParentType = 'group'; }
           else if (dest.type === 'folder') { targetParentId = dest.id; targetParentType = 'folder'; }
       } else {
-          // Before/After : On prend le parent du destItem
-          if (dest.type === 'category') { 
-              // Root level sorting of categories
-              targetParentType = 'root';
-          } else {
+          if (dest.type === 'category') { targetParentType = 'root'; } 
+          else {
               targetCategoryId = destItem.categoryId || null;
               targetParentId = destItem.parentId;
-              targetParentType = destItem.parentType || 'category'; // Fallback logic
-              
-              // Special case: Groups usually have categoryId but act as children of category
-              if (dest.type === 'group') {
-                  targetCategoryId = destItem.categoryId;
-                  targetParentId = destItem.categoryId; // Groups act as children of category
-                  targetParentType = 'category';
-              }
+              targetParentType = destItem.parentType || 'category'; 
+              if (dest.type === 'group') { targetCategoryId = destItem.categoryId; targetParentId = destItem.categoryId; targetParentType = 'category'; }
           }
       }
 
-      // 3. Mise à jour de l'item Source (Changement de parent)
       if (src.type === 'group') {
-          // Un groupe ne peut aller que dans une Category. 
-          // Si on essaye de le mettre dans un Folder ou Style, ça doit remonter à la Category du folder/style.
-          // Simplification: On force targetCategoryId si dispo.
           if (targetCategoryId) srcItem.categoryId = targetCategoryId;
           else if (targetParentType === 'category') srcItem.categoryId = targetParentId;
       } else {
-          // Folder/Style
-          if (action === 'nest') {
-             srcItem.parentId = dest.id;
-             srcItem.parentType = dest.type;
-          } else {
-             srcItem.parentId = destItem.parentId;
-             srcItem.parentType = destItem.parentType;
-             // Cas spécial: Si on drop à côté d'un groupe, le parent est la catégorie du groupe
-             if(dest.type === 'group') {
-                 srcItem.parentId = destItem.categoryId;
-                 srcItem.parentType = 'category';
-             }
+          if (action === 'nest') { srcItem.parentId = dest.id; srcItem.parentType = dest.type; } 
+          else {
+             srcItem.parentId = destItem.parentId; srcItem.parentType = destItem.parentType;
+             if(dest.type === 'group') { srcItem.parentId = destItem.categoryId; srcItem.parentType = 'category'; }
           }
       }
 
-      // 4. Recalcul de l'ordre (Le plus dur: mixer les types)
-      // On récupère TOUS les frères potentiels dans le nouveau contexte
       let siblings = [];
-
-      if (dest.type === 'category' && action !== 'nest') {
-          siblings = state.config.imgCategories; // Root sort
-      } else {
-          // On cherche dans quel conteneur on a atterri
+      if (dest.type === 'category' && action !== 'nest') { siblings = state.config.imgCategories; } 
+      else {
           let contextId, contextType;
           if (action === 'nest') { contextId = dest.id; contextType = dest.type; }
           else { 
-             // On est à côté de destItem. Quel est son conteneur?
              if (dest.type === 'group') { contextId = destItem.categoryId; contextType = 'category'; }
              else { contextId = destItem.parentId; contextType = destItem.parentType; }
           }
-          
-          // Rassembler tous les enfants de ce contexte
-          const gr = state.config.imgGroups.filter(g => g.categoryId === contextId); // Groups in Cat
+          const gr = state.config.imgGroups.filter(g => g.categoryId === contextId);
           const fo = state.config.imgFolders.filter(f => f.parentId === contextId && f.parentType === contextType);
           const st = state.config.imgStyles.filter(s => s.parentId === contextId && s.parentType === contextType);
-          
-          // Cas mixte: dans une catégorie, on a Groupes + Folders + Styles
-          if (contextType === 'category') {
-             siblings = [...gr, ...fo, ...st]; 
-          } else {
-             // Dans un Groupe ou Folder, pas de sous-groupes (structure actuelle)
-             siblings = [...fo, ...st];
-          }
+          if (contextType === 'category') siblings = [...gr, ...fo, ...st]; else siblings = [...fo, ...st];
       }
 
-      // Trier les frères actuels par ordre
       siblings.sort((a,b) => (a.order||0) - (b.order||0));
-
-      // Retirer srcItem de la liste (s'il y est déjà, ex: déplacement intra-groupe)
       siblings = siblings.filter(x => x.id !== srcItem.id);
 
-      // Insérer au bon endroit
-      if (action === 'nest') {
-          siblings.push(srcItem); // Ajout à la fin
-      } else {
+      if (action === 'nest') { siblings.push(srcItem); } 
+      else {
           const destIndex = siblings.findIndex(x => x.id === dest.id);
           if (action === 'before') siblings.splice(destIndex, 0, srcItem);
           else siblings.splice(destIndex + 1, 0, srcItem);
       }
-
-      // Réattribuer les ordres (0, 1, 2...)
       siblings.forEach((item, index) => item.order = index);
-
       renderConfigUI();
   };
 
-  /* --- CRUD --- */
+  window.deleteNodeDirect = (type, id) => {
+      if(!confirm("Confirmer la suppression ?")) return;
+      if (type === 'category') {
+          state.config.imgCategories = state.config.imgCategories.filter(x => x.id !== id);
+          state.config.imgGroups = state.config.imgGroups.filter(x => x.categoryId !== id);
+          state.config.imgFolders = state.config.imgFolders.filter(x => !(x.parentType === 'category' && x.parentId === id));
+          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'category' && x.parentId === id));
+      } else if (type === 'group') {
+          state.config.imgGroups = state.config.imgGroups.filter(x => x.id !== id);
+          state.config.imgFolders = state.config.imgFolders.filter(x => !(x.parentType === 'group' && x.parentId === id));
+          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'group' && x.parentId === id));
+      } else if (type === 'folder') {
+          state.config.imgFolders = state.config.imgFolders.filter(x => x.id !== id);
+          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'folder' && x.parentId === id));
+      } else if (type === 'style') { state.config.imgStyles = state.config.imgStyles.filter(x => x.id !== id); }
+      renderConfigUI();
+  };
+
   window.addCategoryBtn = $("addCategoryBtn");
   if(window.addCategoryBtn) window.addCategoryBtn.onclick = () => {
       const name = $("newCatName").value; if(!name) return;
@@ -455,22 +437,8 @@
 
   $("deleteNodeBtn").onclick = () => {
       const id = $("editNodeId").value; const type = $("editNodeType").value;
-      if(!id) return closeNodeEditor();
-      if(!confirm("Supprimer ?")) return;
-      if (type === 'category') {
-          state.config.imgCategories = state.config.imgCategories.filter(x => x.id !== id);
-          state.config.imgGroups = state.config.imgGroups.filter(x => x.categoryId !== id);
-          state.config.imgFolders = state.config.imgFolders.filter(x => !(x.parentType === 'category' && x.parentId === id));
-          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'category' && x.parentId === id));
-      } else if (type === 'group') {
-          state.config.imgGroups = state.config.imgGroups.filter(x => x.id !== id);
-          state.config.imgFolders = state.config.imgFolders.filter(x => !(x.parentType === 'group' && x.parentId === id));
-          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'group' && x.parentId === id));
-      } else if (type === 'folder') {
-          state.config.imgFolders = state.config.imgFolders.filter(x => x.id !== id);
-          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'folder' && x.parentId === id));
-      } else if (type === 'style') { state.config.imgStyles = state.config.imgStyles.filter(x => x.id !== id); }
-      closeNodeEditor(); renderConfigUI();
+      window.deleteNodeDirect(type, id);
+      closeNodeEditor();
   };
 
   $("cancelNodeBtn").onclick = closeNodeEditor;
