@@ -1,3 +1,4 @@
+/* GLOBAL RESET & VARIABLES */
 :root { --primary: #000; --bg: #f5f6f8; --card-bg: #fff; --border: #eee; --apple-blue: #007AFF; --apple-red: #FF3B30; --text-main: #1d1d1f; --text-muted: #86868b; }
 * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
 body { background: var(--bg); margin: 0; padding: 40px 0; display: flex; justify-content: center; }
@@ -31,7 +32,7 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .tab-container-scroll { flex: 1; overflow-y: auto; background: #fff; display: flex; flex-direction: column; }
 .tab-content { padding: 24px; display: flex; flex-direction: column; gap: 20px; min-height: min-content; }
 
-/* ORGANIZER & CONFIG */
+/* CONFIG ORGANIZER STYLES */
 .separator { border: 0; border-top: 1px solid #eee; margin: 15px 0; }
 .config-section { margin-bottom: 10px; }
 .tags-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
@@ -54,6 +55,34 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .org-style-tag { background: #fff; border: 1px solid #ccc; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: grab; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .org-style-tag:active { cursor: grabbing; }
 .org-style-tag button { border: none; background: none; font-size: 10px; color: #007AFF; cursor: pointer; padding: 0; }
+
+/* STUDIO UI STYLES */
+.studio-group-title { font-size: 10px; font-weight: 800; color: #999; margin: 15px 0 5px 0; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #eee; padding-bottom: 2px; }
+.folder-btn-click { width: 100%; display: flex; justify-content: space-between; padding: 8px 12px; background: #fff; border: 1px solid #eee; border-radius: 8px; margin-bottom: 5px; cursor: pointer; font-size: 12px; font-weight: 500; color: #333; transition: all 0.2s; }
+.folder-btn-click:hover { background: #f5f5f7; }
+.folder-btn-click.active { border-color: #007AFF; background: #f0f7ff; color: #007AFF; }
+.studio-styles-grid { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; background: #f9f9f9; border-radius: 8px; margin-bottom: 10px; border: 1px solid #eee; animation: slideDown 0.2s ease-out; }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+.style-tag { border: 1px solid #ddd; background: #fff; color: #333; padding: 6px 12px; border-radius: 20px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all 0.1s; }
+.style-tag:hover { border-color: #bbb; }
+.style-tag.selected { background: #007AFF; color: #fff; border-color: #007AFF; box-shadow: 0 2px 5px rgba(0,122,255,0.3); }
+.btn-thumb { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; background: #eee; }
+
+/* Image Cards */
+.gen-image-card { position: relative; border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.05); cursor: pointer; border: 3px solid transparent; }
+.gen-image-card.selected-border { border-color: #007AFF; }
+.gen-image-card img { width: 100%; height: 150px; object-fit: cover; display: block; }
+.gen-image-overlay { padding: 8px; font-size: 10px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #fff; }
+.zoom-btn, .del-btn, .add-btn { position: absolute; width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); background: rgba(255,255,255,0.9); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; transition: transform 0.1s; }
+.zoom-btn:hover, .del-btn:hover, .add-btn:hover { transform: scale(1.1); }
+.settings-select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd; background: #f9f9f9; font-size: 13px; outline: none; margin-top: 5px; }
+.input-images-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid #f0f0f0; }
+.input-img-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #ddd; }
+.input-img-wrapper { position: relative; }
+.remove-input-img { position: absolute; top: -5px; right: -5px; background: #fff; border: 1px solid #ccc; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: red; }
+.gen-image-card.dragging { opacity: 0.4; }
+.gen-image-card.drag-over { transform: scale(1.05); box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 10; border: 2px solid var(--apple-blue); }
 
 .dropdown { position: relative; display: inline-block; }
 .dropdown-content { display: none; position: absolute; right: 0; background: #fff; min-width: 200px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border-radius: 12px; z-index: 100; padding: 10px; border: 1px solid #eee; }
@@ -97,32 +126,3 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .loading { position: fixed; inset: 0; background: rgba(255,255,255,0.8); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .spinner { width: 32px; height: 32px; border: 3px solid #eee; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-/* STUDIO UI STYLES */
-.studio-group-title { font-size: 10px; font-weight: 800; color: #999; margin: 15px 0 5px 0; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #eee; padding-bottom: 2px; }
-.folder-btn-click { width: 100%; display: flex; justify-content: space-between; padding: 8px 12px; background: #fff; border: 1px solid #eee; border-radius: 8px; margin-bottom: 5px; cursor: pointer; font-size: 12px; font-weight: 500; color: #333; transition: all 0.2s; }
-.folder-btn-click:hover { background: #f5f5f7; }
-.folder-btn-click.active { border-color: #007AFF; background: #f0f7ff; color: #007AFF; }
-.studio-styles-grid { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; background: #f9f9f9; border-radius: 8px; margin-bottom: 10px; border: 1px solid #eee; animation: slideDown 0.2s ease-out; }
-@keyframes slideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-
-.style-tag { border: 1px solid #ddd; background: #fff; color: #333; padding: 6px 12px; border-radius: 20px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all 0.1s; }
-.style-tag:hover { border-color: #bbb; }
-.style-tag.selected { background: #007AFF; color: #fff; border-color: #007AFF; box-shadow: 0 2px 5px rgba(0,122,255,0.3); }
-.btn-thumb { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; background: #eee; }
-
-/* Image Cards */
-.image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-.gen-image-card { border-radius: 12px; overflow: hidden; border: 2px solid transparent; cursor: pointer; position: relative; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.05); transition: opacity 0.2s, transform 0.2s; }
-.gen-image-card.selected-border { border-color: #007AFF; }
-.gen-image-card img { width: 100%; height: 150px; object-fit: cover; display: block; }
-.gen-image-overlay { padding: 8px; font-size: 10px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #fff; }
-.zoom-btn, .del-btn, .add-btn { position: absolute; width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); background: rgba(255,255,255,0.9); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; transition: transform 0.1s; }
-.zoom-btn:hover, .del-btn:hover, .add-btn:hover { transform: scale(1.1); }
-.settings-select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd; background: #f9f9f9; font-size: 13px; outline: none; margin-top: 5px; }
-.input-images-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid #f0f0f0; }
-.input-img-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #ddd; }
-.input-img-wrapper { position: relative; }
-.remove-input-img { position: absolute; top: -5px; right: -5px; background: #fff; border: 1px solid #ccc; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: red; }
-.gen-image-card.dragging { opacity: 0.4; }
-.gen-image-card.drag-over { transform: scale(1.05); box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 10; border: 2px solid var(--apple-blue); }
