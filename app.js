@@ -11,7 +11,7 @@
     promptTranslate: "Professional luxury translator. TASK: Translate into {targetLang}. URL: {product_url}",
     headlineStyles: [{ name: "POV", prompt: "POV perspective." }],
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }],
-    imgStyles: [], // [{ name, category, subcategory, prompt, refImage }]
+    imgStyles: [], // [{ name, category, subcategory, prompt, refImage, mode }]
     imgCategories: ["Packaging", "Ambiance", "Mannequin"]
   };
 
@@ -36,7 +36,8 @@
     selectedSessionImagesIdx: [],
     // ETATS UI STUDIO
     currentImgCategory: "",
-    selectedImgStyles: [],
+    selectedImgStyles: [], // Pour les boutons "Auto"
+    manualImgStyles: [],   // Pour les boutons "Manuel" actifs (visuel uniquement)
     editingImgStyleIndex: null
   };
 
@@ -100,7 +101,10 @@
             <div style="flex:1;">
                 <div style="display:flex; justify-content:space-between;">
                     <div style="font-weight:bold; font-size:12px;">${s.name}</div>
-                    <div style="font-size:10px; background:#f0f0f0; padding:2px 6px; border-radius:4px;">${s.category || 'Général'} ${s.subcategory ? ' > '+s.subcategory : ''}</div>
+                    <div style="display:flex; gap:5px;">
+                        <span style="font-size:10px; background:#f0f0f0; padding:2px 6px; border-radius:4px;">${s.category || 'Général'} ${s.subcategory ? ' > '+s.subcategory : ''}</span>
+                        <span style="font-size:10px; background:${s.mode === 'manual' ? '#fff3cd' : '#e0f7fa'}; padding:2px 6px; border-radius:4px;">${s.mode === 'manual' ? 'MANUEL' : 'AUTO'}</span>
+                    </div>
                 </div>
                 <div style="font-size:11px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:300px;">${s.prompt}</div>
             </div>
@@ -154,8 +158,9 @@
       state.editingImgStyleIndex = i;
       $("newImgStyleName").value = style.name;
       $("newImgStyleCategory").value = style.category || "";
-      $("newImgStyleSubCategory").value = style.subcategory || ""; // NOUVEAU
+      $("newImgStyleSubCategory").value = style.subcategory || ""; 
       $("newImgStylePrompt").value = style.prompt;
+      $("newImgStyleMode").value = style.mode || "auto"; // NOUVEAU
       $("newImgStyleFile").value = ""; 
       $("imgStyleFormTitle").textContent = "MODIFIER LE STYLE";
       $("addImgStyleBtn").textContent = "Mettre à jour le Style";
@@ -171,6 +176,7 @@
       $("newImgStyleCategory").value = "";
       $("newImgStyleSubCategory").value = "";
       $("newImgStylePrompt").value = "";
+      $("newImgStyleMode").value = "auto";
       $("newImgStyleFile").value = "";
       $("imgStyleFormTitle").textContent = "AJOUTER UN STYLE";
       $("addImgStyleBtn").textContent = "+ Enregistrer le Style";
@@ -182,13 +188,14 @@
   $("addImgStyleBtn").onclick = () => {
       const name = $("newImgStyleName").value;
       const category = $("newImgStyleCategory").value;
-      const subcategory = $("newImgStyleSubCategory").value; // NOUVEAU
+      const subcategory = $("newImgStyleSubCategory").value; 
       const prompt = $("newImgStylePrompt").value;
+      const mode = $("newImgStyleMode").value; // NOUVEAU
       const fileInput = $("newImgStyleFile");
       if(!name || !prompt) return alert("Nom et Prompt requis.");
 
       const saveStyle = (imgBase64) => {
-          const styleData = { name, category, subcategory, prompt };
+          const styleData = { name, category, subcategory, prompt, mode };
           if(state.editingImgStyleIndex !== null) {
               const oldStyle = state.config.imgStyles[state.editingImgStyleIndex];
               styleData.refImage = imgBase64 || oldStyle.refImage;
@@ -236,12 +243,10 @@
       const container = $("imgGenStylesContainer");
       if(!container) return;
       
-      // Filtre : Catégorie actuelle OU "Général"
       const filtered = (state.config.imgStyles || []).filter(s => {
           return (s.category || "") === state.currentImgCategory || (s.category === "" || s.category === "Général");
       });
 
-      // Groupement par Sous-Catégorie
       const groups = {};
       const noSub = [];
 
@@ -256,12 +261,10 @@
 
       let html = "";
 
-      // 1. Boutons sans sous-catégorie
       if(noSub.length > 0) {
           html += `<div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:5px;">` + noSub.map(s => renderStyleBtn(s)).join("") + `</div>`;
       }
 
-      // 2. Boutons groupés
       Object.keys(groups).forEach(subKey => {
           html += `<div style="font-size:10px; font-weight:bold; color:#888; margin-top:5px; margin-bottom:2px;">${subKey.toUpperCase()}</div>`;
           html += `<div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:5px;">` + groups[subKey].map(s => renderStyleBtn(s)).join("") + `</div>`;
@@ -271,25 +274,70 @@
   }
 
   function renderStyleBtn(s) {
-      const isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
+      // Pour Auto: on vérifie state.selectedImgStyles
+      // Pour Manuel: on vérifie state.manualImgStyles
+      let isActive = false;
+      if (s.mode === 'manual') {
+          isActive = state.manualImgStyles.includes(s.name);
+      } else {
+          isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
+      }
+
+      // Bordure différente pour mode manuel
+      const borderStyle = s.mode === 'manual' ? 'border:1px dashed var(--apple-blue);' : 'border:1px solid #ddd;';
+
       return `
-         <button class="style-tag ${isActive ? 'selected' : ''}" onclick="window.toggleImgStyle('${s.name}')" style="display:flex; align-items:center; gap:5px; flex-shrink:0; border:1px solid #ddd; ${isActive ? 'background:var(--apple-blue); color:white; border-color:var(--apple-blue);' : 'background:#fff;'}">
+         <button class="style-tag ${isActive ? 'selected' : ''}" onclick="window.toggleImgStyle('${s.name}')" style="display:flex; align-items:center; gap:5px; flex-shrink:0; ${borderStyle} ${isActive ? 'background:var(--apple-blue); color:white;' : 'background:#fff;'}">
             ${s.refImage ? '<span style="width:12px; height:12px; background:#ccc; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
-            ${s.name}
+            ${s.name} ${s.mode === 'manual' ? '📝' : ''}
          </button>
       `;
   }
 
+  // --- LOGIQUE TOGGLE (AUTO vs MANUEL) ---
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName);
       if(!style) return;
-      const idx = state.selectedImgStyles.findIndex(s => s.name === styleName);
-      if (idx > -1) { state.selectedImgStyles.splice(idx, 1); } 
-      else { state.selectedImgStyles.push(style); }
+
+      if (style.mode === 'manual') {
+          // LOGIQUE MANUELLE : On injecte/retire le texte et l'image directement dans l'input
+          const idx = state.manualImgStyles.indexOf(styleName);
+          const currentText = $("imgGenPrompt").value;
+          
+          if (idx > -1) {
+              // DÉSACTIVER MANUEL
+              state.manualImgStyles.splice(idx, 1);
+              // 1. Retirer Texte (si présent)
+              if (currentText.includes(style.prompt)) {
+                  $("imgGenPrompt").value = currentText.replace(style.prompt, "").trim();
+              }
+              // 2. Retirer Image Ref (si présente)
+              if (style.refImage) {
+                  const imgIdx = state.inputImages.indexOf(style.refImage);
+                  if (imgIdx > -1) state.inputImages.splice(imgIdx, 1);
+                  renderInputImages();
+              }
+          } else {
+              // ACTIVER MANUEL
+              state.manualImgStyles.push(styleName);
+              // 1. Ajouter Texte
+              $("imgGenPrompt").value = (currentText + " " + style.prompt).trim();
+              // 2. Ajouter Image Ref
+              if (style.refImage && !state.inputImages.includes(style.refImage)) {
+                  state.inputImages.push(style.refImage);
+                  renderInputImages();
+              }
+          }
+      } else {
+          // LOGIQUE AUTO (Classique)
+          const idx = state.selectedImgStyles.findIndex(s => s.name === styleName);
+          if (idx > -1) { state.selectedImgStyles.splice(idx, 1); } 
+          else { state.selectedImgStyles.push(style); }
+      }
       renderImgStylesButtons();
   };
 
-  /* --- COMMON API (UPDATED FOR LAZY LOAD) --- */
+  /* --- COMMON API --- */
   async function apiCall(action, extra = {}) {
     if (!state.imageBase64) return;
     startLoading();
@@ -351,6 +399,7 @@
   
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   
+  // --- MOTEUR DE GÉNÉRATION ---
   async function callGeminiImageGen() {
       const userPrompt = $("imgGenPrompt").value;
       if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style.");
@@ -382,7 +431,7 @@
                   type: 'manual',
                   prompt: userPrompt,
                   refImage: null,
-                  label: userPrompt 
+                  label: userPrompt // Utilise le prompt utilisateur brut
               }];
           }
 
@@ -403,6 +452,7 @@
           });
       });
 
+      // 1. PLACEHOLDERS
       const newItems = batches.map(b => ({
           id: Date.now() + Math.random(), 
           loading: true, 
@@ -412,9 +462,13 @@
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
 
+      // 2. NETTOYAGE UI (DEMANDE UTILISATEUR)
       state.selectedImgStyles = []; 
+      state.manualImgStyles = []; // Reset visual manual states
+      $("imgGenPrompt").value = ""; // VIDER LE CHAT
       renderImgStylesButtons(); 
 
+      // 3. EXECUTION
       newItems.forEach(async (item, index) => {
           const batchData = batches[index];
           try {
@@ -453,6 +507,7 @@
   }
 
   function renderGenImages() {
+      // 1. Session Results
       const sessionContainer = $("imgGenSessionResults");
       sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => {
         if (item.loading) {
@@ -479,6 +534,7 @@
         </div>
       `}).join("");
 
+      // 2. Saved Results
       let savedHtml = "";
       if(state.imageBase64) {
           savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default;">
@@ -489,8 +545,13 @@
       }
 
       savedHtml += state.savedGeneratedImages.map((item, i) => `
-        <div class="gen-image-card" draggable="true" ondragstart="dragStart(event, ${i})" ondrop="drop(event, ${i})" ondragover="allowDrop(event)">
-           <img src="data:image/jpeg;base64,${item.image}">
+        <div class="gen-image-card" 
+             draggable="true" 
+             ondragstart="dragStart(event, ${i})" 
+             ondrop="drop(event, ${i})" 
+             ondragenter="dragEnter(event, ${i})"
+             ondragover="allowDrop(event)">
+           <img src="data:image/jpeg;base64,${item.image}" style="pointer-events:none;">
            <div class="gen-image-overlay">${item.prompt}</div>
            <button class="icon-btn-small" style="position:absolute; top:5px; right:55px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInput(${i})" title="Utiliser">＋</button>
            <button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button>
@@ -501,29 +562,45 @@
       $("imgGenSavedResults").innerHTML = savedHtml;
   }
 
-  // --- DRAG AND DROP LOGIC (FLUIDE VIA CSS) ---
+  // --- DRAG AND DROP (AMÉLIORÉ: LIVE SWAP) ---
   let dragSrcIndex = null;
+  
   window.dragStart = (e, i) => { 
       dragSrcIndex = i; 
-      e.target.classList.add('dragging'); // Style visuel
+      e.dataTransfer.effectAllowed = 'move';
+      e.target.style.opacity = '0.4';
   };
+  
   window.allowDrop = (e) => { 
-      e.preventDefault(); 
-      const card = e.target.closest('.gen-image-card');
-      if(card) card.classList.add('drag-over');
+      e.preventDefault(); // Necessary
   };
-  window.drop = async (e, i) => {
-      e.preventDefault();
-      document.querySelectorAll('.gen-image-card').forEach(c => {
-          c.classList.remove('dragging');
-          c.classList.remove('drag-over');
-      });
 
-      if (dragSrcIndex === null || dragSrcIndex === i) return;
+  // NOUVEAU: Swap immédiat au survol pour fluidité
+  window.dragEnter = (e, targetIndex) => {
+      if (dragSrcIndex === null || dragSrcIndex === targetIndex) return;
+      
+      // Swap dans le tableau local
       const item = state.savedGeneratedImages.splice(dragSrcIndex, 1)[0];
-      state.savedGeneratedImages.splice(i, 0, item);
+      state.savedGeneratedImages.splice(targetIndex, 0, item);
+      
+      // Mise à jour index source pour le prochain swap
+      dragSrcIndex = targetIndex;
+      
       renderGenImages();
       
+      // Ré-appliquer style dragging sur le nouvel élément DOM
+      const cards = document.querySelectorAll('#imgGenSavedResults .gen-image-card');
+      if(cards[dragSrcIndex]) cards[dragSrcIndex].style.opacity = '0.4';
+  };
+
+  window.drop = async (e, i) => {
+      e.preventDefault();
+      // Reset opacity
+      const cards = document.querySelectorAll('#imgGenSavedResults .gen-image-card');
+      cards.forEach(c => c.style.opacity = '1');
+      dragSrcIndex = null;
+
+      // Persist order
       if (state.currentHistoryId) {
           try {
               const payload = { id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) };
@@ -534,6 +611,7 @@
       }
   };
 
+  // --- INPUT MANAGEMENT (AJOUTER SAVED/ORIGINAL) ---
   window.addSavedToInput = (index) => {
       const item = state.savedGeneratedImages[index];
       if(item && !state.inputImages.includes(item.image)) {
@@ -600,7 +678,6 @@
               generated_images: JSON.stringify(state.savedGeneratedImages) 
           };
           await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
-          // Mise à jour du cache local si présent (même si incomplet)
           const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
           if (histItem) histItem.generated_images = payload.generated_images;
           
@@ -856,97 +933,7 @@
     } catch(e) { alert("Erreur suppression: " + e.message); } finally { stopLoading(); }
   };
 
-  // --- LOGIQUE HISTORIQUE OPTIMISÉE (LISTE LEGERE / DETAIL LOURD) ---
-  
-  async function loadHistory() { 
-      try { 
-          // Appel par défaut -> renvoie la liste légère
-          const r = await fetch("/api/history"); 
-          state.historyCache = await r.json(); 
-          renderHistoryUI(); 
-      } catch(e){} 
-  }
-
-  function renderHistoryUI() {
-    const filtered = (state.historyCache || []).filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
-    const start = (state.currentPage - 1) * 5; 
-    const pag = filtered.slice(start, start + 5);
-    $("historyList").innerHTML = pag.map(item => `
-        <div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})">
-            <img src="data:image/jpeg;base64,${item.image}" class="history-img">
-            <div style="flex:1">
-                <h4>${item.title || "Sans titre"}</h4>
-            </div>
-            <button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button>
-        </div>
-    `).join("");
-    renderPagination(Math.ceil(filtered.length / 5));
-  }
-
-  function renderPagination(total) {
-    const p = $("pagination"); 
-    p.innerHTML = ""; 
-    if(total <= 1) return;
-    for(let i=1; i<=total; i++) {
-      const b = document.createElement("button"); 
-      b.textContent = i; 
-      if(i === state.currentPage) b.className = "active";
-      b.onclick = () => { state.currentPage = i; renderHistoryUI(); }; 
-      p.appendChild(b);
-    }
-  }
-
-  window.restore = async (id) => {
-    // 1. UI Feedback immédiat (sélection visuelle)
-    state.currentHistoryId = id;
-    renderHistoryUI();
-    startLoading();
-
-    try {
-        // 2. FETCH COMPLET DU PRODUIT (Lourd)
-        const res = await fetch(`/api/history?id=${id}`);
-        const item = await res.json();
-
-        // 3. Mise à jour de l'état
-        state.sessionHeadlines = []; state.sessionAds = [];
-        state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; 
-        state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
-        state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; 
-        state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
-        
-        // CHARGEMENT IMAGES SAUVEGARDÉES (Crucial pour correction bug disparition)
-        state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
-        state.sessionGeneratedImages = []; 
-        
-        // 4. Mise à jour UI
-        $("titleText").textContent = item.title; 
-        $("descText").textContent = item.description; 
-        $("productUrlInput").value = item.product_url || "";
-        $("previewImg").src = `data:image/jpeg;base64,${item.image}`; 
-        state.imageBase64 = item.image; 
-        $("preview").classList.remove("hidden");
-        $("dropPlaceholder").style.display = "none"; 
-        $("generateBtn").disabled = false;
-        
-        // Reset Inputs Generateur
-        state.inputImages = [item.image]; 
-        renderInputImages(); 
-        renderGenImages();
-
-    } catch(e) {
-        alert("Erreur chargement: " + e.message);
-    } finally {
-        stopLoading();
-    }
-  };
-
-  window.deleteItem = async (id) => { 
-      if(!confirm("Supprimer ?")) return; 
-      await fetch(`/api/history?id=${id}`, { method: "DELETE" }); 
-      if(state.currentHistoryId == id) state.currentHistoryId = null; 
-      loadHistory(); 
-  };
-  
+  window.deleteItem = async (id) => { if(!confirm("Supprimer ?")) return; await fetch(`/api/history?id=${id}`, { method: "DELETE" }); if(state.currentHistoryId == id) state.currentHistoryId = null; loadHistory(); };
   window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
 
   function init() {
