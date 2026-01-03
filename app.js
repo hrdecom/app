@@ -29,12 +29,10 @@
     headlinesTrans: {}, adsTrans: {},
     selHlStyles: [], selAdStyles: [],
     hlPage: 1, adPage: 1,
-    // ETATS IMAGES
     inputImages: [], 
     sessionGeneratedImages: [], 
     savedGeneratedImages: [], 
     selectedSessionImagesIdx: [],
-    // ETATS UI STUDIO
     currentImgCategory: "",
     selectedImgStyles: [], 
     manualImgStyles: [],   
@@ -80,7 +78,7 @@
     $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     
-    // CATÉGORIES
+    // CONFIG IMAGES
     $("imgCategoriesList").innerHTML = (state.config.imgCategories || []).map((cat, i) => `
        <div class="style-tag" style="background:#eee; border:1px solid #ccc; padding:4px 10px; display:flex; gap:5px; align-items:center;">
           ${cat} <span onclick="window.removeImgCategory(${i})" style="cursor:pointer; color:red; font-weight:bold;">×</span>
@@ -92,7 +90,6 @@
     catSelect.innerHTML = `<option value="">Général</option>` + (state.config.imgCategories || []).map(c => `<option value="${c}">${c}</option>`).join("");
     if(currentVal) catSelect.value = currentVal;
 
-    // LISTE STYLES (SETTINGS)
     $("imgStyleEditorList").innerHTML = (state.config.imgStyles || []).map((s, i) => `
         <div style="display:flex; gap:10px; margin-bottom:10px; align-items:flex-start; background:#fff; padding:10px; border-radius:8px; border:1px solid #eee;">
             <div style="width:50px; height:50px; background:#eee; border-radius:6px; overflow:hidden; flex-shrink:0;">
@@ -345,7 +342,7 @@
       renderImgStylesButtons();
   };
 
-  /* --- COMMON API --- */
+  /* --- API CALL --- */
   async function apiCall(action, extra = {}) {
     if (!state.imageBase64) return;
     startLoading();
@@ -393,7 +390,7 @@
     finally { stopLoading(); }
   }
 
-  /* --- LOGIQUE GENERATION IMAGES --- */
+  /* --- IMAGES GENERATION --- */
   
   function renderInputImages() {
     const container = $("inputImagesPreview");
@@ -470,6 +467,7 @@
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
 
+      // CLEANUP
       state.selectedImgStyles = []; 
       state.manualImgStyles = [];
       $("imgGenPrompt").value = ""; 
@@ -513,6 +511,7 @@
   }
 
   function renderGenImages() {
+      // 1. Session Results
       const sessionContainer = $("imgGenSessionResults");
       sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => {
         if (item.loading) {
@@ -539,6 +538,7 @@
         </div>
       `}).join("");
 
+      // 2. Saved Results
       let savedHtml = "";
       if(state.imageBase64) {
           savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default;">
@@ -572,16 +572,13 @@
       $("imgGenSavedResults").innerHTML = savedHtml;
   }
 
+  // --- TOGGLE SAVED IMAGE ---
   window.toggleSavedImg = (index) => {
       const item = state.savedGeneratedImages[index];
       if(!item) return;
-      
       const idx = state.inputImages.indexOf(item.image);
-      if(idx > -1) {
-          state.inputImages.splice(idx, 1);
-      } else {
-          state.inputImages.push(item.image);
-      }
+      if(idx > -1) { state.inputImages.splice(idx, 1); } 
+      else { state.inputImages.push(item.image); }
       renderInputImages();
       renderGenImages();
   };
@@ -613,15 +610,6 @@
               const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
               if (histItem) histItem.generated_images = payload.generated_images;
           } catch(err) {}
-      }
-  };
-
-  window.addSavedToInput = (index) => {
-      const item = state.savedGeneratedImages[index];
-      if(item && !state.inputImages.includes(item.image)) {
-          state.inputImages.push(item.image);
-          renderInputImages();
-          document.querySelector('button[data-tab="tab-img-chat"]').click();
       }
   };
 
@@ -663,6 +651,7 @@
       window.open(blobUrl, '_blank');
   };
 
+  // ⚠️ CRITICAL UPDATE: ERROR CHECKING FOR SAVE
   window.saveImgSelection = async () => {
       if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
       if (state.selectedSessionImagesIdx.length === 0) return alert("Aucune image sélectionnée.");
@@ -681,9 +670,17 @@
               id: state.currentHistoryId, 
               generated_images: JSON.stringify(state.savedGeneratedImages) 
           };
-          await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
+          const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
+          
+          // VERIFICATION STRICTE
+          if (!res.ok) {
+              const errorText = await res.text();
+              throw new Error("Erreur serveur (" + res.status + "): " + errorText + ". Vérifiez la colonne 'generated_images' en base de données.");
+          }
+
           const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
           if (histItem) histItem.generated_images = payload.generated_images;
+          
           alert("Images enregistrées !");
           renderGenImages();
           document.querySelector('button[data-tab="tab-img-saved"]').click();
@@ -700,7 +697,8 @@
       startLoading();
       try {
           const payload = { id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) };
-          await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
+          const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
+          if(!res.ok) throw new Error("Erreur serveur lors de la suppression.");
           const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
           if (histItem) histItem.generated_images = payload.generated_images;
           renderGenImages();
