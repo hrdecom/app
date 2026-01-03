@@ -8,13 +8,12 @@ export async function onRequest(context) {
     const id = url.searchParams.get("id");
 
     if (id) {
-        // CAS 1 : On demande un produit précis (pour le restaurer)
-        // Là on renvoie TOUT (y compris les images générées lourdes)
+        // CAS 1 : Restauration complète (On charge tout, y compris les images générées)
         const item = await db.prepare("SELECT * FROM history WHERE id = ?").bind(id).first();
         return new Response(JSON.stringify(item), { headers: { "content-type": "application/json" } });
     } else {
-        // CAS 2 : On demande la liste pour la sidebar
-        // OPTIMISATION : On NE sélectionne PAS 'generated_images' ni les textes longs pour éviter de faire ramer l'appli
+        // CAS 2 : Liste latérale (On charge LEGER : pas d'images générées, pas de textes longs)
+        // Cela empêche l'application de ramer quand il y a beaucoup d'historique
         const { results } = await db.prepare("SELECT id, title, description, image, product_name FROM history ORDER BY id DESC").all();
         return new Response(JSON.stringify(results), { headers: { "content-type": "application/json" } });
     }
@@ -35,7 +34,7 @@ export async function onRequest(context) {
       ad_copys || "[]", 
       "{}", 
       "{}",
-      "[]" 
+      "[]" // Champ pour les images générées
     ).run();
     return new Response(JSON.stringify({ id: result.meta.last_row_id }), { headers: { "content-type": "application/json" } });
   }
@@ -47,11 +46,9 @@ export async function onRequest(context) {
 
     if (!id) return new Response("Missing ID", { status: 400 });
 
-    // Construction dynamique de la requête SQL
     const updates = [];
     const values = [];
-
-    // Liste des champs autorisés à être mis à jour
+    // On autorise explicitement la mise à jour de 'generated_images'
     const fields = ['title', 'description', 'headlines', 'product_url', 'ad_copys', 'headlines_trans', 'ads_trans', 'generated_images'];
 
     for (const field of fields) {
@@ -63,7 +60,7 @@ export async function onRequest(context) {
 
     if (updates.length === 0) return new Response("No fields to update", { status: 400 });
 
-    values.push(id); // Pour le WHERE id = ?
+    values.push(id); 
     const query = `UPDATE history SET ${updates.join(", ")} WHERE id = ?`;
 
     await db.prepare(query).bind(...values).run();
