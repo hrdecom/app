@@ -36,8 +36,8 @@
     selectedSessionImagesIdx: [],
     // ETATS UI STUDIO
     currentImgCategory: "",
-    selectedImgStyles: [], // Pour les boutons "Auto"
-    manualImgStyles: [],   // Pour les boutons "Manuel" actifs (visuel uniquement)
+    selectedImgStyles: [], 
+    manualImgStyles: [],   
     editingImgStyleIndex: null
   };
 
@@ -444,7 +444,6 @@
           });
       });
 
-      // 1. PLACEHOLDERS
       const newItems = batches.map(b => ({
           id: Date.now() + Math.random(), 
           loading: true, 
@@ -457,7 +456,7 @@
       // 2. NETTOYAGE UI
       state.selectedImgStyles = []; 
       state.manualImgStyles = [];
-      $("imgGenPrompt").value = ""; // ON VIDE LE CHAT COMME DEMANDÉ
+      $("imgGenPrompt").value = ""; // Clean input
       renderImgStylesButtons(); 
 
       // 3. EXECUTION
@@ -754,6 +753,17 @@
   
   window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
 
+  // LA FONCTION MANQUANTE QUI CAUSAIT LE BUG
+  function switchTab(e) {
+    const m = e.target.closest('.modal-content');
+    if (!m) return;
+    m.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active"));
+    m.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
+    e.target.classList.add("active"); 
+    const target = $(e.target.dataset.tab);
+    if(target) target.classList.remove("hidden");
+  }
+
   function init() {
     $("loading").classList.add("hidden");
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
@@ -776,6 +786,7 @@
     $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
     $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
     
+    // IMAGE GEN
     $("openImgGenBtn").onclick = () => {
         if (!state.imageBase64) return alert("Veuillez d'abord uploader une image principale.");
         if (state.inputImages.length === 0) state.inputImages = [state.imageBase64];
