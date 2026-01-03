@@ -29,14 +29,17 @@
     headlinesTrans: {}, adsTrans: {},
     selHlStyles: [], selAdStyles: [],
     hlPage: 1, adPage: 1,
+    // ETATS IMAGES
     inputImages: [], 
     sessionGeneratedImages: [], 
     savedGeneratedImages: [], 
     selectedSessionImagesIdx: [],
+    // ETATS UI STUDIO
     currentImgCategory: "",
     selectedImgStyles: [], 
     manualImgStyles: [],   
-    editingImgStyleIndex: null
+    editingImgStyleIndex: null,
+    expandedGroups: [] // NOUVEAU: Pour gérer les sous-menus ouverts
   };
 
   const startLoading = () => {
@@ -78,7 +81,6 @@
     $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     
-    // CONFIG IMAGES
     $("imgCategoriesList").innerHTML = (state.config.imgCategories || []).map((cat, i) => `
        <div class="style-tag" style="background:#eee; border:1px solid #ccc; padding:4px 10px; display:flex; gap:5px; align-items:center;">
           ${cat} <span onclick="window.removeImgCategory(${i})" style="cursor:pointer; color:red; font-weight:bold;">×</span>
@@ -216,7 +218,7 @@
       }
   };
 
-  /* --- STUDIO UI LOGIC --- */
+  /* --- STUDIO UI LOGIC (Groupes & Sous-menus) --- */
   function renderStudioCategories() {
       const container = $("imgGenCategoriesBar");
       if(!container) return;
@@ -232,6 +234,7 @@
 
   window.setImgCategory = (c) => {
       state.currentImgCategory = c;
+      state.expandedGroups = []; // Reset submenus on category change
       renderStudioCategories();
       renderImgStylesButtons();
   };
@@ -244,32 +247,51 @@
           return (s.category || "") === state.currentImgCategory || (s.category === "" || s.category === "Général");
       });
 
+      // Groupement par Sous-Catégorie
       const groups = {};
-      const noSub = [];
+      const standalone = [];
 
       filtered.forEach(s => {
-          if (s.subcategory) {
+          if (s.subcategory && s.subcategory.trim() !== "") {
               if(!groups[s.subcategory]) groups[s.subcategory] = [];
               groups[s.subcategory].push(s);
           } else {
-              noSub.push(s);
+              standalone.push(s);
           }
       });
 
       let html = "";
 
-      if(noSub.length > 0) {
-          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; padding-bottom:15px;">` + noSub.map(s => renderStyleBtn(s)).join("") + `</div>`;
+      // 1. Boutons Indépendants
+      if(standalone.length > 0) {
+          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; padding-bottom:5px;">` + standalone.map(s => renderStyleBtn(s)).join("") + `</div>`;
       }
 
+      // 2. Boutons Groupés (Sous-menus)
       Object.keys(groups).forEach(subKey => {
-          html += `<div style="font-size:11px; font-weight:700; color:#333; margin-top:5px; margin-bottom:8px; text-transform:uppercase; border-bottom:1px solid #eee; padding-bottom:4px;">${subKey}</div>`;
-          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; padding-bottom:15px;">` + groups[subKey].map(s => renderStyleBtn(s)).join("") + `</div>`;
+          const isExpanded = state.expandedGroups.includes(subKey);
+          
+          // Vérifie si un enfant est actif pour highlighter le parent
+          const isChildActive = groups[subKey].some(s =>
+             (s.mode === 'manual' && state.manualImgStyles.includes(s.name)) ||
+             (s.mode !== 'manual' && state.selectedImgStyles.some(sel => sel.name === s.name))
+          );
+
+          // Rendu du bouton parent
+          html += renderGroupBtn(subKey, isExpanded, isChildActive);
+
+          // Rendu des enfants si ouvert
+          if (isExpanded) {
+               html += `<div style="display:flex; flex-wrap:wrap; gap:8px; padding:10px; background:#f9f9f9; border-radius:12px; margin-bottom:10px; border:1px solid #eee; box-shadow:inset 0 0 5px rgba(0,0,0,0.05);">` +
+                       groups[subKey].map(s => renderStyleBtn(s)).join("") +
+                       `</div>`;
+          }
       });
 
       container.innerHTML = html;
   }
 
+  // Rendu Bouton Style
   function renderStyleBtn(s) {
       let isActive = false;
       if (s.mode === 'manual') {
@@ -294,14 +316,50 @@
       `;
   }
 
+  // Rendu Bouton Parent (Groupe)
+  function renderGroupBtn(name, isExpanded, isActive) {
+      const bgColor = isActive ? '#E1F0FF' : '#fff';
+      const arrow = isExpanded ? '▼' : '▶';
+      
+      return `
+         <button class="group-btn-click" 
+            data-group="${name.replace(/"/g, '&quot;')}"
+            style="width:100%; text-align:left; display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid #eee; background:${bgColor}; padding:8px 12px; border-radius:12px; margin-bottom:5px; transition: all 0.2s; font-weight:600; color:#333; cursor:pointer;">
+            <span>${name}</span>
+            <span style="font-size:10px; color:#888;">${arrow}</span>
+         </button>
+      `;
+  }
+
+  // --- EVENT LISTENERS ---
   document.addEventListener('click', function(e) {
+      // 1. Bouton Style
       const btn = e.target.closest('.style-btn-click');
       if (btn) {
           const name = btn.getAttribute('data-name');
           if (name) window.toggleImgStyle(name);
       }
+
+      // 2. Bouton Groupe
+      const groupBtn = e.target.closest('.group-btn-click');
+      if (groupBtn) {
+          const group = groupBtn.getAttribute('data-group');
+          if (group) window.toggleGroup(group);
+      }
   });
 
+  // --- LOGIQUE TOGGLE GROUP ---
+  window.toggleGroup = (groupName) => {
+      const idx = state.expandedGroups.indexOf(groupName);
+      if(idx > -1) {
+          state.expandedGroups.splice(idx, 1);
+      } else {
+          state.expandedGroups.push(groupName);
+      }
+      renderImgStylesButtons();
+  };
+
+  // --- LOGIQUE TOGGLE STYLE ---
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName);
       if(!style) return;
@@ -309,10 +367,12 @@
       const promptClean = style.prompt.trim();
 
       if (style.mode === 'manual') {
+          // MODE MANUEL
           const idx = state.manualImgStyles.indexOf(styleName);
           let currentText = $("imgGenPrompt").value.trim();
           
           if (idx > -1) {
+              // DÉSACTIVATION
               state.manualImgStyles.splice(idx, 1);
               if (currentText.includes(promptClean)) {
                   const parts = currentText.split(promptClean);
@@ -325,6 +385,7 @@
                   renderInputImages();
               }
           } else {
+              // ACTIVATION
               state.manualImgStyles.push(styleName);
               if (!currentText.includes(promptClean)) {
                   $("imgGenPrompt").value = (currentText + " " + promptClean).trim();
@@ -335,6 +396,7 @@
               }
           }
       } else {
+          // MODE AUTO
           const idx = state.selectedImgStyles.findIndex(s => s.name === styleName);
           if (idx > -1) { state.selectedImgStyles.splice(idx, 1); } 
           else { state.selectedImgStyles.push(style); }
@@ -406,6 +468,7 @@
   
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   
+  // --- MOTEUR DE GÉNÉRATION ---
   async function callGeminiImageGen() {
       const userPrompt = $("imgGenPrompt").value;
       if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style.");
@@ -473,6 +536,7 @@
       $("imgGenPrompt").value = ""; 
       renderImgStylesButtons(); 
 
+      // EXECUTION
       newItems.forEach(async (item, index) => {
           const batchData = batches[index];
           try {
@@ -537,6 +601,7 @@
         </div>
       `}).join("");
 
+      // Saved Results
       let savedHtml = "";
       if(state.imageBase64) {
           savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default;">
@@ -570,6 +635,7 @@
       $("imgGenSavedResults").innerHTML = savedHtml;
   }
 
+  // --- TOGGLE SAVED IMAGE ---
   window.toggleSavedImg = (index) => {
       const item = state.savedGeneratedImages[index];
       if(!item) return;
@@ -680,7 +746,8 @@
               throw new Error("Erreur serveur (" + res.status + "): " + errorText);
           }
 
-          // Pas besoin de mettre à jour le cache ici car on le recharge au clic
+          const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
+          if (histItem) histItem.generated_images = payload.generated_images;
           alert("Images enregistrées !");
           renderGenImages();
           document.querySelector('button[data-tab="tab-img-saved"]').click();
