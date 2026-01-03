@@ -5,10 +5,7 @@
   const ICONS = {
     folder: `<svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>`,
     group: `<svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>`,
-    style: `<svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
-    edit: `<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`,
-    add: `<svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>`,
-    trash: `<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`
+    style: `<svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`
   };
 
   const DEFAULTS = {
@@ -167,10 +164,11 @@
       if (type === "folder") icon = ICONS.folder;
       if (type === "style") icon = ICONS.style;
       
+      // BOUTONS TEXTUELS EXPLICITES (CORRECTION)
       let addBtns = "";
-      if (type === "category") addBtns = `<button class="action-btn-ios" onclick="window.addNode('group', '${data.id}')" title="Ajouter Groupe">${ICONS.group}</button> <button class="action-btn-ios" onclick="window.addNode('folder', '${data.id}', 'category')" title="Ajouter Btn Multiple">${ICONS.folder}</button> <button class="action-btn-ios" onclick="window.addNode('style', '${data.id}', 'category')" title="Ajouter Btn Simple">${ICONS.style}</button>`;
-      if (type === "group") addBtns = `<button class="action-btn-ios" onclick="window.addNode('folder', '${data.id}', 'group')" title="Ajouter Btn Multiple">${ICONS.folder}</button> <button class="action-btn-ios" onclick="window.addNode('style', '${data.id}', 'group')" title="Ajouter Btn Simple">${ICONS.style}</button>`;
-      if (type === "folder") addBtns = `<button class="action-btn-ios" onclick="window.addNode('style', '${data.id}', 'folder')" title="Ajouter Btn Simple">${ICONS.style}</button>`;
+      if (type === "category") addBtns = `<button class="action-btn-text" onclick="window.addNode('group', '${data.id}')">+ Groupe</button> <button class="action-btn-text" onclick="window.addNode('folder', '${data.id}', 'category')">+ Multiple</button> <button class="action-btn-text" onclick="window.addNode('style', '${data.id}', 'category')">+ Bouton</button>`;
+      if (type === "group") addBtns = `<button class="action-btn-text" onclick="window.addNode('folder', '${data.id}', 'group')">+ Multiple</button> <button class="action-btn-text" onclick="window.addNode('style', '${data.id}', 'group')">+ Bouton</button>`;
+      if (type === "folder") addBtns = `<button class="action-btn-text" onclick="window.addNode('style', '${data.id}', 'folder')">+ Bouton</button>`;
 
       el.innerHTML = `
         <div class="tree-header">
@@ -178,14 +176,13 @@
             <span class="t-label">${data.name}</span>
             <div class="t-actions">
                 ${addBtns}
-                <button class="action-btn-ios" onclick="window.editNode('${type}', '${data.id}')">${ICONS.edit}</button>
-                <button class="action-btn-ios btn-delete" onclick="window.deleteNodeDirect('${type}', '${data.id}')">${ICONS.trash}</button>
+                <button class="action-btn-text" onclick="window.editNode('${type}', '${data.id}')">Modifier</button>
+                <button class="action-btn-text btn-delete" onclick="window.deleteNodeDirect('${type}', '${data.id}')">Suppr.</button>
             </div>
         </div>
         <div class="tree-children"></div>
       `;
 
-      // --- DRAG & DROP ---
       const header = el.querySelector('.tree-header');
       el.addEventListener('dragstart', (e) => {
           state.draggedItem = { id: data.id, type: type, parentId: parentId };
