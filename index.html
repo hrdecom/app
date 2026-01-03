@@ -49,63 +49,92 @@
           <div id="tab-img-styles" class="tab-content hidden">
              
              <div class="config-section">
-                <label>1. GROUPES (Sections Visuelles)</label>
+                <label>1. CATÉGORIES (Onglets Principaux)</label>
+                <div id="imgCategoriesList" class="tags-container"></div>
+                <div style="display:flex; gap:10px; margin-top:5px;">
+                   <input type="text" id="newImgCategoryInput" placeholder="Nouvelle catégorie (ex: Bagues, Colliers)..." style="flex:1;">
+                   <button id="addImgCategoryBtn" class="secondary-btn">+ Créer</button>
+                </div>
+             </div>
+
+             <hr class="separator">
+
+             <div class="config-section">
+                <label>2. GROUPES (Titres de Séparation)</label>
                 <div id="imgGroupsList" class="tags-container"></div>
                 <div style="display:flex; gap:10px; margin-top:5px;">
-                   <input type="text" id="newImgGroupInput" placeholder="Nouveau groupe (ex: Couleurs)" style="flex:1;">
-                   <button id="addImgGroupBtn" class="secondary-btn">+ Créer Groupe</button>
+                   <input type="text" id="newImgGroupInput" placeholder="Nouveau groupe (ex: Métal, Ambiance)..." style="flex:1;">
+                   <button id="addImgGroupBtn" class="secondary-btn">+ Créer</button>
                 </div>
              </div>
 
-             <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+             <hr class="separator">
 
              <div class="config-section">
-                <label>2. BOUTONS À CHOIX MULTIPLE (Dossiers)</label>
-                <div id="imgFoldersList" class="list-container"></div>
-                
-                <div class="add-box">
-                    <span style="font-size:10px; font-weight:bold; color:#666; margin-bottom:5px; display:block;">NOUVEAU DOSSIER</span>
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px;">
+                    <label style="margin:0;">3. ORGANISATION (Glisser-Déposer)</label>
                     <div style="display:flex; gap:10px;">
-                        <input type="text" id="newFolderInput" placeholder="Nom (ex: Or Jaune)" style="flex:1;">
-                        <select id="newFolderCategory" style="flex:1;"><option value="">Catégorie...</option></select>
-                        <select id="newFolderGroup" style="flex:1;"><option value="">Groupe...</option></select>
-                        <button id="addFolderBtn" class="primary-btn" style="padding:5px 10px;">Ajouter</button>
+                         <button id="createNewFolderBtn" class="small-action-btn">📁 Créer Dossier (Choix Multiple)</button>
+                         <button id="createNewStyleBtn" class="small-action-btn">✨ Créer Bouton Prompt</button>
                     </div>
+                </div>
+                
+                <div class="organizer-container">
+                    <p style="font-size:11px; color:#666; margin:5px 0 10px;">
+                       💡 Glissez les <b>Boutons Prompts</b> dans les <b>Dossiers</b>. Glissez les éléments pour changer l'ordre d'affichage.
+                       Cliquez sur ✏️ pour modifier.
+                    </p>
+                    <div id="organizerList" class="organizer-list"></div>
                 </div>
              </div>
 
-             <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+             <div id="styleEditorModal" class="modal hidden" style="z-index:10001;">
+                <div class="modal-content" style="max-width:500px; height:auto; max-height:90vh;">
+                    <div class="modal-header">
+                        <h3 id="editorTitle">Éditer</h3>
+                        <button id="closeEditorBtn" class="close-btn">×</button>
+                    </div>
+                    <div style="padding:20px; display:flex; flex-direction:column; gap:15px; overflow-y:auto;">
+                        <div>
+                            <label style="font-size:11px; font-weight:bold;">Nom</label>
+                            <input type="text" id="editItemName" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;">
+                        </div>
 
-             <div class="config-section">
-                <label>3. BOUTONS PROMPTS (Actions)</label>
-                <p style="font-size:11px; color:#888; margin-bottom:10px;">Ces boutons seront placés DANS un dossier ci-dessus.</p>
-                <div id="imgStyleEditorList" class="list-container"></div>
-                
-                <div id="imgStyleEditorForm" class="add-box">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <label style="font-size:10px; font-weight:bold; color:#007AFF;" id="imgStyleFormTitle">AJOUTER UN PROMPT</label>
-                        <button id="cancelImgStyleEditBtn" class="secondary-btn hidden" style="font-size:10px; padding:2px 8px;">Annuler</button>
-                    </div>
-                    
-                    <div style="display:grid; grid-template-columns: 2fr 1fr; gap:10px; margin-bottom:10px;">
-                       <input type="text" id="newImgStyleName" placeholder="Nom du bouton (ex: Brillant)" style="width:100%;">
-                       <select id="newImgStyleFolder" style="width:100%; font-weight:bold;">
-                          <option value="">Choisir un Dossier...</option>
-                       </select>
-                    </div>
+                        <div id="folderFields" class="hidden">
+                             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                                 <div>
+                                    <label style="font-size:11px; font-weight:bold;">Catégorie</label>
+                                    <select id="editFolderCategory" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></select>
+                                 </div>
+                                 <div>
+                                    <label style="font-size:11px; font-weight:bold;">Groupe</label>
+                                    <select id="editFolderGroup" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></select>
+                                 </div>
+                             </div>
+                        </div>
 
-                    <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
-                        <select id="newImgStyleMode" style="flex:1;">
-                           <option value="auto">⚡ Auto (Envoi direct)</option>
-                           <option value="manual">📝 Manuel (Ajout texte)</option>
-                        </select>
-                        <input type="file" id="newImgStyleFile" accept="image/*" style="font-size:11px; flex:1;">
-                        <div id="currentRefImgPreview" class="hidden" style="font-size:10px; color:green;">Img OK</div>
+                        <div id="styleFields" class="hidden">
+                             <div>
+                                <label style="font-size:11px; font-weight:bold;">Mode d'application</label>
+                                <select id="editStyleMode" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;">
+                                   <option value="auto">⚡ Auto (Envoi direct)</option>
+                                   <option value="manual">📝 Manuel (Ajout texte chat)</option>
+                                </select>
+                             </div>
+                             <div>
+                                <label style="font-size:11px; font-weight:bold;">Image de référence</label>
+                                <input type="file" id="editStyleFile" accept="image/*" style="font-size:11px; display:block; margin-top:5px;">
+                                <div id="editStyleImgPreview" style="font-size:10px; color:green; margin-top:2px;"></div>
+                             </div>
+                             <div>
+                                <label style="font-size:11px; font-weight:bold;">Prompt</label>
+                                <textarea id="editStylePrompt" rows="3" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></textarea>
+                             </div>
+                        </div>
+
+                        <button id="saveItemBtn" class="primary-btn" style="width:100%;">Enregistrer</button>
+                        <button id="deleteItemBtn" class="secondary-btn" style="width:100%; color:red; border-color:red;">Supprimer</button>
                     </div>
-                    
-                    <textarea id="newImgStylePrompt" rows="2" placeholder="Prompt IA..." style="width:100%;"></textarea>
-                    
-                    <button id="addImgStyleBtn" class="secondary-btn" style="width:100%; margin-top:10px;">+ Enregistrer le Prompt</button>
                 </div>
              </div>
 
@@ -123,33 +152,9 @@
 
   <div id="headlinesModal" class="modal hidden">
     <div class="modal-content">
-      <div class="modal-header">
-          <h2>Headlines Vidéos</h2>
-          <div class="dropdown">
-              <button id="translateHlMenuBtn" class="secondary-btn">🌍 Traduire...</button>
-              <div id="hlLangList" class="dropdown-content"></div>
-          </div>
-          <button id="closeHeadlines" class="close-btn">×</button>
-      </div>
-      <div class="tabs" id="headlinesTabs">
-        <button class="tab-link active" data-tab="tab-gen-headlines">Générer</button>
-        <button class="tab-link" data-tab="tab-saved-headlines">Enregistrées</button>
-      </div>
-      <div id="headlinesTabContainer" class="tab-container-scroll">
-          <div id="tab-gen-headlines" class="tab-content">
-            <div class="style-selector" id="styleSelectorContainer"></div>
-            <div id="headlinesResults" class="headlines-results"></div>
-            <div class="headlines-actions-wrapper">
-                <div class="headlines-actions hidden" id="similarActions">
-                    <button id="genSimilarBtn" class="secondary-btn" style="width:100%; color: var(--apple-blue);">✨ Générer versions similaires</button>
-                </div>
-                <div id="headlinesLocalPagination" class="pagination"></div>
-            </div>
-          </div>
-          <div id="tab-saved-headlines" class="tab-content hidden">
-            <div id="headlinesSavedList" class="headlines-results"></div>
-          </div>
-      </div>
+      <div class="modal-header"><h2>Headlines Vidéos</h2><div class="dropdown"><button id="translateHlMenuBtn" class="secondary-btn">🌍 Traduire...</button><div id="hlLangList" class="dropdown-content"></div></div><button id="closeHeadlines" class="close-btn">×</button></div>
+      <div class="tabs" id="headlinesTabs"><button class="tab-link active" data-tab="tab-gen-headlines">Générer</button><button class="tab-link" data-tab="tab-saved-headlines">Enregistrées</button></div>
+      <div id="headlinesTabContainer" class="tab-container-scroll"><div id="tab-gen-headlines" class="tab-content"><div class="style-selector" id="styleSelectorContainer"></div><div id="headlinesResults" class="headlines-results"></div><div class="headlines-actions-wrapper"><div class="headlines-actions hidden" id="similarActions"><button id="genSimilarBtn" class="secondary-btn">✨ Générer versions similaires</button></div><div id="headlinesLocalPagination" class="pagination"></div></div></div><div id="tab-saved-headlines" class="tab-content hidden"><div id="headlinesSavedList" class="headlines-results"></div></div></div>
       <div class="chat-container"><div class="chat-bar"><input type="text" id="headlineStyleInput" placeholder="Style..."/><button id="sendHeadlineChat">↑</button></div></div>
       <div class="modal-footer"><button id="saveHeadlinesBtn" class="primary-btn">Enregistrer sélections</button></div>
     </div>
@@ -157,34 +162,9 @@
 
   <div id="adsModal" class="modal hidden">
     <div class="modal-content">
-      <div class="modal-header">
-          <h2>Ad Copys</h2>
-          <div class="dropdown">
-              <button id="translateAdMenuBtn" class="secondary-btn">🌍 Traduire...</button>
-              <div id="adLangList" class="dropdown-content"></div>
-          </div>
-          <button id="closeAds" class="close-btn">×</button>
-      </div>
-      <div class="tabs" id="adsTabs">
-        <button class="tab-link active" data-tab="tab-gen-ads">Générer</button>
-        <button class="tab-link" data-tab="tab-saved-ads">Enregistrés</button>
-      </div>
-      <div id="adsTabContainer" class="tab-container-scroll">
-          <div id="tab-gen-ads" class="tab-content">
-            <div class="style-selector" id="adStyleSelectorContainer"></div>
-            <div id="adsResults" class="headlines-results"></div>
-            <div class="headlines-actions-wrapper">
-                <div class="headlines-actions hidden" id="similarAdsActions">
-                    <button id="genSimilarAdsBtn" class="secondary-btn" style="width:100%; color: var(--apple-blue);">✨ Générer versions similaires</button>
-                </div>
-                <div id="adsLocalPagination" class="pagination"></div>
-            </div>
-          </div>
-          <div id="tab-saved-ads" class="tab-content hidden">
-            <div id="adsSavedList" class="headlines-results"></div>
-            <div id="adsDefaultInfoBlock" class="ads-info-block"></div>
-          </div>
-      </div>
+      <div class="modal-header"><h2>Ad Copys</h2><div class="dropdown"><button id="translateAdMenuBtn" class="secondary-btn">🌍 Traduire...</button><div id="adLangList" class="dropdown-content"></div></div><button id="closeAds" class="close-btn">×</button></div>
+      <div class="tabs" id="adsTabs"><button class="tab-link active" data-tab="tab-gen-ads">Générer</button><button class="tab-link" data-tab="tab-saved-ads">Enregistrés</button></div>
+      <div id="adsTabContainer" class="tab-container-scroll"><div id="tab-gen-ads" class="tab-content"><div class="style-selector" id="adStyleSelectorContainer"></div><div id="adsResults" class="headlines-results"></div><div class="headlines-actions-wrapper"><div class="headlines-actions hidden" id="similarAdsActions"><button id="genSimilarAdsBtn" class="secondary-btn">✨ Générer versions similaires</button></div><div id="adsLocalPagination" class="pagination"></div></div></div><div id="tab-saved-ads" class="tab-content hidden"><div id="adsSavedList" class="headlines-results"></div><div id="adsDefaultInfoBlock" class="ads-info-block"></div></div></div>
       <div class="chat-container"><div class="chat-bar"><input type="text" id="adStyleInput" placeholder="Style..."/><button id="sendAdChat">↑</button></div></div>
       <div class="modal-footer"><button id="saveAdsBtn" class="primary-btn">Enregistrer sélections</button></div>
     </div>
@@ -234,38 +214,18 @@
             <button id="closeImgGen" class="close-btn">×</button>
          </div>
          <div style="padding: 20px; display: flex; flex-direction: column; gap: 20px;">
-            
             <div class="setting-group">
                <label style="font-size:11px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Nombre d'images</label>
-               <select id="imgCount" class="settings-select">
-                  <option value="1">1</option>
-                  <option value="2" selected>2</option>
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                  <option value="5">5</option>
-               </select>
+               <select id="imgCount" class="settings-select"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select>
             </div>
-
             <div class="setting-group">
                <label style="font-size:11px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Aspect Ratio</label>
-               <select id="imgAspectRatio" class="settings-select">
-                  <option value="1:1">1:1 (Carré)</option>
-                  <option value="16:9">16:9 (Paysage)</option>
-                  <option value="9:16">9:16 (Story)</option>
-                  <option value="4:3">4:3</option>
-                  <option value="3:4">3:4</option>
-               </select>
+               <select id="imgAspectRatio" class="settings-select"><option value="1:1">1:1 (Carré)</option><option value="16:9">16:9 (Paysage)</option><option value="9:16">9:16 (Story)</option><option value="4:3">4:3</option><option value="3:4">3:4</option></select>
             </div>
-            
             <div class="setting-group">
                <label style="font-size:11px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Résolution / Qualité</label>
-               <select id="imgResolution" class="settings-select">
-                  <option value="1k">1k (Standard)</option>
-                  <option value="2k">2k (Haute Déf.)</option>
-                  <option value="4k" selected>4k (Ultra HD)</option>
-               </select>
+               <select id="imgResolution" class="settings-select"><option value="1k">1k (Standard)</option><option value="2k">2k (Haute Déf.)</option><option value="4k" selected>4k (Ultra HD)</option></select>
             </div>
-
             <div style="margin-top:auto;">
                <button id="saveImgSelectionBtn" class="primary-btn" style="width:100%;">Enregistrer Sélection</button>
             </div>
@@ -279,28 +239,13 @@
 
   <section class="workspace">
     <div class="left">
-        <div id="drop" class="drop">
-          <input id="imageInput" type="file" accept="image/*"/>
-          <div id="preview" class="preview hidden"><button id="removeImage" class="modern-remove-btn">×</button><img id="previewImg"/></div>
-          <p id="dropPlaceholder">Cliquez ou déposez une image</p>
-        </div>
-        <button id="openImgGenBtn" class="secondary-btn" style="width: 100%; margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-           <span>🎨</span> Generate Images
-        </button>
+        <div id="drop" class="drop"><input id="imageInput" type="file" accept="image/*"/><div id="preview" class="preview hidden"><button id="removeImage" class="modern-remove-btn">×</button><img id="previewImg"/></div><p id="dropPlaceholder">Cliquez ou déposez une image</p></div>
+        <button id="openImgGenBtn" class="secondary-btn" style="width: 100%; margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;"><span>🎨</span> Generate Images</button>
     </div>
     <div class="right">
-      <section class="card"><label>Collection</label><select id="collectionSelect" style="margin-bottom:15px;"></select>
-        <div class="actions">
-          <button id="generateBtn" class="primary-btn" disabled>Générer Tout</button>
-          <button id="regenTitleBtn" class="secondary-btn" disabled>Titre</button>
-          <button id="regenDescBtn" class="secondary-btn" disabled>Description</button>
-        </div>
-      </section>
+      <section class="card"><label>Collection</label><select id="collectionSelect" style="margin-bottom:15px;"></select><div class="actions"><button id="generateBtn" class="primary-btn" disabled>Générer Tout</button><button id="regenTitleBtn" class="secondary-btn" disabled>Titre</button><button id="regenDescBtn" class="secondary-btn" disabled>Description</button></div></section>
       <section class="card"><div class="card-head"><h3>Titre</h3><button id="copyTitle">⌘C</button></div><pre id="titleText"></pre></section>
-      <section class="card"><div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div><pre id="descText"></pre>
-        <div style="margin-top:15px;"><label style="font-size:10px; font-weight:bold; color:var(--text-muted);">Product URL</label><input type="text" id="productUrlInput" placeholder="https://en.riccardiparis.com/..."/></div>
-        <div style="display:flex; gap:10px; margin-top:15px;"><button id="openHeadlinesBtn" class="secondary-btn" style="flex:1;">🎬 Headlines</button><button id="openAdsBtn" class="secondary-btn" style="flex:1;">📢 Ad Copys</button></div>
-      </section>
+      <section class="card"><div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div><pre id="descText"></pre><div style="margin-top:15px;"><label style="font-size:10px; font-weight:bold; color:var(--text-muted);">Product URL</label><input type="text" id="productUrlInput" placeholder="https://en.riccardiparis.com/..."/></div><div style="display:flex; gap:10px; margin-top:15px;"><button id="openHeadlinesBtn" class="secondary-btn" style="flex:1;">🎬 Headlines</button><button id="openAdsBtn" class="secondary-btn" style="flex:1;">📢 Ad Copys</button></div></section>
     </div>
   </section>
 
