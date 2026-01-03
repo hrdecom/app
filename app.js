@@ -1,3 +1,7 @@
+{
+type: uploaded file
+fileName: hrdecom/app/app-0c9ef930b25fd034277c072055e9cefc92f8be42/app.js
+fullContent:
 (() => {
   const $ = (id) => document.getElementById(id);
 
@@ -281,16 +285,16 @@
           isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
       }
 
-      // Design amélioré
+      // Design moderne "Tag"
       const borderStyle = s.mode === 'manual' ? 'border:1px dashed #007AFF;' : 'border:1px solid #e5e5e5;';
       const bgColor = isActive ? '#007AFF' : '#fff';
       const color = isActive ? '#fff' : '#1d1d1f';
       const shadow = isActive ? 'box-shadow: 0 2px 5px rgba(0,122,255,0.3);' : 'box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
 
-      // NOTE: On utilise data-name pour l'event listener afin d'éviter les problèmes d'échappement de quotes
+      // NOTE CRUCIALE : Ajout de la classe "style-btn-click" pour l'event listener
       return `
          <button class="style-tag style-btn-click" 
-            data-name="${s.name}" 
+            data-name="${s.name.replace(/"/g, '&quot;')}"
             style="display:flex; align-items:center; gap:6px; flex-shrink:0; ${borderStyle} background:${bgColor}; color:${color}; padding:6px 12px; border-radius:20px; transition: all 0.2s; ${shadow} font-weight:500;">
             ${s.refImage ? '<span style="width:16px; height:16px; background:#f0f0f0; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
             <span>${s.name}</span>
@@ -299,8 +303,7 @@
       `;
   }
 
-  // GLOBAL CLICK DELEGATION POUR LES BOUTONS STYLES
-  // (Empêche les bugs d'injection HTML/Onclick)
+  // --- EVENT LISTENER ROBUSTE POUR LES CLICS ---
   document.addEventListener('click', function(e) {
       const btn = e.target.closest('.style-btn-click');
       if (btn) {
@@ -314,7 +317,7 @@
       const style = state.config.imgStyles.find(s => s.name === styleName);
       if(!style) return;
 
-      const promptClean = style.prompt.trim(); // Prompt du bouton nettoyé
+      const promptClean = style.prompt.trim();
 
       if (style.mode === 'manual') {
           // MODE MANUEL
@@ -325,15 +328,12 @@
               // DÉSACTIVATION
               state.manualImgStyles.splice(idx, 1);
               
-              // Suppression Robuste (Split/Join) pour ignorer les espaces multiples
               if (currentText.includes(promptClean)) {
                   const parts = currentText.split(promptClean);
-                  // On recolle les morceaux et on nettoie les doubles espaces
                   currentText = parts.map(p => p.trim()).filter(p => p).join(" ");
                   $("imgGenPrompt").value = currentText;
               }
 
-              // Retrait Image
               if (style.refImage) {
                   const imgIdx = state.inputImages.indexOf(style.refImage);
                   if (imgIdx > -1) state.inputImages.splice(imgIdx, 1);
@@ -343,12 +343,10 @@
               // ACTIVATION
               state.manualImgStyles.push(styleName);
               
-              // Ajout texte (si pas déjà dedans)
               if (!currentText.includes(promptClean)) {
                   $("imgGenPrompt").value = (currentText + " " + promptClean).trim();
               }
 
-              // Ajout Image
               if (style.refImage && !state.inputImages.includes(style.refImage)) {
                   state.inputImages.push(style.refImage);
                   renderInputImages();
@@ -572,7 +570,6 @@
       }
 
       savedHtml += state.savedGeneratedImages.map((item, i) => {
-          // CORRECTION: Sélection visuelle si dans inputImages
           const isSelected = state.inputImages.includes(item.image);
           const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : '';
 
@@ -907,3 +904,4 @@
 
   init();
 })();
+}
