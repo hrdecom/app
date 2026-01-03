@@ -1,6 +1,16 @@
 (() => {
   const $ = (id) => document.getElementById(id);
 
+  /* --- ICONS SVG --- */
+  const ICONS = {
+      category: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`,
+      group: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>`,
+      folder: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`,
+      style: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>`,
+      chevronDown: `<svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4 4-4"/></svg>`,
+      chevronRight: `<svg width="6" height="10" viewBox="0 0 6 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4-4 4"/></svg>`
+  };
+
   const DEFAULTS = {
     collections: [{ name: "Initial", meaning: "Letter jewelry." }],
     promptSystem: "Senior luxury jewelry copywriter.",
@@ -12,24 +22,11 @@
     headlineStyles: [{ name: "POV", prompt: "POV perspective." }],
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }],
     
-    // NOUVELLE STRUCTURE HIERARCHIQUE PAR DEFAUT
-    imgCategories: [
-        { id: "cat_1", name: "Collier" },
-        { id: "cat_2", name: "Bague" },
-        { id: "cat_3", name: "Bracelet" }
-    ],
-    imgGroups: [
-        { id: "grp_1", name: "Petit collier", categoryId: "cat_1" },
-        { id: "grp_2", name: "Gros collier", categoryId: "cat_1" }
-    ],
-    imgFolders: [
-        { id: "fol_1", name: "Photo portée", parentId: "grp_1", parentType: "group" },
-        { id: "fol_2", name: "Changer couleur", parentId: "cat_1", parentType: "category" }
-    ],
-    imgStyles: [
-        { id: "sty_1", name: "Sur cou", prompt: "On neck.", parentId: "fol_1", parentType: "folder" },
-        { id: "sty_2", name: "Sur main", prompt: "On hand.", parentId: "fol_1", parentType: "folder" }
-    ]
+    // STRUCTURE HIERARCHIQUE
+    imgCategories: [ { id: "cat_1", name: "Collier" } ],
+    imgGroups: [ { id: "grp_1", name: "Petit collier", categoryId: "cat_1" } ],
+    imgFolders: [ { id: "fol_1", name: "Photo portée", parentId: "grp_1", parentType: "group" } ],
+    imgStyles: [ { id: "sty_1", name: "Sur cou", prompt: "On neck.", parentId: "fol_1", parentType: "folder" } ]
   };
 
   let state = {
@@ -37,40 +34,29 @@
     config: JSON.parse(JSON.stringify(DEFAULTS)),
     currentPage: 1, pageSize: 5, searchQuery: "", currentHistoryId: null,
     timerInterval: null, sessionHeadlines: [], sessionAds: [],
-    selectedHeadlines: [], selectedAds: [],
-    headlinesTrans: {}, adsTrans: {},
-    selHlStyles: [], selAdStyles: [],
+    selectedHeadlines: [], selectedAds: [], selHlStyles: [], selAdStyles: [],
     hlPage: 1, adPage: 1,
-    // ETATS IMAGES
-    inputImages: [], 
-    sessionGeneratedImages: [], 
-    savedGeneratedImages: [], 
-    selectedSessionImagesIdx: [],
-    // ETATS UI STUDIO
+    
+    // STATES IMAGES
+    inputImages: [], sessionGeneratedImages: [], savedGeneratedImages: [], selectedSessionImagesIdx: [],
+    
+    // STATES UI STUDIO
     currentImgCategory: "",
-    currentStudioGroup: "", 
-    activeFolderId: null, 
+    expandedGroups: [], // Liste des IDs de groupes ouverts
+    activeFolderId: null, // ID du bouton multiple ouvert
     selectedImgStyles: [], 
     manualImgStyles: [],   
     
-    // DRAG & DROP STATE
+    // DRAG & DROP
     draggedItem: null
   };
 
-  const startLoading = () => {
-    let s = 0; $("timer").textContent = "00:00";
-    if (state.timerInterval) clearInterval(state.timerInterval);
-    state.timerInterval = setInterval(() => { s++; const mm = String(Math.floor(s/60)).padStart(2,"0"); const ss = String(s%60).padStart(2,"0"); $("timer").textContent = `${mm}:${ss}`; }, 1000);
-    $("loading").classList.remove("hidden");
-  };
+  /* --- UTILS --- */
+  const startLoading = () => { let s = 0; $("timer").textContent = "00:00"; if(state.timerInterval) clearInterval(state.timerInterval); state.timerInterval = setInterval(() => { s++; $("timer").textContent = `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`; }, 1000); $("loading").classList.remove("hidden"); };
   const stopLoading = () => { clearInterval(state.timerInterval); $("loading").classList.add("hidden"); };
+  const formatLangUrl = (url, sub="en.") => url ? url.replace(/https:\/\/(en\.|dn\.|du\.|de\.|it\.|pl\.|pt-br\.|pt\.|es\.)/, "https://").replace("https://", `https://${sub}`) : "";
 
-  const formatLangUrl = (url, sub = "en.") => {
-    if (!url) return "";
-    let cleanUrl = url.replace(/https:\/\/(en\.|dn\.|du\.|de\.|it\.|pl\.|pt-br\.|pt\.|es\.)/, "https://");
-    return cleanUrl.replace("https://", `https://${sub}`);
-  };
-
+  /* --- CONFIG LOAD --- */
   async function loadConfig() {
     const res = await fetch("/api/settings");
     const data = await res.json();
@@ -79,47 +65,36 @@
       const parsed = JSON.parse(saved.value);
       state.config = { ...DEFAULTS, ...parsed }; 
       
-      // --- MIGRATION AUTOMATIQUE (Correction du bug "undefined") ---
-      // Si les catégories sont encore sous forme de chaînes de caractères (ancienne version)
+      // AUTO MIGRATION (Fix bugs old structure)
       if (Array.isArray(state.config.imgCategories) && state.config.imgCategories.length > 0 && typeof state.config.imgCategories[0] === 'string') {
-          console.log("Migration des catégories détectée...");
           state.config.imgCategories = state.config.imgCategories.map((c, i) => ({ id: "cat_" + i, name: c }));
-          
-          // Migration basique des groupes s'ils étaient des chaînes
           if (Array.isArray(state.config.imgGroups) && typeof state.config.imgGroups[0] === 'string') {
                const defaultCatId = state.config.imgCategories[0].id;
                state.config.imgGroups = state.config.imgGroups.map((g, i) => ({ id: "grp_" + i, name: g, categoryId: defaultCatId }));
           }
-          
-          // Initialisation des listes manquantes si nécessaire
           if (!state.config.imgFolders) state.config.imgFolders = [];
           if (!state.config.imgStyles) state.config.imgStyles = [];
       }
-      // --- FIN MIGRATION ---
     }
     
-    // Init Studio Category avec le premier ID disponible
-    if (state.config.imgCategories.length > 0) {
-        state.currentImgCategory = state.config.imgCategories[0].id;
-    }
+    if (state.config.imgCategories.length > 0) state.currentImgCategory = state.config.imgCategories[0].id;
     renderConfigUI();
   }
 
   function renderConfigUI() {
-    ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => { 
-      if($(id)) $(id).value = state.config[id] || DEFAULTS[id]; 
-    });
+    ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => { if($(id)) $(id).value = state.config[id] || DEFAULTS[id]; });
     if($("configBlacklist")) $("configBlacklist").value = state.config.blacklist || "";
-    $("collectionsList").innerHTML = (state.config.collections || []).map((c, i) => `<div class="config-row collections-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${c.name}" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${c.meaning}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
-    $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
-    $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     
+    // Listes simples
+    $("collectionsList").innerHTML = (state.config.collections || []).map(c => `<div class="config-row collections-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${c.name}" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${c.meaning}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
+    $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map(s => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
+    $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map(s => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     $("collectionSelect").innerHTML = (state.config.collections || []).map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     
     renderStyleSelectors();
-    renderImgConfigTree();
-    renderStudioCategories();
-    renderImgStylesButtons();
+    renderImgConfigTree(); // L'arbre
+    renderStudioCategories(); // La barre de navigation du studio
+    renderImgStylesButtons(); // Le contenu du studio
   }
 
   function renderStyleSelectors() {
@@ -133,7 +108,7 @@
   };
 
   /* =========================================
-     NOUVEAU SYSTÈME HIERARCHIQUE (TREE EDITOR)
+     TREE EDITOR (HIERARCHY)
      ========================================= */
 
   function renderImgConfigTree() {
@@ -146,17 +121,12 @@
           container.appendChild(catNode);
           const childrenContainer = catNode.querySelector('.tree-children');
 
-          // A. Contenu GLOBAL de la Catégorie
+          // A. Contenu GLOBAL (Directement dans Catégorie)
           const globalFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'category' && f.parentId === cat.id);
           const globalStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'category' && s.parentId === cat.id);
-          
-          [...globalFolders, ...globalStyles].forEach(item => {
-             const type = item.prompt !== undefined ? 'style' : 'folder';
-             const node = createRecursiveNode(type, item);
-             childrenContainer.appendChild(node);
-          });
+          [...globalFolders, ...globalStyles].forEach(item => childrenContainer.appendChild(createRecursiveNode(item.prompt!==undefined?'style':'folder', item)));
 
-          // B. GROUPES de la Catégorie
+          // B. GROUPES
           const groups = (state.config.imgGroups||[]).filter(g => g.categoryId === cat.id);
           groups.forEach(grp => {
               const grpNode = createTreeNode("group", grp, cat.id);
@@ -166,12 +136,7 @@
               // C. Contenu du GROUPE
               const grpFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'group' && f.parentId === grp.id);
               const grpStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'group' && s.parentId === grp.id);
-
-              [...grpFolders, ...grpStyles].forEach(item => {
-                  const type = item.prompt !== undefined ? 'style' : 'folder';
-                  const node = createRecursiveNode(type, item);
-                  grpChildren.appendChild(node);
-              });
+              [...grpFolders, ...grpStyles].forEach(item => grpChildren.appendChild(createRecursiveNode(item.prompt!==undefined?'style':'folder', item)));
           });
       });
   }
@@ -181,10 +146,7 @@
       if (type === 'folder') {
           const childrenContainer = node.querySelector('.tree-children');
           const styles = (state.config.imgStyles||[]).filter(s => s.parentType === 'folder' && s.parentId === item.id);
-          styles.forEach(s => {
-              const sNode = createRecursiveNode('style', s);
-              childrenContainer.appendChild(sNode);
-          });
+          styles.forEach(s => childrenContainer.appendChild(createRecursiveNode('style', s)));
       }
       return node;
   }
@@ -196,19 +158,20 @@
       el.setAttribute('data-id', data.id);
       el.setAttribute('data-type', type);
       
-      let icon = "📁";
-      if (type === "category") icon = "📦";
-      if (type === "group") icon = "🔹";
-      if (type === "style") icon = "🎨";
-      
+      let icon = ICONS[type] || ICONS.style;
+      let label = data.name;
+      if (type === 'folder') label = data.name; // "Bouton Multi" dans l'UI tree ? non on garde le nom
+
+      // Boutons d'ajout contextuels
       let addBtns = "";
-      if (type === "category") addBtns = `<button class="small-action-btn" onclick="window.addNode('group', '${data.id}')">+ Groupe</button> <button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'category')">+ Dossier Global</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'category')">+ Style Global</button>`;
-      if (type === "group") addBtns = `<button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'group')">+ Dossier</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'group')">+ Style</button>`;
+      if (type === "category") addBtns = `<button class="small-action-btn" onclick="window.addNode('group', '${data.id}')">+ Groupe</button> <button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'category')">+ Bouton Multi</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'category')">+ Style</button>`;
+      if (type === "group") addBtns = `<button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'group')">+ Bouton Multi</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'group')">+ Style</button>`;
       if (type === "folder") addBtns = `<button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'folder')">+ Style</button>`;
 
       el.innerHTML = `
         <div class="tree-header">
-            <span>${icon} ${data.name}</span>
+            <span class="node-icon">${icon}</span>
+            <span class="node-label">${label}</span>
             <div class="node-actions">
                 ${addBtns}
                 <button class="small-action-btn" onclick="window.editNode('${type}', '${data.id}')">✏️</button>
@@ -217,23 +180,21 @@
         <div class="tree-children"></div>
       `;
 
+      // DRAG & DROP LOGIC
       const header = el.querySelector('.tree-header');
+      
       el.addEventListener('dragstart', (e) => {
           state.draggedItem = { id: data.id, type: type };
-          e.stopPropagation();
-          e.dataTransfer.effectAllowed = 'move';
-          el.style.opacity = '0.5';
+          e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; el.style.opacity = '0.5';
       });
       el.addEventListener('dragend', (e) => {
-          el.style.opacity = '1';
-          document.querySelectorAll('.drag-over-center, .drag-over-top, .drag-over-bottom').forEach(x => {
-              x.classList.remove('drag-over-center', 'drag-over-top', 'drag-over-bottom');
-          });
-          state.draggedItem = null;
+          el.style.opacity = '1'; state.draggedItem = null;
+          document.querySelectorAll('.drag-over-center').forEach(x => x.classList.remove('drag-over-center'));
       });
       header.addEventListener('dragover', (e) => {
           e.preventDefault(); e.stopPropagation();
           if(!state.draggedItem || state.draggedItem.id === data.id) return;
+          // Rules
           const src = state.draggedItem.type; const dest = type;
           let allow = false;
           if (src === 'group' && dest === 'category') allow = true;
@@ -243,13 +204,14 @@
       });
       header.addEventListener('dragleave', (e) => header.classList.remove('drag-over-center'));
       header.addEventListener('drop', (e) => {
-          e.preventDefault(); e.stopPropagation();
-          header.classList.remove('drag-over-center');
+          e.preventDefault(); e.stopPropagation(); header.classList.remove('drag-over-center');
           if(state.draggedItem && state.draggedItem.id !== data.id) window.moveNode(state.draggedItem, { id: data.id, type: type });
       });
+
       return el;
   }
 
+  /* --- CRUD ACTIONS --- */
   window.addCategoryBtn = $("addCategoryBtn");
   if(window.addCategoryBtn) window.addCategoryBtn.onclick = () => {
       const name = $("newCatName").value; if(!name) return;
@@ -264,20 +226,32 @@
       $("nodeEditorOverlay").classList.remove("hidden");
       $("editNodeId").value = id || ""; $("editNodeType").value = type;
       state.tempParentId = parentId; state.tempParentType = parentTypeContext;
+      
+      // Reset
       $("editNodeName").value = ""; $("editNodePrompt").value = ""; $("editNodeFile").value = "";
-      $("editNodeImgPreview").innerHTML = ""; $("editPromptContainer").classList.add("hidden");
+      $("editNodeImgPreview").innerHTML = "Aucune"; $("editPromptContainer").classList.add("hidden");
       
       let title = id ? "Modifier " : "Créer ";
-      if (type === 'group') title += "Groupe";
-      if (type === 'folder') title += "Bouton Multiple";
-      if (type === 'style') { title += "Style (Prompt)"; $("editPromptContainer").classList.remove("hidden"); }
+      let placeholder = "Nom...";
       
+      if (type === 'category') { title += "Catégorie"; }
+      else if (type === 'group') { title += "Groupe"; placeholder = "Ex: Matières, Couleurs..."; }
+      else if (type === 'folder') { title += "Bouton Multiple"; placeholder = "Nom du bouton (Ex: Photo Portée)"; }
+      else if (type === 'style') { 
+          title += "Style (Action)"; 
+          $("editPromptContainer").classList.remove("hidden"); 
+      }
+      
+      $("nodeEditorTitle").textContent = title;
+      $("editNodeName").placeholder = placeholder;
+
       if (id) {
           let item = null;
           if (type === 'category') item = state.config.imgCategories.find(x => x.id === id);
           if (type === 'group') item = state.config.imgGroups.find(x => x.id === id);
           if (type === 'folder') item = state.config.imgFolders.find(x => x.id === id);
           if (type === 'style') item = state.config.imgStyles.find(x => x.id === id);
+          
           if (item) {
               $("editNodeName").value = item.name;
               if (item.prompt) $("editNodePrompt").value = item.prompt;
@@ -285,58 +259,81 @@
               if (item.refImage) $("editNodeImgPreview").innerHTML = `<img src="data:image/jpeg;base64,${item.refImage}" style="width:100%;height:100%;object-fit:cover;">`;
           }
       }
-      $("nodeEditorTitle").textContent = title;
   }
 
   $("saveNodeBtn").onclick = () => {
       const id = $("editNodeId").value; const type = $("editNodeType").value; const name = $("editNodeName").value;
       if (!name) return alert("Nom requis");
 
-      if (!id) {
-          const newId = (type === 'group' ? 'grp_' : (type === 'folder' ? 'fol_' : 'sty_')) + Date.now();
-          const newItem = { id: newId, name };
-          if (type === 'group') { newItem.categoryId = state.tempParentId; state.config.imgGroups.push(newItem); } 
-          else {
-              newItem.parentId = state.tempParentId; newItem.parentType = state.tempParentType;
-              if (type === 'style') {
-                  newItem.prompt = $("editNodePrompt").value; newItem.mode = $("editNodeMode").value;
-                  const file = $("editNodeFile").files[0];
-                  if (file) { const r = new FileReader(); r.onload = (e) => { newItem.refImage = e.target.result.split(",")[1]; state.config.imgStyles.push(newItem); closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; }
-                  state.config.imgStyles.push(newItem);
-              } else { state.config.imgFolders.push(newItem); }
+      // Helper save
+      const saveToState = (newItem) => {
+          if (!id) {
+              if(type === 'category') state.config.imgCategories.push(newItem);
+              else if(type === 'group') state.config.imgGroups.push(newItem);
+              else if(type === 'folder') state.config.imgFolders.push(newItem);
+              else state.config.imgStyles.push(newItem);
+          } else {
+              // Update existing references are handled because objects are ref types, but simplistic approach:
+              // We find the object again and update props
+              let list = (type === 'category') ? state.config.imgCategories : (type === 'group') ? state.config.imgGroups : (type === 'folder') ? state.config.imgFolders : state.config.imgStyles;
+              const found = list.find(x => x.id === id);
+              if(found) Object.assign(found, newItem);
           }
-      } else {
-          let list = (type === 'category') ? state.config.imgCategories : (type === 'group') ? state.config.imgGroups : (type === 'folder') ? state.config.imgFolders : state.config.imgStyles;
-          const item = list.find(x => x.id === id);
-          if (item) {
-              item.name = name;
-              if (type === 'style') {
-                  item.prompt = $("editNodePrompt").value; item.mode = $("editNodeMode").value;
-                  const file = $("editNodeFile").files[0];
-                  if (file) { const r = new FileReader(); r.onload = (e) => { item.refImage = e.target.result.split(",")[1]; closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; }
-              }
+          closeNodeEditor(); renderConfigUI();
+      };
+
+      const newItem = id ? { id } : { id: (type === 'group' ? 'grp_' : (type === 'folder' ? 'fol_' : 'sty_')) + Date.now() };
+      newItem.name = name;
+      
+      if (!id) {
+          if (type === 'group') newItem.categoryId = state.tempParentId;
+          else if (type === 'folder' || type === 'style') { newItem.parentId = state.tempParentId; newItem.parentType = state.tempParentType; }
+      }
+
+      if (type === 'style') {
+          newItem.prompt = $("editNodePrompt").value; newItem.mode = $("editNodeMode").value;
+          const file = $("editNodeFile").files[0];
+          if (file) {
+              const r = new FileReader();
+              r.onload = (e) => { newItem.refImage = e.target.result.split(",")[1]; saveToState(newItem); };
+              r.readAsDataURL(file);
+              return;
           }
       }
-      closeNodeEditor(); renderConfigUI();
+      saveToState(newItem);
   };
 
   $("deleteNodeBtn").onclick = () => {
       const id = $("editNodeId").value; const type = $("editNodeType").value;
       if(!id) return closeNodeEditor();
-      if(!confirm("Supprimer ?")) return;
+      if(!confirm("Supprimer cet élément et tout son contenu ?")) return;
+      
+      // Cascade delete simple
+      const removeChildren = (parentId, parentType) => {
+          // Folders children of this parent
+          const folders = state.config.imgFolders.filter(f => f.parentId === parentId && f.parentType === parentType);
+          folders.forEach(f => removeChildren(f.id, 'folder')); // Recurse
+          state.config.imgFolders = state.config.imgFolders.filter(f => !(f.parentId === parentId && f.parentType === parentType));
+          
+          // Styles children of this parent
+          state.config.imgStyles = state.config.imgStyles.filter(s => !(s.parentId === parentId && s.parentType === parentType));
+      };
+
       if (type === 'category') {
           state.config.imgCategories = state.config.imgCategories.filter(x => x.id !== id);
+          const groups = state.config.imgGroups.filter(g => g.categoryId === id);
+          groups.forEach(g => removeChildren(g.id, 'group'));
           state.config.imgGroups = state.config.imgGroups.filter(x => x.categoryId !== id);
-          state.config.imgFolders = state.config.imgFolders.filter(x => !(x.parentType === 'category' && x.parentId === id));
-          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'category' && x.parentId === id));
+          removeChildren(id, 'category'); // Global items
       } else if (type === 'group') {
           state.config.imgGroups = state.config.imgGroups.filter(x => x.id !== id);
-          state.config.imgFolders = state.config.imgFolders.filter(x => !(x.parentType === 'group' && x.parentId === id));
-          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'group' && x.parentId === id));
+          removeChildren(id, 'group');
       } else if (type === 'folder') {
           state.config.imgFolders = state.config.imgFolders.filter(x => x.id !== id);
-          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'folder' && x.parentId === id));
-      } else if (type === 'style') { state.config.imgStyles = state.config.imgStyles.filter(x => x.id !== id); }
+          removeChildren(id, 'folder');
+      } else if (type === 'style') {
+          state.config.imgStyles = state.config.imgStyles.filter(x => x.id !== id);
+      }
       closeNodeEditor(); renderConfigUI();
   };
 
@@ -344,128 +341,177 @@
   function closeNodeEditor() { $("nodeEditorOverlay").classList.add("hidden"); }
 
   window.moveNode = (src, dest) => {
-      const srcId = src.id; const destId = dest.id; const destType = dest.type;
-      if (src.type === 'group') { const item = state.config.imgGroups.find(x => x.id === srcId); if (item) item.categoryId = destId; } 
-      else if (src.type === 'folder') { const item = state.config.imgFolders.find(x => x.id === srcId); if (item) { item.parentId = destId; item.parentType = destType; } } 
-      else if (src.type === 'style') { const item = state.config.imgStyles.find(x => x.id === srcId); if (item) { item.parentId = destId; item.parentType = destType; } }
+      // Basic Drop logic: Update Parent
+      const itemList = (src.type === 'group') ? state.config.imgGroups : (src.type === 'folder') ? state.config.imgFolders : state.config.imgStyles;
+      const item = itemList.find(x => x.id === src.id);
+      if(!item) return;
+
+      if (src.type === 'group') item.categoryId = dest.id;
+      else { item.parentId = dest.id; item.parentType = dest.type; }
       renderConfigUI();
   };
 
+
   /* =========================================
-     STUDIO UI (AFFICHAGE HIERARCHIQUE)
+     STUDIO UI (NEW APPLE DESIGN)
      ========================================= */
   
   function renderStudioCategories() {
       const container = $("imgGenCategoriesBar");
       if(!container) return;
+      
       const cats = state.config.imgCategories || [];
+      // Auto select
       if (!state.currentImgCategory && cats.length > 0) state.currentImgCategory = cats[0].id;
 
+      container.className = "studio-cat-bar";
       container.innerHTML = cats.map(c => `
-         <div class="style-tag ${state.currentImgCategory === c.id ? 'selected' : ''}" 
-              onclick="window.setImgCategory('${c.id}')"
-              style="font-size:10px; padding:4px 10px; border-radius:12px;">
-            ${c.name.toUpperCase()}
+         <div class="studio-cat-pill ${state.currentImgCategory === c.id ? 'selected' : ''}" 
+              onclick="window.setImgCategory('${c.id}')">
+            ${c.name}
          </div>
       `).join("");
   }
 
   window.setImgCategory = (cId) => {
       state.currentImgCategory = cId;
-      state.activeFolderId = null; 
-      state.currentStudioGroup = ""; 
+      state.expandedGroups = []; // Reset accordions
+      state.activeFolderId = null; // Close folders
       renderStudioCategories();
-      renderImgStylesButtons();
-  };
-
-  window.setStudioGroup = (gId) => {
-      state.currentStudioGroup = gId;
-      state.activeFolderId = null;
-      renderImgStylesButtons();
-  };
-
-  window.setStudioFolder = (fId) => {
-      state.activeFolderId = (state.activeFolderId === fId) ? null : fId;
       renderImgStylesButtons();
   };
 
   function renderImgStylesButtons() {
       const container = $("imgGenStylesContainer");
       if(!container) return;
+      container.innerHTML = "";
 
       if (!state.currentImgCategory) {
-          container.innerHTML = `<div style="padding:10px; color:#999; text-align:center;">Veuillez créer des catégories dans les paramètres.</div>`;
+          container.innerHTML = `<div style="padding:20px; color:#999; text-align:center;">Veuillez configurer des catégories.</div>`;
           return;
       }
 
-      let html = "";
+      const content = document.createElement('div');
+      content.className = "studio-content";
 
-      // 1. ITEMS GLOBAUX
+      // 1. GLOBAL ITEMS (Top of the page)
       const globalFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'category' && f.parentId === state.currentImgCategory);
       const globalStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'category' && s.parentId === state.currentImgCategory);
 
       if (globalFolders.length > 0 || globalStyles.length > 0) {
-          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid #f0f0f0;">`;
-          globalFolders.forEach(f => html += renderFolderButton(f));
-          globalStyles.forEach(s => html += renderStyleBtn(s));
-          html += `</div>`;
-          if (state.activeFolderId && globalFolders.find(f => f.id === state.activeFolderId)) html += renderFolderContent(state.activeFolderId);
+          const globalSection = document.createElement('div');
+          globalSection.className = "studio-global-section";
+          
+          globalFolders.forEach(f => globalSection.appendChild(renderFolderBtn(f)));
+          globalStyles.forEach(s => globalSection.appendChild(renderStyleBtn(s)));
+          
+          content.appendChild(globalSection);
+          
+          // Render Content of opened Global Folder immediately below
+          if (state.activeFolderId && globalFolders.find(f => f.id === state.activeFolderId)) {
+              content.appendChild(renderFolderContent(state.activeFolderId));
+          }
       }
 
-      // 2. GROUPES
-      const catGroups = (state.config.imgGroups||[]).filter(g => g.categoryId === state.currentImgCategory);
-      if (catGroups.length > 0) {
-          if (!state.currentStudioGroup || !catGroups.find(g => g.id === state.currentStudioGroup)) state.currentStudioGroup = catGroups[0].id;
+      // 2. GROUPS (Accordions)
+      const groups = (state.config.imgGroups||[]).filter(g => g.categoryId === state.currentImgCategory);
+      
+      groups.forEach(grp => {
+          const groupEl = document.createElement('div');
+          groupEl.className = "accordion-group";
+          
+          const isOpen = state.expandedGroups.includes(grp.id);
+          
+          // Header
+          const header = document.createElement('div');
+          header.className = `accordion-header ${isOpen ? 'active' : ''}`;
+          header.innerHTML = `<span>${grp.name}</span> <span style="color:#999">${isOpen ? ICONS.chevronDown : ICONS.chevronRight}</span>`;
+          header.onclick = () => window.toggleGroup(grp.id);
+          groupEl.appendChild(header);
 
-          html += `<div style="margin-bottom:10px;"><select onchange="window.setStudioGroup(this.value)" class="settings-select" style="margin-top:0; padding:6px; font-weight:bold;">${catGroups.map(g => `<option value="${g.id}" ${g.id === state.currentStudioGroup ? 'selected' : ''}>${g.name}</option>`).join("")}</select></div>`;
+          // Body
+          if (isOpen) {
+              const body = document.createElement('div');
+              body.className = "accordion-body";
+              
+              const grpFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'group' && f.parentId === grp.id);
+              const grpStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'group' && s.parentId === grp.id);
+              
+              grpFolders.forEach(f => body.appendChild(renderFolderBtn(f)));
+              grpStyles.forEach(s => body.appendChild(renderStyleBtn(s)));
+              
+              groupEl.appendChild(body);
 
-          const activeGrpId = state.currentStudioGroup;
-          const grpFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'group' && f.parentId === activeGrpId);
-          const grpStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'group' && s.parentId === activeGrpId);
+              // If a folder inside THIS group is open, render its content inside the group body or below it?
+              // User said "affochent les boutons associés en dessous". 
+              // We'll put it inside the body for visual grouping.
+              if (state.activeFolderId && grpFolders.find(f => f.id === state.activeFolderId)) {
+                  const folderContent = renderFolderContent(state.activeFolderId);
+                  folderContent.style.marginTop = "0"; // adjust spacing
+                  folderContent.style.borderTop = "1px solid #eee";
+                  folderContent.style.background = "#fafafa";
+                  groupEl.appendChild(folderContent);
+              }
+          }
+          
+          content.appendChild(groupEl);
+      });
 
-          if (grpFolders.length > 0 || grpStyles.length > 0) {
-              html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">`;
-              grpFolders.forEach(f => html += renderFolderButton(f));
-              grpStyles.forEach(s => html += renderStyleBtn(s));
-              html += `</div>`;
-          } else { html += `<div style="font-size:11px; color:#999;">Vide</div>`; }
-
-          if (state.activeFolderId && grpFolders.find(f => f.id === state.activeFolderId)) html += renderFolderContent(state.activeFolderId);
-      } 
-      container.innerHTML = html;
+      container.appendChild(content);
   }
 
-  function renderFolderButton(f) {
+  window.toggleGroup = (grpId) => {
+      const idx = state.expandedGroups.indexOf(grpId);
+      if (idx > -1) state.expandedGroups.splice(idx, 1);
+      else state.expandedGroups.push(grpId);
+      renderImgStylesButtons();
+  };
+
+  window.toggleFolder = (fId) => {
+      state.activeFolderId = (state.activeFolderId === fId) ? null : fId;
+      renderImgStylesButtons();
+  };
+
+  function renderFolderBtn(f) {
+      const btn = document.createElement('button');
       const isActive = state.activeFolderId === f.id;
-      return `<button onclick="window.setStudioFolder('${f.id}')" class="style-tag ${isActive ? 'selected' : ''}" style="font-weight:bold; padding:6px 12px; font-size:11px;">📁 ${f.name}</button>`;
+      btn.className = `studio-btn multi-btn ${isActive ? 'active' : ''}`;
+      // Note: "folder" icon inside button
+      btn.innerHTML = `<span>${ICONS.folder} ${f.name}</span> <span style="font-size:10px">${isActive ? '▼' : '▶'}</span>`;
+      btn.onclick = () => window.toggleFolder(f.id);
+      return btn;
   }
 
   function renderFolderContent(folderId) {
+      const box = document.createElement('div');
+      box.className = "multi-content-box";
+      
       const children = (state.config.imgStyles||[]).filter(s => s.parentType === 'folder' && s.parentId === folderId);
-      let html = `<div style="background:#f9f9f9; border:1px solid #eee; border-radius:12px; padding:12px; margin-bottom:10px;"><div style="display:flex; flex-wrap:wrap; gap:8px;">`;
-      if (children.length === 0) html += `<span style="font-size:11px; color:#999;">Aucun prompt.</span>`;
-      else children.forEach(s => html += renderStyleBtn(s));
-      html += `</div></div>`;
-      return html;
+      if (children.length === 0) {
+          box.innerHTML = `<span style="font-size:11px; color:#999;">Vide.</span>`;
+      } else {
+          children.forEach(s => box.appendChild(renderStyleBtn(s)));
+      }
+      return box;
   }
 
   function renderStyleBtn(s) {
-      let isActive = false;
-      if (s.mode === 'manual') isActive = state.manualImgStyles.includes(s.name);
-      else isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
-
-      const borderStyle = s.mode === 'manual' ? 'border:1px dashed #007AFF;' : 'border:1px solid #e5e5e5;';
-      const bgColor = isActive ? '#007AFF' : '#fff';
-      const color = isActive ? '#fff' : '#1d1d1f';
+      const btn = document.createElement('button');
+      const isManual = s.mode === 'manual';
+      const isSelected = isManual ? state.manualImgStyles.includes(s.name) : state.selectedImgStyles.some(sel => sel.name === s.name);
       
-      return `<button class="style-tag style-btn-click" data-name="${s.name.replace(/"/g, '&quot;')}" style="display:flex; align-items:center; gap:4px; flex-shrink:0; ${borderStyle} background:${bgColor}; color:${color}; padding:4px 10px; border-radius:15px; transition: all 0.2s; box-shadow:0 1px 2px rgba(0,0,0,0.05); font-weight:500; font-size:11px;">${s.refImage ? '<span style="width:12px; height:12px; background:#f0f0f0; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}<span>${s.name}</span>${s.mode === 'manual' ? '<span style="font-size:9px; opacity:0.7;">📝</span>' : ''}</button>`;
+      btn.className = `studio-btn ${isManual ? 'manual' : ''} ${isSelected ? 'selected' : ''}`;
+      
+      let iconHTML = "";
+      if (s.refImage) iconHTML = `<img src="data:image/jpeg;base64,${s.refImage}" class="studio-btn-icon">`;
+      
+      btn.innerHTML = `${iconHTML} ${s.name} ${isManual ? '<span style="font-size:9px">📝</span>' : ''}`;
+      
+      btn.onclick = () => window.toggleImgStyle(s.name);
+      return btn;
   }
 
-  document.addEventListener('click', function(e) {
-      const btn = e.target.closest('.style-btn-click');
-      if (btn) { const name = btn.getAttribute('data-name'); if (name) window.toggleImgStyle(name); }
-  });
-
+  // --- LOGIC TOGGLE STYLE ---
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName);
       if(!style) return;
@@ -494,6 +540,8 @@
       renderImgStylesButtons();
   };
 
+  /* --- Reste du code API (inchangé) --- */
+  
   async function apiCall(action, extra = {}) {
     if (!state.imageBase64) return;
     startLoading();
