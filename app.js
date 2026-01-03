@@ -63,8 +63,11 @@
       if (!state.config.imgStyles) state.config.imgStyles = [];
       if (!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
     }
-    if (state.config.imgCategories.length > 0) {
+    // Initialisation catégorie par défaut
+    if (state.config.imgCategories && state.config.imgCategories.length > 0) {
         state.currentImgCategory = state.config.imgCategories[0];
+    } else {
+        state.currentImgCategory = "";
     }
     renderConfigUI();
   }
@@ -78,7 +81,6 @@
     $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     
-    // CONFIG IMAGES
     $("imgCategoriesList").innerHTML = (state.config.imgCategories || []).map((cat, i) => `
        <div class="style-tag" style="background:#eee; border:1px solid #ccc; padding:4px 10px; display:flex; gap:5px; align-items:center;">
           ${cat} <span onclick="window.removeImgCategory(${i})" style="cursor:pointer; color:red; font-weight:bold;">×</span>
@@ -283,6 +285,7 @@
       const color = isActive ? '#fff' : '#1d1d1f';
       const shadow = isActive ? 'box-shadow: 0 2px 5px rgba(0,122,255,0.3);' : 'box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
 
+      // IMPORTANT : Utilisation de data-name pour le clic
       return `
          <button class="style-tag style-btn-click" 
             data-name="${s.name.replace(/"/g, '&quot;')}"
@@ -294,6 +297,7 @@
       `;
   }
 
+  // --- EVENT LISTENER ROBUSTE ---
   document.addEventListener('click', function(e) {
       const btn = e.target.closest('.style-btn-click');
       if (btn) {
@@ -309,6 +313,7 @@
       const promptClean = style.prompt.trim();
 
       if (style.mode === 'manual') {
+          // MODE MANUEL
           const idx = state.manualImgStyles.indexOf(styleName);
           let currentText = $("imgGenPrompt").value.trim();
           
@@ -335,6 +340,7 @@
               }
           }
       } else {
+          // MODE AUTO
           const idx = state.selectedImgStyles.findIndex(s => s.name === styleName);
           if (idx > -1) { state.selectedImgStyles.splice(idx, 1); } 
           else { state.selectedImgStyles.push(style); }
@@ -342,7 +348,7 @@
       renderImgStylesButtons();
   };
 
-  /* --- API CALL --- */
+  /* --- COMMON API --- */
   async function apiCall(action, extra = {}) {
     if (!state.imageBase64) return;
     startLoading();
@@ -390,7 +396,7 @@
     finally { stopLoading(); }
   }
 
-  /* --- IMAGES GENERATION --- */
+  /* --- LOGIQUE GENERATION IMAGES --- */
   
   function renderInputImages() {
     const container = $("inputImagesPreview");
@@ -406,6 +412,7 @@
   
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   
+  // --- MOTEUR DE GÉNÉRATION ---
   async function callGeminiImageGen() {
       const userPrompt = $("imgGenPrompt").value;
       if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style.");
@@ -467,12 +474,13 @@
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
 
-      // CLEANUP
+      // NETTOYAGE UI
       state.selectedImgStyles = []; 
       state.manualImgStyles = [];
       $("imgGenPrompt").value = ""; 
       renderImgStylesButtons(); 
 
+      // EXECUTION
       newItems.forEach(async (item, index) => {
           const batchData = batches[index];
           try {
@@ -511,7 +519,6 @@
   }
 
   function renderGenImages() {
-      // 1. Session Results
       const sessionContainer = $("imgGenSessionResults");
       sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => {
         if (item.loading) {
@@ -538,7 +545,7 @@
         </div>
       `}).join("");
 
-      // 2. Saved Results
+      // Saved Results
       let savedHtml = "";
       if(state.imageBase64) {
           savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default;">
@@ -607,9 +614,17 @@
           try {
               const payload = { id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) };
               await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
-              const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
-              if (histItem) histItem.generated_images = payload.generated_images;
+              // Mute error here to avoid spam
           } catch(err) {}
+      }
+  };
+
+  window.addSavedToInput = (index) => {
+      const item = state.savedGeneratedImages[index];
+      if(item && !state.inputImages.includes(item.image)) {
+          state.inputImages.push(item.image);
+          renderInputImages();
+          document.querySelector('button[data-tab="tab-img-chat"]').click();
       }
   };
 
@@ -651,7 +666,6 @@
       window.open(blobUrl, '_blank');
   };
 
-  // ⚠️ CRITICAL UPDATE: ERROR CHECKING FOR SAVE
   window.saveImgSelection = async () => {
       if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
       if (state.selectedSessionImagesIdx.length === 0) return alert("Aucune image sélectionnée.");
@@ -672,10 +686,9 @@
           };
           const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
           
-          // VERIFICATION STRICTE
           if (!res.ok) {
               const errorText = await res.text();
-              throw new Error("Erreur serveur (" + res.status + "): " + errorText + ". Vérifiez la colonne 'generated_images' en base de données.");
+              throw new Error("Erreur serveur (" + res.status + "): " + errorText);
           }
 
           const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
@@ -699,8 +712,6 @@
           const payload = { id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) };
           const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
           if(!res.ok) throw new Error("Erreur serveur lors de la suppression.");
-          const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
-          if (histItem) histItem.generated_images = payload.generated_images;
           renderGenImages();
       } catch(e) { alert(e.message); } finally { stopLoading(); }
   };
@@ -755,7 +766,10 @@
         state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
         state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; 
         state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
+        
+        // RECUPERATION DES IMAGES DEPUIS LA NOUVELLE STRUCTURE
         state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
+        
         state.sessionGeneratedImages = []; 
         $("titleText").textContent = item.title; 
         $("descText").textContent = item.description; 
