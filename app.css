@@ -88,6 +88,9 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .gen-image-card img { width: 100%; height: 150px; object-fit: cover; display: block; }
 .gen-image-overlay { padding: 8px; font-size: 11px; color: #666; background: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .settings-select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd; background: #f9f9f9; font-size: 13px; outline: none; margin-top: 5px; }
+.ios-input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #e5e5e5; background: #f9f9f9; font-size: 14px; outline: none; transition: all 0.2s; }
+.ios-input:focus { background: #fff; border-color: var(--apple-blue); box-shadow: 0 0 0 3px rgba(0,122,255,0.1); }
+
 .input-images-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid #f0f0f0; }
 .input-img-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #ddd; }
 .input-img-wrapper { position: relative; }
@@ -97,33 +100,55 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .gen-image-card.dragging { opacity: 0.4; }
 .gen-image-card.drag-over { transform: scale(1.05); box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 10; border: 2px solid var(--apple-blue); }
 
-/* --- TREE EDITOR (STYLE APPLE) --- */
-.tree-toolbar { padding: 12px 20px; border-bottom: 1px solid #e5e5e5; background: rgba(255,255,255,0.8); backdrop-filter: blur(10px); display: flex; gap: 10px; align-items: center; position: sticky; top: 0; z-index: 5; }
-.tree-editor-container { padding: 20px; overflow-y: auto; background: #F2F2F7; min-height: 400px; }
+/* --- TREE EDITOR (STYLE APPLE / iOS SETTINGS) --- */
+.tree-toolbar { padding: 12px 20px; border-bottom: 1px solid #ccc; background: rgba(242,242,247,0.8); backdrop-filter: blur(20px); display: flex; gap: 10px; align-items: center; position: sticky; top: 0; z-index: 5; }
+.tree-editor-wrapper { padding: 20px; overflow-y: auto; background: #F2F2F7; min-height: 400px; }
+.tree-editor-container { max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 
-.tree-node { margin-bottom: 2px; }
-.tree-header { display: flex; align-items: center; padding: 10px 16px; background: #fff; border-radius: 0; border-bottom: 1px solid #f0f0f0; cursor: grab; transition: all 0.2s; position: relative; }
-.tree-header:hover { background: #fafafa; }
+/* Container pour les groupes (Listes iOS) */
+.tree-node-group-container { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+.tree-node-group-container > .tree-node:last-child > .tree-header { border-bottom: none; }
+
+.tree-node { position: relative; }
+
+/* En-tête de ligne (Item) */
+.tree-header { display: flex; align-items: center; padding: 12px 16px; background: #fff; cursor: grab; transition: background 0.2s; position: relative; min-height: 44px; }
+.tree-header:hover { background: #f2f2f7; }
+.tree-header:active { cursor: grabbing; }
+
+/* Séparateurs internes (Inset) */
+.tree-header::after { content: ''; position: absolute; bottom: 0; left: 50px; right: 0; height: 1px; background: #E5E5EA; z-index: 1; }
+/* Pas de séparateur pour le dernier élément d'un groupe */
+.tree-node:last-child > .tree-header::after { display: none; }
 
 /* Drag Visuals */
-.tree-header.drag-over-top { border-top: 2px solid #007AFF; }
-.tree-header.drag-over-bottom { border-bottom: 2px solid #007AFF; }
-.tree-header.drag-over-center { background: #E1F0FF; border: 1px solid #007AFF; border-radius: 8px; transform: scale(0.98); }
+.tree-header.drag-over-top { border-top: 2px solid var(--apple-blue); z-index: 10; }
+.tree-header.drag-over-bottom { border-bottom: 2px solid var(--apple-blue); z-index: 10; }
+.tree-header.drag-over-center { background: #E1F0FF; z-index: 10; } /* Highlight nesting */
 
 /* Hierarchy Visuals */
-.tree-children { margin-left: 24px; border-left: 2px solid #e5e5e5; }
-.type-category > .tree-header { font-weight: 700; font-size: 14px; background: transparent; border: none; padding-left: 0; color: #888; text-transform: uppercase; margin-top: 20px; }
-.type-group > .tree-header { border-radius: 10px; margin-bottom: 5px; font-weight: 600; }
-.type-folder > .tree-header, .type-style > .tree-header { background: #fff; margin-bottom: 1px; }
-.type-folder > .tree-header { font-weight: 500; color: #007AFF; }
-.type-style > .tree-header { font-size: 13px; color: #333; }
+.type-category > .tree-header { background: transparent; padding: 0 0 8px 16px; margin-top: 10px; min-height: 30px; }
+.type-category > .tree-header::after { display: none; }
+.type-category > .tree-header .t-label { font-size: 13px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: -0.2px; }
+.type-category > .tree-children { background: #fff; border-radius: 12px; overflow: hidden; }
+
+.type-group > .tree-header { background: #fff; font-weight: 600; }
+.type-folder > .tree-header { padding-left: 30px; } /* Indent Folder */
+.type-folder > .tree-header .t-label { color: #007AFF; font-weight: 500; }
+.type-style > .tree-header { padding-left: 30px; } /* Indent Style */
+.type-style > .tree-header .t-label { font-size: 15px; color: #000; }
+
+/* Children Container */
+.tree-children { display: flex; flex-direction: column; }
+.type-group > .tree-children .tree-header { padding-left: 30px; } /* Indent items in Group */
+.type-folder > .tree-children .tree-header { padding-left: 50px; } /* Indent items in Folder */
 
 /* Custom Icons */
-.t-icon { margin-right: 10px; font-size: 16px; width: 20px; text-align: center; }
-
-/* Action Buttons Hidden by default */
-.node-actions { margin-left: auto; display: flex; gap: 5px; opacity: 0; transition: opacity 0.2s; }
-.tree-header:hover .node-actions { opacity: 1; }
+.t-icon { margin-right: 12px; font-size: 18px; width: 24px; text-align: center; display: flex; align-items: center; justify-content: center; }
+.t-actions { margin-left: auto; display: flex; gap: 8px; opacity: 0; transition: opacity 0.2s; z-index: 2; }
+.tree-header:hover .t-actions { opacity: 1; }
+.action-btn-ios { width: 24px; height: 24px; border-radius: 50%; border: none; background: #e5e5ea; color: #007AFF; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; }
+.action-btn-ios:hover { background: #007AFF; color: #fff; }
 
 /* STUDIO ACCORDIONS */
 .studio-group-block { background: #fff; border-radius: 12px; margin-bottom: 12px; overflow: hidden; border: 1px solid #eee; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
