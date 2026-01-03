@@ -139,22 +139,32 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 
 .type-group .t-icon { color: #8E8E93; }
 .type-folder .t-icon { color: #007AFF; }
-.type-style .t-icon { color: #FF9500; } /* Orange par défaut */
+.type-style .t-icon { color: #FF9500; }
 
-/* RÈGLE SPÉCIALE : STYLE DANS UN FOLDER (BLEU) */
-.type-folder > .tree-children > .type-style > .tree-header .t-icon { color: #007AFF !important; }
+/* RÈGLE SPÉCIALE : STYLE DANS UN FOLDER (BLEU) - Renforcée */
+.type-folder .tree-children .type-style .t-icon { color: #007AFF !important; }
 
 .t-label { font-size: 16px; color: #000; font-weight: 400; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .type-group > .tree-header .t-label { font-weight: 600; }
 
-/* Action Buttons */
-.t-actions { margin-left: 10px; display: flex; gap: 8px; opacity: 0; transition: opacity 0.2s; z-index: 2; }
+/* NOUVEAUX BOUTONS TEXTUELS */
+.t-actions { margin-left: 10px; display: flex; gap: 6px; opacity: 0; transition: opacity 0.2s; z-index: 2; }
 .tree-header:hover .t-actions { opacity: 1; }
-.action-btn-ios { width: 28px; height: 28px; border-radius: 50%; border: none; background: #e5e5ea; color: #007AFF; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
-.action-btn-ios:hover { background: #007AFF; color: #fff; }
-.action-btn-ios.btn-delete { color: #FF3B30; background: #fff0f0; }
-.action-btn-ios.btn-delete:hover { background: #FF3B30; color: #fff; }
-.action-btn-ios svg { width: 14px; height: 14px; fill: currentColor; }
+
+.action-btn-text {
+    background: #e5e5ea;
+    color: #000;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.action-btn-text:hover { background: #d1d1d6; }
+.action-btn-text.btn-delete { background: #ffe5e5; color: #ff3b30; }
+.action-btn-text.btn-delete:hover { background: #ffcccc; }
 
 /* STUDIO ACCORDIONS */
 .studio-group-block { background: #fff; border-radius: 12px; margin-bottom: 12px; overflow: hidden; border: 1px solid #eee; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
