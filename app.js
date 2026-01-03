@@ -1,11 +1,11 @@
 (() => {
   const $ = (id) => document.getElementById(id);
 
-  // ICONES SVG
+  // SVG ICONS (Vectoriels & Complets)
   const ICONS = {
-    folder: `<svg viewBox="0 0 24 24" class="icon-svg"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>`,
-    group: `<svg viewBox="0 0 24 24" class="icon-svg"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>`,
-    style: `<svg viewBox="0 0 24 24" class="icon-svg"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
+    folder: `<svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>`,
+    group: `<svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>`,
+    style: `<svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
     edit: `<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`,
     add: `<svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>`,
     trash: `<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`
@@ -91,7 +91,7 @@
   };
 
   /* =========================================
-     NOUVEAU SYSTÈME HIERARCHIQUE (TREE EDITOR)
+     TREE EDITOR (MIXTE)
      ========================================= */
 
   function renderImgConfigTree() {
@@ -174,7 +174,7 @@
 
       el.innerHTML = `
         <div class="tree-header">
-            ${icon ? `<span class="icon-svg">${icon}</span>` : ''}
+            ${icon ? `<span class="t-icon">${icon}</span>` : ''}
             <span class="t-label">${data.name}</span>
             <div class="t-actions">
                 ${addBtns}
@@ -185,6 +185,7 @@
         <div class="tree-children"></div>
       `;
 
+      // --- DRAG & DROP ---
       const header = el.querySelector('.tree-header');
       el.addEventListener('dragstart', (e) => {
           state.draggedItem = { id: data.id, type: type, parentId: parentId };
