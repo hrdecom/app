@@ -61,7 +61,7 @@
     const saved = data.find(i => i.id === 'full_config');
     if (saved) {
       const parsed = JSON.parse(saved.value);
-      state.config = { ...DEFAULTS, ...parsed }; // Merge
+      state.config = { ...DEFAULTS, ...parsed }; 
       if (!state.config.imgStyles) state.config.imgStyles = [];
       if (!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
     }
@@ -297,7 +297,6 @@
       `;
   }
 
-  // --- EVENT LISTENER ROBUSTE POUR LES CLICS ---
   document.addEventListener('click', function(e) {
       const btn = e.target.closest('.style-btn-click');
       if (btn) {
@@ -306,7 +305,6 @@
       }
   });
 
-  // --- LOGIQUE TOGGLE ROBUSTE ---
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName);
       if(!style) return;
@@ -314,12 +312,10 @@
       const promptClean = style.prompt.trim();
 
       if (style.mode === 'manual') {
-          // MODE MANUEL
           const idx = state.manualImgStyles.indexOf(styleName);
           let currentText = $("imgGenPrompt").value.trim();
           
           if (idx > -1) {
-              // DESACTIVATION
               state.manualImgStyles.splice(idx, 1);
               if (currentText.includes(promptClean)) {
                   const parts = currentText.split(promptClean);
@@ -332,7 +328,6 @@
                   renderInputImages();
               }
           } else {
-              // ACTIVATION
               state.manualImgStyles.push(styleName);
               if (!currentText.includes(promptClean)) {
                   $("imgGenPrompt").value = (currentText + " " + promptClean).trim();
@@ -343,7 +338,6 @@
               }
           }
       } else {
-          // MODE AUTO
           const idx = state.selectedImgStyles.findIndex(s => s.name === styleName);
           if (idx > -1) { state.selectedImgStyles.splice(idx, 1); } 
           else { state.selectedImgStyles.push(style); }
@@ -476,13 +470,11 @@
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
 
-      // NETTOYAGE UI
       state.selectedImgStyles = []; 
       state.manualImgStyles = [];
       $("imgGenPrompt").value = ""; 
       renderImgStylesButtons(); 
 
-      // EXECUTION
       newItems.forEach(async (item, index) => {
           const batchData = batches[index];
           try {
@@ -547,7 +539,6 @@
         </div>
       `}).join("");
 
-      // Saved Results
       let savedHtml = "";
       if(state.imageBase64) {
           savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default;">
@@ -581,18 +572,20 @@
       $("imgGenSavedResults").innerHTML = savedHtml;
   }
 
-  // --- TOGGLE SAVED IMAGE ---
   window.toggleSavedImg = (index) => {
       const item = state.savedGeneratedImages[index];
       if(!item) return;
+      
       const idx = state.inputImages.indexOf(item.image);
-      if(idx > -1) { state.inputImages.splice(idx, 1); } 
-      else { state.inputImages.push(item.image); }
+      if(idx > -1) {
+          state.inputImages.splice(idx, 1);
+      } else {
+          state.inputImages.push(item.image);
+      }
       renderInputImages();
       renderGenImages();
   };
 
-  // --- DRAG AND DROP ---
   let dragSrcIndex = null;
   window.dragStart = (e, i) => { 
       dragSrcIndex = i; 
@@ -620,6 +613,15 @@
               const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
               if (histItem) histItem.generated_images = payload.generated_images;
           } catch(err) {}
+      }
+  };
+
+  window.addSavedToInput = (index) => {
+      const item = state.savedGeneratedImages[index];
+      if(item && !state.inputImages.includes(item.image)) {
+          state.inputImages.push(item.image);
+          renderInputImages();
+          document.querySelector('button[data-tab="tab-img-chat"]').click();
       }
   };
 
