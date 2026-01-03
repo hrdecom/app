@@ -51,89 +51,92 @@
              <div class="config-section">
                 <label>1. CATÉGORIES (Onglets Principaux)</label>
                 <div id="imgCategoriesList" class="tags-container"></div>
-                <div style="display:flex; gap:10px; margin-top:5px;">
-                   <input type="text" id="newImgCategoryInput" placeholder="Nouvelle catégorie (ex: Bagues, Colliers)..." style="flex:1;">
-                   <button id="addImgCategoryBtn" class="secondary-btn">+ Créer</button>
+                <div class="input-row">
+                   <input type="text" id="newImgCategoryInput" placeholder="Nouvelle catégorie (ex: Bagues)...">
+                   <button id="addImgCategoryBtn" class="secondary-btn">Ajouter</button>
                 </div>
              </div>
 
              <hr class="separator">
 
              <div class="config-section">
-                <label>2. GROUPES (Titres de Séparation)</label>
+                <label>2. GROUPES (Sections Visuelles)</label>
                 <div id="imgGroupsList" class="tags-container"></div>
-                <div style="display:flex; gap:10px; margin-top:5px;">
-                   <input type="text" id="newImgGroupInput" placeholder="Nouveau groupe (ex: Métal, Ambiance)..." style="flex:1;">
-                   <button id="addImgGroupBtn" class="secondary-btn">+ Créer</button>
+                <div class="input-row">
+                   <input type="text" id="newImgGroupInput" placeholder="Nouveau groupe (ex: Métal, Ambiance)...">
+                   <button id="addImgGroupBtn" class="secondary-btn">Ajouter</button>
                 </div>
              </div>
 
              <hr class="separator">
 
              <div class="config-section">
-                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <label style="margin:0;">3. ORGANISATION (Glisser-Déposer)</label>
                     <div style="display:flex; gap:10px;">
-                         <button id="createNewFolderBtn" class="small-action-btn">📁 Créer Dossier (Choix Multiple)</button>
-                         <button id="createNewStyleBtn" class="small-action-btn">✨ Créer Bouton Prompt</button>
+                         <button id="createNewFolderBtn" class="small-action-btn">📁 Créer Dossier</button>
+                         <button id="createNewStyleBtn" class="small-action-btn">✨ Créer Bouton</button>
                     </div>
                 </div>
                 
                 <div class="organizer-container">
-                    <p style="font-size:11px; color:#666; margin:5px 0 10px;">
-                       💡 Glissez les <b>Boutons Prompts</b> dans les <b>Dossiers</b>. Glissez les éléments pour changer l'ordre d'affichage.
-                       Cliquez sur ✏️ pour modifier.
-                    </p>
-                    <div id="organizerList" class="organizer-list"></div>
+                    <div id="organizerOrphans" class="org-section-orphans">
+                        <div class="org-header-small">Boutons Isolés (Glissez-les dans des dossiers)</div>
+                        <div id="orphansList" class="org-dropzone" data-type="orphan"></div>
+                    </div>
+                    <div id="organizerFolders" class="org-folders-grid"></div>
                 </div>
              </div>
 
-             <div id="styleEditorModal" class="modal hidden" style="z-index:10001;">
-                <div class="modal-content" style="max-width:500px; height:auto; max-height:90vh;">
+             <div id="itemEditorModal" class="modal hidden" style="z-index: 10005;">
+                <div class="modal-content" style="max-width: 400px; height: auto;">
                     <div class="modal-header">
                         <h3 id="editorTitle">Éditer</h3>
                         <button id="closeEditorBtn" class="close-btn">×</button>
                     </div>
-                    <div style="padding:20px; display:flex; flex-direction:column; gap:15px; overflow-y:auto;">
+                    <div style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
+                        
                         <div>
                             <label style="font-size:11px; font-weight:bold;">Nom</label>
-                            <input type="text" id="editItemName" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;">
+                            <input type="text" id="editorName" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;">
                         </div>
 
-                        <div id="folderFields" class="hidden">
+                        <div id="editorFolderFields" class="hidden">
                              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                                  <div>
                                     <label style="font-size:11px; font-weight:bold;">Catégorie</label>
-                                    <select id="editFolderCategory" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></select>
+                                    <select id="editorCategory" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></select>
                                  </div>
                                  <div>
                                     <label style="font-size:11px; font-weight:bold;">Groupe</label>
-                                    <select id="editFolderGroup" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></select>
+                                    <select id="editorGroup" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></select>
                                  </div>
                              </div>
                         </div>
 
-                        <div id="styleFields" class="hidden">
+                        <div id="editorStyleFields" class="hidden">
                              <div>
-                                <label style="font-size:11px; font-weight:bold;">Mode d'application</label>
-                                <select id="editStyleMode" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;">
+                                <label style="font-size:11px; font-weight:bold;">Mode</label>
+                                <select id="editorMode" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;">
                                    <option value="auto">⚡ Auto (Envoi direct)</option>
-                                   <option value="manual">📝 Manuel (Ajout texte chat)</option>
+                                   <option value="manual">📝 Manuel (Texte chat)</option>
                                 </select>
                              </div>
                              <div>
-                                <label style="font-size:11px; font-weight:bold;">Image de référence</label>
-                                <input type="file" id="editStyleFile" accept="image/*" style="font-size:11px; display:block; margin-top:5px;">
-                                <div id="editStyleImgPreview" style="font-size:10px; color:green; margin-top:2px;"></div>
+                                <label style="font-size:11px; font-weight:bold;">Image Référence</label>
+                                <input type="file" id="editorFile" accept="image/*" style="font-size:11px; margin-top:5px;">
+                                <div id="editorImgPreview" style="font-size:10px; color:green; margin-top:2px;"></div>
                              </div>
                              <div>
                                 <label style="font-size:11px; font-weight:bold;">Prompt</label>
-                                <textarea id="editStylePrompt" rows="3" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></textarea>
+                                <textarea id="editorPrompt" rows="3" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></textarea>
                              </div>
                         </div>
 
-                        <button id="saveItemBtn" class="primary-btn" style="width:100%;">Enregistrer</button>
-                        <button id="deleteItemBtn" class="secondary-btn" style="width:100%; color:red; border-color:red;">Supprimer</button>
+                        <div style="display:flex; gap:10px; margin-top:10px;">
+                            <button id="editorDeleteBtn" class="secondary-btn" style="color:red; border-color:red;">Supprimer</button>
+                            <button id="editorSaveBtn" class="primary-btn" style="flex:1;">Enregistrer</button>
+                        </div>
                     </div>
                 </div>
              </div>
