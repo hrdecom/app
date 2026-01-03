@@ -10,19 +10,31 @@
 
 <div id="app">
   <header class="header">
-    <div class="brand"><div class="logo">✧</div><h1>Copywriting Bijoux</h1></div>
-    <button id="settingsBtn" class="icon-btn">⚙️ Paramètres</button>
+    <div class="brand">
+        <div class="logo">✧</div>
+        <div class="titles">
+            <h1>Studio Créatif</h1>
+            <span class="subtitle">Bijoux & Joaillerie</span>
+        </div>
+    </div>
+    <button id="settingsBtn" class="icon-btn">
+        <span class="icon">⚙️</span> Paramètres
+    </button>
   </header>
 
   <div id="settingsModal" class="modal hidden">
-    <div class="modal-content">
-      <div class="modal-header"><h2>Configuration</h2><button id="closeSettings" class="close-btn">×</button></div>
+    <div class="modal-content glass-panel">
+      <div class="modal-header">
+          <h2>Configuration</h2>
+          <button id="closeSettings" class="close-btn">×</button>
+      </div>
+      
       <div class="tabs">
         <button class="tab-link active" data-tab="tab-collections">Collections</button>
         <button class="tab-link" data-tab="tab-prompts">Prompts IA</button>
         <button class="tab-link" data-tab="tab-headlines-config">Headlines</button>
         <button class="tab-link" data-tab="tab-ads-config">Ad Copys</button>
-        <button class="tab-link" data-tab="tab-img-styles">Styles Images</button>
+        <button class="tab-link" data-tab="tab-img-styles">Studio Images</button>
         <button class="tab-link" data-tab="tab-translate-config">Traduction</button>
         <button class="tab-link" data-tab="tab-blacklist">Blacklist</button>
       </div>
@@ -48,48 +60,49 @@
 
           <div id="tab-img-styles" class="tab-content hidden">
              
-             <div class="config-section">
-                <label>1. CATÉGORIES (Onglets Principaux)</label>
-                <div id="imgCategoriesList" class="tags-container"></div>
-                <div class="input-row">
-                   <input type="text" id="newImgCategoryInput" placeholder="Nouvelle catégorie (ex: Bagues)...">
-                   <button id="addImgCategoryBtn" class="secondary-btn">Ajouter</button>
-                </div>
-             </div>
+             <div class="config-grid">
+                 <div class="config-column">
+                     <div class="config-section">
+                        <label>🏷️ CATÉGORIES (Onglets)</label>
+                        <div id="imgCategoriesList" class="tags-container"></div>
+                        <div class="input-row">
+                           <input type="text" id="newImgCategoryInput" placeholder="Nouvelle catégorie...">
+                           <button id="addImgCategoryBtn" class="secondary-btn small">+</button>
+                        </div>
+                     </div>
 
-             <hr class="separator">
+                     <div class="config-section">
+                        <label>📂 GROUPES (Menus Déroulants)</label>
+                        <p class="hint">Ajoutez "ALL" pour un groupe universel.</p>
+                        <div id="imgGroupsList" class="tags-container"></div>
+                        <div class="input-row">
+                           <input type="text" id="newImgGroupInput" placeholder="Nouveau groupe...">
+                           <button id="addImgGroupBtn" class="secondary-btn small">+</button>
+                        </div>
+                     </div>
+                 </div>
 
-             <div class="config-section">
-                <label>2. GROUPES (Sections Visuelles)</label>
-                <div id="imgGroupsList" class="tags-container"></div>
-                <div class="input-row">
-                   <input type="text" id="newImgGroupInput" placeholder="Nouveau groupe (ex: Métal, Ambiance)...">
-                   <button id="addImgGroupBtn" class="secondary-btn">Ajouter</button>
-                </div>
-             </div>
-
-             <hr class="separator">
-
-             <div class="config-section">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <label style="margin:0;">3. ORGANISATION (Glisser-Déposer)</label>
-                    <div style="display:flex; gap:10px;">
-                         <button id="createNewFolderBtn" class="small-action-btn">📁 Créer Dossier</button>
-                         <button id="createNewStyleBtn" class="small-action-btn">✨ Créer Bouton</button>
-                    </div>
-                </div>
-                
-                <div class="organizer-container">
-                    <div id="organizerOrphans" class="org-section-orphans">
-                        <div class="org-header-small">Boutons Isolés (Glissez-les dans des dossiers)</div>
-                        <div id="orphansList" class="org-dropzone" data-type="orphan"></div>
-                    </div>
-                    <div id="organizerFolders" class="org-folders-grid"></div>
-                </div>
+                 <div class="config-column">
+                     <div class="config-header-row">
+                        <label>🎨 ORGANISATION VISUELLE</label>
+                        <div class="actions-row">
+                             <button id="createNewFolderBtn" class="action-btn">📁 Choix Multiple</button>
+                             <button id="createNewStyleBtn" class="action-btn">✨ Bouton Simple</button>
+                        </div>
+                     </div>
+                     
+                     <div class="organizer-container">
+                        <div class="org-section-orphans">
+                            <div class="org-header-small">ÉLÉMENTS SIMPLES (Glissez dans des dossiers ou laissez ici)</div>
+                            <div id="orphansList" class="org-dropzone" data-type="orphan"></div>
+                        </div>
+                        <div id="organizerFolders" class="org-folders-grid"></div>
+                     </div>
+                 </div>
              </div>
 
              <div id="itemEditorModal" class="modal hidden" style="z-index: 10005;">
-                <div class="modal-content" style="max-width: 400px; height: auto;">
+                <div class="modal-content glass-panel" style="max-width: 400px; height: auto;">
                     <div class="modal-header">
                         <h3 id="editorTitle">Éditer</h3>
                         <button id="closeEditorBtn" class="close-btn">×</button>
@@ -97,247 +110,178 @@
                     <div style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
                         
                         <div>
-                            <label style="font-size:11px; font-weight:bold;">Nom</label>
-                            <input type="text" id="editorName" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;">
+                            <label class="field-label">Nom de l'élément</label>
+                            <input type="text" id="editorName" class="modern-input">
                         </div>
 
-                        <div id="editorFolderFields" class="hidden">
+                        <div id="editorPositionFields" class="hidden">
                              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                                  <div>
-                                    <label style="font-size:11px; font-weight:bold;">Catégorie</label>
-                                    <select id="editorCategory" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></select>
+                                    <label class="field-label">Catégorie</label>
+                                    <select id="editorCategory" class="modern-select"></select>
                                  </div>
                                  <div>
-                                    <label style="font-size:11px; font-weight:bold;">Groupe</label>
-                                    <select id="editorGroup" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></select>
+                                    <label class="field-label">Groupe (Menu)</label>
+                                    <select id="editorGroup" class="modern-select"></select>
                                  </div>
                              </div>
                         </div>
 
                         <div id="editorStyleFields" class="hidden">
                              <div>
-                                <label style="font-size:11px; font-weight:bold;">Mode</label>
-                                <select id="editorMode" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;">
-                                   <option value="auto">⚡ Auto (Envoi direct)</option>
-                                   <option value="manual">📝 Manuel (Texte chat)</option>
+                                <label class="field-label">Mode d'application</label>
+                                <select id="editorMode" class="modern-select">
+                                   <option value="auto">⚡ Auto (Envoi immédiat)</option>
+                                   <option value="manual">📝 Manuel (Ajout au texte)</option>
                                 </select>
                              </div>
                              <div>
-                                <label style="font-size:11px; font-weight:bold;">Image Référence</label>
-                                <input type="file" id="editorFile" accept="image/*" style="font-size:11px; margin-top:5px;">
-                                <div id="editorImgPreview" style="font-size:10px; color:green; margin-top:2px;"></div>
+                                <label class="field-label">Image de référence (Optionnelle)</label>
+                                <input type="file" id="editorFile" accept="image/*" class="modern-file-input">
+                                <div id="editorImgPreview" class="img-preview-status"></div>
                              </div>
                              <div>
-                                <label style="font-size:11px; font-weight:bold;">Prompt</label>
-                                <textarea id="editorPrompt" rows="3" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;"></textarea>
+                                <label class="field-label">Prompt IA</label>
+                                <textarea id="editorPrompt" rows="3" class="modern-textarea"></textarea>
                              </div>
                         </div>
 
-                        <div style="display:flex; gap:10px; margin-top:10px;">
-                            <button id="editorDeleteBtn" class="secondary-btn" style="color:red; border-color:red;">Supprimer</button>
-                            <button id="editorSaveBtn" class="primary-btn" style="flex:1;">Enregistrer</button>
+                        <div class="modal-actions">
+                            <button id="editorDeleteBtn" class="danger-btn">Supprimer</button>
+                            <button id="editorSaveBtn" class="primary-btn">Enregistrer</button>
                         </div>
                     </div>
                 </div>
              </div>
-
           </div>
 
           <div id="tab-translate-config" class="tab-content hidden">
-            <label>Prompt Principal Traduction</label><textarea id="promptTranslate" rows="12"></textarea>
+            <label>Prompt Traduction</label><textarea id="promptTranslate" rows="12"></textarea>
           </div>
           <div id="tab-blacklist" class="tab-content hidden"><textarea id="configBlacklist" rows="12"></textarea></div>
       </div>
 
-      <div class="modal-footer"><button id="saveConfig" class="primary-btn">Enregistrer tout</button></div>
+      <div class="modal-footer"><button id="saveConfig" class="primary-btn">Sauvegarder tout</button></div>
     </div>
   </div>
 
   <div id="headlinesModal" class="modal hidden">
-    <div class="modal-content">
-      <div class="modal-header">
-          <h2>Headlines Vidéos</h2>
-          <div class="dropdown">
-              <button id="translateHlMenuBtn" class="secondary-btn">🌍 Traduire...</button>
-              <div id="hlLangList" class="dropdown-content"></div>
-          </div>
-          <button id="closeHeadlines" class="close-btn">×</button>
-      </div>
-      <div class="tabs" id="headlinesTabs">
-        <button class="tab-link active" data-tab="tab-gen-headlines">Générer</button>
-        <button class="tab-link" data-tab="tab-saved-headlines">Enregistrées</button>
-      </div>
-      <div id="headlinesTabContainer" class="tab-container-scroll">
-          <div id="tab-gen-headlines" class="tab-content">
-            <div class="style-selector" id="styleSelectorContainer"></div>
-            <div id="headlinesResults" class="headlines-results"></div>
-            <div class="headlines-actions-wrapper">
-                <div class="headlines-actions hidden" id="similarActions">
-                    <button id="genSimilarBtn" class="secondary-btn" style="width:100%; color: var(--apple-blue);">✨ Générer versions similaires</button>
-                </div>
-                <div id="headlinesLocalPagination" class="pagination"></div>
-            </div>
-          </div>
-          <div id="tab-saved-headlines" class="tab-content hidden">
-            <div id="headlinesSavedList" class="headlines-results"></div>
-          </div>
-      </div>
-      <div class="chat-container"><div class="chat-bar"><input type="text" id="headlineStyleInput" placeholder="Style..."/><button id="sendHeadlineChat">↑</button></div></div>
-      <div class="modal-footer"><button id="saveHeadlinesBtn" class="primary-btn">Enregistrer sélections</button></div>
+    <div class="modal-content glass-panel">
+      <div class="modal-header"><h2>Headlines</h2><div class="dropdown"><button id="translateHlMenuBtn" class="secondary-btn">🌍 Traduire...</button><div id="hlLangList" class="dropdown-content"></div></div><button id="closeHeadlines" class="close-btn">×</button></div>
+      <div class="tabs" id="headlinesTabs"><button class="tab-link active" data-tab="tab-gen-headlines">Générer</button><button class="tab-link" data-tab="tab-saved-headlines">Enregistrées</button></div>
+      <div id="headlinesTabContainer" class="tab-container-scroll"><div id="tab-gen-headlines" class="tab-content"><div class="style-selector" id="styleSelectorContainer"></div><div id="headlinesResults" class="headlines-results"></div><div class="headlines-actions-wrapper"><div class="headlines-actions hidden" id="similarActions"><button id="genSimilarBtn" class="secondary-btn">✨ Générer similaires</button></div><div id="headlinesLocalPagination" class="pagination"></div></div></div><div id="tab-saved-headlines" class="tab-content hidden"><div id="headlinesSavedList" class="headlines-results"></div></div></div>
+      <div class="chat-container"><div class="chat-bar"><input type="text" id="headlineStyleInput" placeholder="Instructions..."/><button id="sendHeadlineChat">↑</button></div></div>
+      <div class="modal-footer"><button id="saveHeadlinesBtn" class="primary-btn">Enregistrer</button></div>
     </div>
   </div>
 
   <div id="adsModal" class="modal hidden">
-    <div class="modal-content">
-      <div class="modal-header">
-          <h2>Ad Copys</h2>
-          <div class="dropdown">
-              <button id="translateAdMenuBtn" class="secondary-btn">🌍 Traduire...</button>
-              <div id="adLangList" class="dropdown-content"></div>
-          </div>
-          <button id="closeAds" class="close-btn">×</button>
-      </div>
-      <div class="tabs" id="adsTabs">
-        <button class="tab-link active" data-tab="tab-gen-ads">Générer</button>
-        <button class="tab-link" data-tab="tab-saved-ads">Enregistrés</button>
-      </div>
-      <div id="adsTabContainer" class="tab-container-scroll">
-          <div id="tab-gen-ads" class="tab-content">
-            <div class="style-selector" id="adStyleSelectorContainer"></div>
-            <div id="adsResults" class="headlines-results"></div>
-            <div class="headlines-actions-wrapper">
-                <div class="headlines-actions hidden" id="similarAdsActions">
-                    <button id="genSimilarAdsBtn" class="secondary-btn" style="width:100%; color: var(--apple-blue);">✨ Générer versions similaires</button>
-                </div>
-                <div id="adsLocalPagination" class="pagination"></div>
-            </div>
-          </div>
-          <div id="tab-saved-ads" class="tab-content hidden">
-            <div id="adsSavedList" class="headlines-results"></div>
-            <div id="adsDefaultInfoBlock" class="ads-info-block"></div>
-          </div>
-      </div>
-      <div class="chat-container"><div class="chat-bar"><input type="text" id="adStyleInput" placeholder="Style..."/><button id="sendAdChat">↑</button></div></div>
-      <div class="modal-footer"><button id="saveAdsBtn" class="primary-btn">Enregistrer sélections</button></div>
+    <div class="modal-content glass-panel">
+      <div class="modal-header"><h2>Publicités</h2><div class="dropdown"><button id="translateAdMenuBtn" class="secondary-btn">🌍 Traduire...</button><div id="adLangList" class="dropdown-content"></div></div><button id="closeAds" class="close-btn">×</button></div>
+      <div class="tabs" id="adsTabs"><button class="tab-link active" data-tab="tab-gen-ads">Générer</button><button class="tab-link" data-tab="tab-saved-ads">Enregistrés</button></div>
+      <div id="adsTabContainer" class="tab-container-scroll"><div id="tab-gen-ads" class="tab-content"><div class="style-selector" id="adStyleSelectorContainer"></div><div id="adsResults" class="headlines-results"></div><div class="headlines-actions-wrapper"><div class="headlines-actions hidden" id="similarAdsActions"><button id="genSimilarAdsBtn" class="secondary-btn">✨ Générer similaires</button></div><div id="adsLocalPagination" class="pagination"></div></div></div><div id="tab-saved-ads" class="tab-content hidden"><div id="adsSavedList" class="headlines-results"></div><div id="adsDefaultInfoBlock" class="ads-info-block"></div></div></div>
+      <div class="chat-container"><div class="chat-bar"><input type="text" id="adStyleInput" placeholder="Instructions..."/><button id="sendAdChat">↑</button></div></div>
+      <div class="modal-footer"><button id="saveAdsBtn" class="primary-btn">Enregistrer</button></div>
     </div>
   </div>
 
   <div id="imgGenModal" class="modal hidden">
-    <div class="modal-content" style="max-width: 1000px; flex-direction: row;">
+    <div class="modal-content glass-panel studio-layout">
       
-      <div style="flex: 3; display: flex; flex-direction: column; border-right: 1px solid var(--border);">
-        <div class="modal-header">
-          <h2>Studio Gemini</h2>
-        </div>
+      <div class="studio-sidebar">
+        <div class="modal-header simple"><h2>Studio Gemini</h2></div>
         
-        <div class="tabs">
+        <div class="tabs studio-tabs">
           <button class="tab-link active" data-tab="tab-img-chat">Génération</button>
-          <button class="tab-link" data-tab="tab-img-saved">Enregistrées</button>
+          <button class="tab-link" data-tab="tab-img-saved">Galerie</button>
         </div>
 
-        <div class="tab-container-scroll" style="background: #fbfbfd;">
-           <div id="tab-img-chat" class="tab-content" style="padding: 20px;">
-              <div id="imgGenSessionResults" class="image-grid"></div>
-           </div>
-
-           <div id="tab-img-saved" class="tab-content hidden" style="padding: 20px;">
-              <div id="imgGenSavedResults" class="image-grid"></div>
-           </div>
+        <div class="studio-controls-scroll">
+           <div id="imgGenCategoriesBar" class="studio-categories"></div>
+           <div id="imgGenStylesContainer" class="studio-groups-container"></div>
         </div>
 
-        <div class="chat-container">
-           <div id="imgGenCategoriesBar" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #f0f0f0;"></div>
-           
-           <div id="imgGenStylesContainer" style="display:flex; flex-direction:column; gap:15px; overflow-y:auto; padding:5px 5px 15px 5px; margin-bottom:10px; border-bottom:1px solid #f0f0f0; max-height: 250px;"></div>
-
+        <div class="studio-chat-wrapper">
            <div id="inputImagesPreview" class="input-images-bar hidden"></div>
-           
-           <div class="chat-bar">
-             <button id="addInputImgBtn" style="background:none; color:#555; border:1px solid #ddd; margin-right:5px;" title="Ajouter une image référence">+</button>
-             <input type="text" id="imgGenPrompt" placeholder="Décrivez l'image à générer..." />
-             <button id="sendImgGen">✨</button>
+           <div class="chat-bar studio-chat">
+             <button id="addInputImgBtn" class="plus-btn" title="Ajouter image réf">+</button>
+             <input type="text" id="imgGenPrompt" placeholder="Décrivez l'image..." />
+             <button id="sendImgGen" class="magic-btn">✨</button>
            </div>
            <input type="file" id="extraImgInput" accept="image/*" multiple style="display:none;"/>
         </div>
       </div>
 
-      <div style="flex: 1; display: flex; flex-direction: column; background: #fff;">
-         <div class="modal-header" style="justify-content: flex-end;">
+      <div class="studio-main">
+         <div class="modal-header right-align">
+            <div class="settings-inline">
+               <select id="imgCount"><option value="1">1 img</option><option value="2" selected>2 imgs</option><option value="3">3 imgs</option><option value="4">4 imgs</option></select>
+               <select id="imgAspectRatio"><option value="1:1">1:1</option><option value="16:9">16:9</option><option value="9:16">9:16</option><option value="4:3">4:3</option><option value="3:4">3:4</option></select>
+               <select id="imgResolution"><option value="1k">1k</option><option value="2k">2k</option><option value="4k" selected>4k</option></select>
+            </div>
             <button id="closeImgGen" class="close-btn">×</button>
          </div>
-         <div style="padding: 20px; display: flex; flex-direction: column; gap: 20px;">
-            
-            <div class="setting-group">
-               <label style="font-size:11px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Nombre d'images</label>
-               <select id="imgCount" class="settings-select">
-                  <option value="1">1</option>
-                  <option value="2" selected>2</option>
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                  <option value="5">5</option>
-               </select>
-            </div>
 
-            <div class="setting-group">
-               <label style="font-size:11px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Aspect Ratio</label>
-               <select id="imgAspectRatio" class="settings-select">
-                  <option value="1:1">1:1 (Carré)</option>
-                  <option value="16:9">16:9 (Paysage)</option>
-                  <option value="9:16">9:16 (Story)</option>
-                  <option value="4:3">4:3</option>
-                  <option value="3:4">3:4</option>
-               </select>
+         <div class="tab-container-scroll transparent-bg">
+            <div id="tab-img-chat" class="tab-content full-height">
+               <div id="imgGenSessionResults" class="image-grid modern-grid"></div>
             </div>
-            
-            <div class="setting-group">
-               <label style="font-size:11px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Résolution / Qualité</label>
-               <select id="imgResolution" class="settings-select">
-                  <option value="1k">1k (Standard)</option>
-                  <option value="2k">2k (Haute Déf.)</option>
-                  <option value="4k" selected>4k (Ultra HD)</option>
-               </select>
+            <div id="tab-img-saved" class="tab-content full-height hidden">
+               <div id="imgGenSavedResults" class="image-grid modern-grid"></div>
             </div>
-
-            <div style="margin-top:auto;">
-               <button id="saveImgSelectionBtn" class="primary-btn" style="width:100%;">Enregistrer Sélection</button>
-            </div>
+         </div>
+         
+         <div class="studio-footer">
+             <button id="saveImgSelectionBtn" class="primary-btn wide">Enregistrer la sélection</button>
          </div>
       </div>
 
     </div>
   </div>
 
-  <div id="loading" class="loading hidden"><div class="spinner"></div><div><strong>Action en cours...</strong><div id="timer">00:00</div></div></div>
+  <div id="loading" class="loading hidden"><div class="spinner-apple"></div><div class="loading-text">Création en cours... <span id="timer">00:00</span></div></div>
 
   <section class="workspace">
     <div class="left">
-        <div id="drop" class="drop">
+        <div id="drop" class="drop-zone">
           <input id="imageInput" type="file" accept="image/*"/>
           <div id="preview" class="preview hidden"><button id="removeImage" class="modern-remove-btn">×</button><img id="previewImg"/></div>
-          <p id="dropPlaceholder">Cliquez ou déposez une image</p>
+          <p id="dropPlaceholder">Glissez votre produit ici</p>
         </div>
-        <button id="openImgGenBtn" class="secondary-btn" style="width: 100%; margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-           <span>🎨</span> Generate Images
-        </button>
+        <button id="openImgGenBtn" class="secondary-btn big-btn"><span>🎨</span> Ouvrir Studio Gemini</button>
     </div>
     <div class="right">
-      <section class="card"><label>Collection</label><select id="collectionSelect" style="margin-bottom:15px;"></select>
+      <section class="card glass-card">
+        <label>Collection</label><select id="collectionSelect" class="modern-select"></select>
         <div class="actions">
           <button id="generateBtn" class="primary-btn" disabled>Générer Tout</button>
           <button id="regenTitleBtn" class="secondary-btn" disabled>Titre</button>
           <button id="regenDescBtn" class="secondary-btn" disabled>Description</button>
         </div>
       </section>
-      <section class="card"><div class="card-head"><h3>Titre</h3><button id="copyTitle">⌘C</button></div><pre id="titleText"></pre></section>
-      <section class="card"><div class="card-head"><h3>Description</h3><button id="copyDesc">⌘C</button></div><pre id="descText"></pre>
-        <div style="margin-top:15px;"><label style="font-size:10px; font-weight:bold; color:var(--text-muted);">Product URL</label><input type="text" id="productUrlInput" placeholder="https://en.riccardiparis.com/..."/></div>
-        <div style="display:flex; gap:10px; margin-top:15px;"><button id="openHeadlinesBtn" class="secondary-btn" style="flex:1;">🎬 Headlines</button><button id="openAdsBtn" class="secondary-btn" style="flex:1;">📢 Ad Copys</button></div>
+      
+      <section class="card glass-card">
+          <div class="card-head"><h3>Titre</h3><button id="copyTitle" class="icon-btn-text">Copier</button></div>
+          <pre id="titleText"></pre>
+      </section>
+      
+      <section class="card glass-card">
+          <div class="card-head"><h3>Description</h3><button id="copyDesc" class="icon-btn-text">Copier</button></div>
+          <pre id="descText"></pre>
+          <div class="url-input-group">
+              <label>URL Produit</label>
+              <input type="text" id="productUrlInput" placeholder="https://..." class="modern-input"/>
+          </div>
+          <div class="quick-actions">
+              <button id="openHeadlinesBtn" class="secondary-btn">🎬 Headlines</button>
+              <button id="openAdsBtn" class="secondary-btn">📢 Publicités</button>
+          </div>
       </section>
     </div>
   </section>
 
-  <section class="card history-section">
-    <div class="history-header"><h2>Historique</h2><input type="text" id="historySearch" placeholder="Filtrer..."/></div>
+  <section class="card history-section glass-card">
+    <div class="history-header"><h2>Historique</h2><input type="text" id="historySearch" placeholder="Rechercher..." class="search-input"/></div>
     <div id="historyList" class="history-list"></div>
     <div id="pagination" class="pagination"></div>
   </section>
