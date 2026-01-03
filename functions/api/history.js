@@ -3,36 +3,44 @@ export async function onRequest(context) {
   const db = env.DB;
   const url = new URL(request.url);
 
-  // --- GET ---
+  // --- GET: RÉCUPÉRATION ---
   if (request.method === "GET") {
     const id = url.searchParams.get("id");
 
     if (id) {
-        // 1. Charger l'info produit
+        // 1. Récupérer le produit principal
         const item = await db.prepare("SELECT * FROM history WHERE id = ?").bind(id).first();
+        
         if (!item) return new Response("Not found", { status: 404 });
 
-        // 2. Charger les images depuis la table dédiée
-        // On récupère le base64 (image), le prompt et l'aspect ratio
-        const imagesResults = await db.prepare("SELECT image, prompt, aspect_ratio as aspectRatio FROM history_images WHERE history_id = ?").bind(id).all();
-        
-        // 3. Injecter dans l'objet pour le frontend
-        // Le frontend attend "generated_images" comme une chaine JSON
-        item.generated_images = JSON.stringify(imagesResults.results || []);
+        // 2. Récupérer les images associées dans la table séparée
+        // On va chercher les images 4K stockées ligne par ligne
+        try {
+            const imagesResults = await db.prepare("SELECT image, prompt, aspect_ratio as aspectRatio FROM history_images WHERE history_id = ?").bind(id).all();
+            
+            // 3. Reconstituer le format attendu par le frontend (JSON)
+            item.generated_images = JSON.stringify(imagesResults.results || []);
+        } catch (e) {
+            // Fallback si la table n'existe pas encore ou erreur
+            item.generated_images = "[]";
+        }
 
         return new Response(JSON.stringify(item), { headers: { "content-type": "application/json" } });
     } else {
-        // Liste légère (Sidebar)
+        // CHARGEMENT LISTE (Menu de gauche)
+        // Optimisation : On ne charge QUE les textes légers
         const { results } = await db.prepare("SELECT id, title, description, image, product_name FROM history ORDER BY id DESC").all();
         return new Response(JSON.stringify(results), { headers: { "content-type": "application/json" } });
     }
   }
 
-  // --- POST ---
+  // --- POST: CRÉATION ---
   if (request.method === "POST") {
     const { title, description, image, product_name, headlines, product_url, ad_copys } = await request.json();
+    
+    // On insère l'historique sans les images générées (elles sont vides au début)
     const result = await db.prepare(
-      "INSERT INTO history (title, description, image, product_name, headlines, product_url, ad_copys, headlines_trans, ads_trans) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO history (title, description, image, product_name, headlines, product_url, ad_copys, headlines_trans, ads_trans, generated_images) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       title || "", 
       description || "", 
@@ -42,24 +50,26 @@ export async function onRequest(context) {
       product_url || "", 
       ad_copys || "[]", 
       "{}", 
-      "{}"
+      "{}",
+      "[]" // On laisse le champ vide/array vide pour la compatibilité
     ).run();
+    
     return new Response(JSON.stringify({ id: result.meta.last_row_id }), { headers: { "content-type": "application/json" } });
   }
 
-  // --- PATCH (Le correctif est ici) ---
+  // --- PATCH: SAUVEGARDE & MISE À JOUR ---
   if (request.method === "PATCH") {
     try {
         const body = await request.json();
-        const { id, generated_images } = body; // On extrait les images à part
+        const { id, generated_images } = body; // On isole les images
 
         if (!id) return new Response(JSON.stringify({ error: "ID manquant" }), { status: 400 });
 
         // 1. Mise à jour de la table HISTORY (Textes uniquement)
-        // IMPORTANT : On a retiré 'generated_images' de cette liste pour éviter l'erreur SQLITE_TOOBIG
-        const fields = ['title', 'description', 'headlines', 'product_url', 'ad_copys', 'headlines_trans', 'ads_trans'];
         const updates = [];
         const values = [];
+        // IMPORTANT: 'generated_images' est RETIRÉ de cette liste pour éviter l'erreur TOOBIG
+        const fields = ['title', 'description', 'headlines', 'product_url', 'ad_copys', 'headlines_trans', 'ads_trans'];
 
         for (const field of fields) {
             if (body[field] !== undefined) {
@@ -73,21 +83,28 @@ export async function onRequest(context) {
             await db.prepare(`UPDATE history SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
         }
 
-        // 2. Mise à jour de la table HISTORY_IMAGES (Images lourdes)
+        // 2. GESTION DES IMAGES (Table Séparée)
         if (generated_images) {
-            const imagesArray = JSON.parse(generated_images);
+            let imagesArray;
+            try {
+                imagesArray = JSON.parse(generated_images);
+            } catch (e) {
+                imagesArray = [];
+            }
             
-            // A. On nettoie les anciennes images de ce produit
+            // A. Supprimer les anciennes images pour cet ID (Reset)
+            // Cela permet de gérer les suppressions ou réorganisations faites dans le frontend
             await db.prepare("DELETE FROM history_images WHERE history_id = ?").bind(id).run();
 
-            // B. On insère les nouvelles une par une
-            // Note: D1 supporte mal les batchs massifs de base64, on boucle proprement
+            // B. Insérer les nouvelles images une par une
+            // Cette boucle permet d'éviter l'erreur de taille car chaque image est une requête séparée ou un petit batch
             if (imagesArray.length > 0) {
                 const stmt = db.prepare("INSERT INTO history_images (history_id, image, prompt, aspect_ratio) VALUES (?, ?, ?, ?)");
                 
-                // Exécution séquentielle pour éviter de surcharger la requête
+                // On boucle pour insérer
                 for (const img of imagesArray) {
-                    await stmt.bind(id, img.image, img.prompt, img.aspectRatio || "").run();
+                    // On s'assure que les données existent
+                    await stmt.bind(id, img.image || "", img.prompt || "", img.aspectRatio || "").run();
                 }
             }
         }
@@ -98,9 +115,10 @@ export async function onRequest(context) {
     }
   }
 
-  // --- DELETE ---
+  // --- DELETE: SUPPRESSION ---
   if (request.method === "DELETE") {
     const id = url.searchParams.get("id");
+    // Suppression en cascade (Historique + Images liées)
     await db.batch([
         db.prepare("DELETE FROM history WHERE id = ?").bind(id),
         db.prepare("DELETE FROM history_images WHERE history_id = ?").bind(id)
