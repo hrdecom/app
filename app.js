@@ -11,15 +11,28 @@
     promptTranslate: "Professional luxury translator. TASK: Translate into {targetLang}. URL: {product_url}",
     headlineStyles: [{ name: "POV", prompt: "POV perspective." }],
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }],
-    imgStyles: [], 
-    imgFolders: [], // NOUVEAU: { id, name, category, group }
-    imgGroups: ["Couleurs", "Matériaux"], // NOUVEAU
-    imgCategories: ["Packaging", "Ambiance", "Mannequin"]
-  };
-
-  const LANGUAGES = { 
-    "Danish": "dn.", "Dutch": "du.", "German": "de.", "Italian": "it.", 
-    "Polish": "pl.", "Portuguese (Brazil)": "pt-br.", "Portuguese (Portugal)": "pt.", "Spanish": "es." 
+    
+    // NOUVELLE STRUCTURE HIERARCHIQUE
+    // Nous utilisons une liste plate d'objets liés par ID pour la flexibilité (CMS style)
+    imgCategories: [
+        { id: "cat_1", name: "Collier" },
+        { id: "cat_2", name: "Bague" },
+        { id: "cat_3", name: "Bracelet" }
+    ],
+    imgGroups: [
+        { id: "grp_1", name: "Petit collier", categoryId: "cat_1" },
+        { id: "grp_2", name: "Gros collier", categoryId: "cat_1" }
+    ],
+    imgFolders: [
+        { id: "fol_1", name: "Photo portée", parentId: "grp_1", parentType: "group" },
+        { id: "fol_2", name: "Changer couleur", parentId: "cat_1", parentType: "category" } // Global
+    ],
+    imgStyles: [
+        { id: "sty_1", name: "Sur cou", prompt: "On neck.", parentId: "fol_1", parentType: "folder" },
+        { id: "sty_2", name: "Sur main", prompt: "On hand.", parentId: "fol_1", parentType: "folder" },
+        { id: "sty_3", name: "Or", prompt: "Gold material.", parentId: "fol_2", parentType: "folder" },
+        { id: "sty_4", name: "Argent", prompt: "Silver material.", parentId: "fol_2", parentType: "folder" }
+    ]
   };
 
   let state = {
@@ -38,12 +51,13 @@
     selectedSessionImagesIdx: [],
     // ETATS UI STUDIO
     currentImgCategory: "",
-    currentStudioGroup: "", // NOUVEAU : Groupe sélectionné dans le menu déroulant
-    activeFolderId: null,   // NOUVEAU : Dossier sélectionné pour afficher ses styles
+    currentStudioGroup: "", 
+    activeFolderId: null, // Pour afficher les enfants d'un dossier (multi-choice)
     selectedImgStyles: [], 
     manualImgStyles: [],   
-    editingImgStyleIndex: null,
-    expandedFolders: [] // Pour ouvrir/fermer les dossiers (Legacy config)
+    
+    // DRAG & DROP STATE
+    draggedItem: null
   };
 
   const startLoading = () => {
@@ -67,19 +81,23 @@
     if (saved) {
       const parsed = JSON.parse(saved.value);
       state.config = { ...DEFAULTS, ...parsed }; 
-      if (!state.config.imgStyles) state.config.imgStyles = [];
-      if (!state.config.imgFolders) state.config.imgFolders = [];
-      if (!state.config.imgGroups) state.config.imgGroups = DEFAULTS.imgGroups;
-      if (!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
+      
+      // Migration sécurité : s'assurer que les nouvelles listes existent
+      if(!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
+      if(!state.config.imgGroups) state.config.imgGroups = DEFAULTS.imgGroups;
+      if(!state.config.imgFolders) state.config.imgFolders = DEFAULTS.imgFolders;
+      if(!state.config.imgStyles) state.config.imgStyles = DEFAULTS.imgStyles;
     }
+    
+    // Init Studio Category
     if (state.config.imgCategories.length > 0) {
-        state.currentImgCategory = state.config.imgCategories[0];
+        state.currentImgCategory = state.config.imgCategories[0].id;
     }
     renderConfigUI();
   }
 
   function renderConfigUI() {
-    // ... [Code inchangé pour Prompts Textuels] ...
+    // ... [Prompts Textuels inchangés] ...
     ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => { 
       if($(id)) $(id).value = state.config[id] || DEFAULTS[id]; 
     });
@@ -88,60 +106,14 @@
     $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     
-    // 1. GROUPES
-    $("imgGroupsList").innerHTML = (state.config.imgGroups || []).map((g, i) => `
-       <div class="style-tag" style="background:#eee; border:1px solid #ccc; padding:4px 10px; display:flex; gap:5px; align-items:center;">
-          ${g} <span onclick="window.removeImgGroup(${i})" style="cursor:pointer; color:red; font-weight:bold;">×</span>
-       </div>
-    `).join("");
-
-    // Update Dropdowns
-    const groupOpts = (state.config.imgGroups || []).map(g => `<option value="${g}">${g}</option>`).join("");
-    const catOpts = (state.config.imgCategories || []).map(c => `<option value="${c}">${c}</option>`).join("");
-    
-    if($("newFolderGroup")) $("newFolderGroup").innerHTML = `<option value="">Groupe...</option>` + groupOpts;
-    if($("newFolderCategory")) $("newFolderCategory").innerHTML = `<option value="">Catégorie...</option>` + catOpts;
-
-    // 2. DOSSIERS
-    $("imgFoldersList").innerHTML = (state.config.imgFolders || []).map((f, i) => `
-        <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:8px; border-radius:6px; border:1px solid #eee; margin-bottom:5px;">
-            <div>
-                <span style="font-weight:bold;">${f.name}</span>
-                <span style="font-size:10px; color:#888; margin-left:10px;">${f.category} > ${f.group}</span>
-            </div>
-            <button onclick="window.removeImgFolder(${i})" style="color:red; border:none; background:none;">×</button>
-        </div>
-    `).join("");
-
-    // Update Folder Select for Styles
-    const folderOpts = (state.config.imgFolders || []).map(f => `<option value="${f.id}">${f.name} (${f.group})</option>`).join("");
-    if($("newImgStyleFolder")) $("newImgStyleFolder").innerHTML = `<option value="">Choisir un Dossier...</option>` + folderOpts;
-
-    // 3. STYLES (Enfants)
-    $("imgStyleEditorList").innerHTML = (state.config.imgStyles || []).map((s, i) => {
-        const folder = state.config.imgFolders.find(f => f.id === s.folderId);
-        const folderName = folder ? folder.name : "Sans dossier";
-        return `
-        <div style="display:flex; gap:10px; margin-bottom:10px; align-items:flex-start; background:#fff; padding:10px; border-radius:8px; border:1px solid #eee;">
-            <div style="width:40px; height:40px; background:#eee; border-radius:6px; overflow:hidden; flex-shrink:0;">
-                ${s.refImage ? `<img src="data:image/jpeg;base64,${s.refImage}" style="width:100%; height:100%; object-fit:cover;">` : ''}
-            </div>
-            <div style="flex:1;">
-                <div style="display:flex; justify-content:space-between;">
-                    <div style="font-weight:bold; font-size:12px;">${s.name}</div>
-                    <div style="font-size:10px; background:#f0f0f0; padding:2px 6px; border-radius:4px;">Dans: ${folderName}</div>
-                </div>
-                <div style="font-size:11px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:250px;">${s.prompt}</div>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:5px;">
-                <button onclick="window.editImgStyle(${i})" style="color:var(--apple-blue); border:none; background:none;">✏️</button>
-                <button onclick="window.removeImgStyle(${i})" style="color:red; border:none; background:none;">×</button>
-            </div>
-        </div>
-    `}).join("");
-
     $("collectionSelect").innerHTML = (state.config.collections || []).map(c => `<option value="${c.name}">${c.name}</option>`).join("");
+    
     renderStyleSelectors();
+    
+    // NOUVEAU : Rendu de l'arbre
+    renderImgConfigTree();
+    
+    // Rendu Studio (Impacté par la config)
     renderStudioCategories();
     renderImgStylesButtons();
   }
@@ -156,223 +128,486 @@
     el.classList.toggle('selected');
   };
 
-  /* --- CRUD GROUPES / DOSSIERS / STYLES --- */
-  
-  // 1. GROUPES
-  window.removeImgGroup = (i) => {
-      state.config.imgGroups.splice(i, 1);
-      renderConfigUI();
-  };
-  $("addImgGroupBtn").onclick = () => {
-      const val = $("newImgGroupInput").value.trim();
-      if(val && !state.config.imgGroups.includes(val)) {
-          state.config.imgGroups.push(val);
-          $("newImgGroupInput").value = "";
-          renderConfigUI();
-      }
-  };
+  /* =========================================
+     NOUVEAU SYSTÈME HIERARCHIQUE (TREE EDITOR)
+     ========================================= */
 
-  // 2. DOSSIERS
-  window.removeImgFolder = (i) => {
-      if(!confirm("Supprimer ce dossier ?")) return;
-      // On pourrait supprimer les enfants en cascade ici si on voulait
-      state.config.imgFolders.splice(i, 1);
-      renderConfigUI();
-  };
-  $("addFolderBtn").onclick = () => {
-      const name = $("newFolderInput").value;
-      const cat = $("newFolderCategory").value;
-      const grp = $("newFolderGroup").value;
-      if(!name || !cat || !grp) return alert("Tout remplir svp");
-      
-      state.config.imgFolders.push({
-          id: "f_" + Date.now(),
-          name, category: cat, group: grp
+  function renderImgConfigTree() {
+      const container = $("treeEditor");
+      if(!container) return;
+      container.innerHTML = "";
+
+      // 1. On itère sur les CATÉGORIES (Racine)
+      state.config.imgCategories.forEach(cat => {
+          const catNode = createTreeNode("category", cat, null);
+          container.appendChild(catNode);
+          
+          const childrenContainer = catNode.querySelector('.tree-children');
+
+          // A. Contenu GLOBAL de la Catégorie (Folders/Styles attachés à la Catégorie directement)
+          // Ces éléments sont "au-dessus des groupes"
+          const globalFolders = state.config.imgFolders.filter(f => f.parentType === 'category' && f.parentId === cat.id);
+          const globalStyles = state.config.imgStyles.filter(s => s.parentType === 'category' && s.parentId === cat.id);
+          
+          [...globalFolders, ...globalStyles].forEach(item => {
+             const type = item.prompt !== undefined ? 'style' : 'folder';
+             const node = createRecursiveNode(type, item);
+             childrenContainer.appendChild(node);
+          });
+
+          // B. GROUPES de la Catégorie
+          const groups = state.config.imgGroups.filter(g => g.categoryId === cat.id);
+          groups.forEach(grp => {
+              const grpNode = createTreeNode("group", grp, cat.id); // ParentID logic for display if needed
+              childrenContainer.appendChild(grpNode);
+              
+              const grpChildren = grpNode.querySelector('.tree-children');
+
+              // C. Contenu du GROUPE (Folders/Styles)
+              const grpFolders = state.config.imgFolders.filter(f => f.parentType === 'group' && f.parentId === grp.id);
+              const grpStyles = state.config.imgStyles.filter(s => s.parentType === 'group' && s.parentId === grp.id);
+
+              [...grpFolders, ...grpStyles].forEach(item => {
+                  const type = item.prompt !== undefined ? 'style' : 'folder';
+                  const node = createRecursiveNode(type, item);
+                  grpChildren.appendChild(node);
+              });
+          });
       });
-      $("newFolderInput").value = "";
-      renderConfigUI();
-  };
+  }
 
-  // 3. STYLES (Enfants)
-  window.removeImgStyle = (i) => {
-      if(!confirm("Supprimer ?")) return;
-      state.config.imgStyles.splice(i, 1);
-      if(state.editingImgStyleIndex === i) window.cancelImgStyleEdit();
-      renderConfigUI();
-  };
-
-  window.editImgStyle = (i) => {
-      const style = state.config.imgStyles[i];
-      state.editingImgStyleIndex = i;
-      $("newImgStyleName").value = style.name;
-      $("newImgStyleFolder").value = style.folderId || "";
-      $("newImgStylePrompt").value = style.prompt;
-      $("newImgStyleMode").value = style.mode || "auto"; 
-      $("newImgStyleFile").value = ""; 
-      $("imgStyleFormTitle").textContent = "MODIFIER LE STYLE";
-      $("addImgStyleBtn").textContent = "Mettre à jour";
-      $("cancelImgStyleEditBtn").classList.remove("hidden");
-      if(style.refImage) $("currentRefImgPreview").classList.remove("hidden");
-      else $("currentRefImgPreview").classList.add("hidden");
-      $("imgStyleEditorForm").scrollIntoView({ behavior: 'smooth' });
-  };
-
-  window.cancelImgStyleEdit = () => {
-      state.editingImgStyleIndex = null;
-      $("newImgStyleName").value = "";
-      $("newImgStyleFolder").value = "";
-      $("newImgStylePrompt").value = "";
-      $("newImgStyleMode").value = "auto";
-      $("newImgStyleFile").value = "";
-      $("imgStyleFormTitle").textContent = "AJOUTER UN STYLE";
-      $("addImgStyleBtn").textContent = "+ Enregistrer le Style";
-      $("cancelImgStyleEditBtn").classList.add("hidden");
-      $("currentRefImgPreview").classList.add("hidden");
-  };
-  $("cancelImgStyleEditBtn").onclick = window.cancelImgStyleEdit;
-
-  $("addImgStyleBtn").onclick = () => {
-      const name = $("newImgStyleName").value;
-      const folderId = $("newImgStyleFolder").value;
-      const prompt = $("newImgStylePrompt").value;
-      const mode = $("newImgStyleMode").value;
-      const fileInput = $("newImgStyleFile");
+  function createRecursiveNode(type, item) {
+      // Crée un noeud (Folder ou Style). Si Folder, cherche ses enfants.
+      const node = createTreeNode(type, item, item.parentId);
       
-      if(!name || !prompt || !folderId) return alert("Nom, Prompt et Dossier requis.");
-
-      const saveStyle = (imgBase64) => {
-          const styleData = { name, folderId, prompt, mode };
-          if(state.editingImgStyleIndex !== null) {
-              const oldStyle = state.config.imgStyles[state.editingImgStyleIndex];
-              styleData.refImage = imgBase64 || oldStyle.refImage;
-              state.config.imgStyles[state.editingImgStyleIndex] = styleData;
-              window.cancelImgStyleEdit(); 
-          } else {
-              styleData.refImage = imgBase64;
-              state.config.imgStyles.push(styleData);
-              $("newImgStyleName").value = ""; $("newImgStylePrompt").value = ""; fileInput.value = "";
-          }
-          renderConfigUI();
-      };
-
-      if (fileInput.files && fileInput.files[0]) {
-          const r = new FileReader();
-          r.onload = (e) => saveStyle(e.target.result.split(",")[1]);
-          r.readAsDataURL(fileInput.files[0]);
-      } else {
-          saveStyle(null);
+      if (type === 'folder') {
+          const childrenContainer = node.querySelector('.tree-children');
+          // Chercher les Styles dans ce Folder
+          const styles = state.config.imgStyles.filter(s => s.parentType === 'folder' && s.parentId === item.id);
+          styles.forEach(s => {
+              const sNode = createRecursiveNode('style', s);
+              childrenContainer.appendChild(sNode);
+          });
       }
+      return node;
+  }
+
+  function createTreeNode(type, data, parentId) {
+      const el = document.createElement('div');
+      el.className = `tree-node type-${type}`;
+      el.setAttribute('draggable', 'true');
+      el.setAttribute('data-id', data.id);
+      el.setAttribute('data-type', type);
+      
+      // Icon & Label
+      let icon = "📁";
+      if (type === "category") icon = "📦";
+      if (type === "group") icon = "🔹";
+      if (type === "style") icon = "🎨";
+      
+      // Actions HTML
+      let addBtns = "";
+      if (type === "category") addBtns = `<button class="small-action-btn" onclick="window.addNode('group', '${data.id}')">+ Groupe</button> <button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'category')">+ Dossier Global</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'category')">+ Style Global</button>`;
+      if (type === "group") addBtns = `<button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'group')">+ Dossier</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'group')">+ Style</button>`;
+      if (type === "folder") addBtns = `<button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'folder')">+ Style</button>`;
+
+      el.innerHTML = `
+        <div class="tree-header">
+            <span>${icon} ${data.name}</span>
+            <div class="node-actions">
+                ${addBtns}
+                <button class="small-action-btn" onclick="window.editNode('${type}', '${data.id}')">✏️</button>
+            </div>
+        </div>
+        <div class="tree-children"></div>
+      `;
+
+      // DRAG EVENTS
+      const header = el.querySelector('.tree-header');
+      
+      el.addEventListener('dragstart', (e) => {
+          state.draggedItem = { id: data.id, type: type };
+          e.stopPropagation();
+          e.dataTransfer.effectAllowed = 'move';
+          el.style.opacity = '0.5';
+      });
+
+      el.addEventListener('dragend', (e) => {
+          el.style.opacity = '1';
+          document.querySelectorAll('.drag-over-center, .drag-over-top, .drag-over-bottom').forEach(x => {
+              x.classList.remove('drag-over-center', 'drag-over-top', 'drag-over-bottom');
+          });
+          state.draggedItem = null;
+      });
+
+      // DROP ZONE LOGIC
+      header.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if(!state.draggedItem || state.draggedItem.id === data.id) return; // Can't drop on self
+
+          // Définir les règles de Drop valides
+          const src = state.draggedItem.type;
+          const dest = type;
+          let allow = false;
+
+          // Règles :
+          // Group -> dans Category
+          // Folder -> dans Category, Group
+          // Style -> dans Category, Group, Folder
+          
+          if (src === 'group' && dest === 'category') allow = true;
+          if (src === 'folder' && (dest === 'category' || dest === 'group')) allow = true;
+          if (src === 'style' && (dest === 'category' || dest === 'group' || dest === 'folder')) allow = true;
+          
+          // Reordering within same list? (Pas implémenté full, focus nesting)
+          
+          if (allow) {
+             header.classList.add('drag-over-center');
+          }
+      });
+
+      header.addEventListener('dragleave', (e) => {
+          header.classList.remove('drag-over-center');
+      });
+
+      header.addEventListener('drop', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          header.classList.remove('drag-over-center');
+          
+          if(state.draggedItem && state.draggedItem.id !== data.id) {
+              window.moveNode(state.draggedItem, { id: data.id, type: type });
+          }
+      });
+
+      return el;
+  }
+
+  /* --- LOGIQUE CRUD ARBRE --- */
+
+  window.addCategoryBtn = $("addCategoryBtn");
+  if(window.addCategoryBtn) window.addCategoryBtn.onclick = () => {
+      const name = $("newCatName").value;
+      if(!name) return;
+      state.config.imgCategories.push({ id: "cat_" + Date.now(), name: name });
+      $("newCatName").value = "";
+      renderConfigUI();
+  };
+
+  window.addNode = (newType, parentId, parentTypeContext) => {
+      // Ouvre l'overlay d'édition en mode création
+      openNodeEditor(null, newType, parentId, parentTypeContext);
+  };
+
+  window.editNode = (type, id) => {
+      openNodeEditor(id, type, null, null);
+  };
+
+  function openNodeEditor(id, type, parentId, parentTypeContext) {
+      $("nodeEditorOverlay").classList.remove("hidden");
+      $("editNodeId").value = id || ""; // Si vide = création
+      $("editNodeType").value = type;
+      
+      // Stocker le contexte parent pour la création
+      state.tempParentId = parentId;
+      state.tempParentType = parentTypeContext;
+
+      // Reset form
+      $("editNodeName").value = "";
+      $("editNodePrompt").value = "";
+      $("editNodeFile").value = "";
+      $("editNodeImgPreview").innerHTML = "";
+      $("editPromptContainer").classList.add("hidden");
+      
+      let title = "Créer ";
+      if (id) title = "Modifier ";
+      
+      if (type === 'group') title += "Groupe";
+      if (type === 'folder') title += "Bouton Multiple (Dossier)";
+      if (type === 'style') {
+          title += "Style (Prompt)";
+          $("editPromptContainer").classList.remove("hidden");
+      }
+      
+      // Si modification, charger les données
+      if (id) {
+          let item = null;
+          if (type === 'category') item = state.config.imgCategories.find(x => x.id === id);
+          if (type === 'group') item = state.config.imgGroups.find(x => x.id === id);
+          if (type === 'folder') item = state.config.imgFolders.find(x => x.id === id);
+          if (type === 'style') item = state.config.imgStyles.find(x => x.id === id);
+          
+          if (item) {
+              $("editNodeName").value = item.name;
+              if (item.prompt) $("editNodePrompt").value = item.prompt;
+              if (item.mode) $("editNodeMode").value = item.mode;
+              if (item.refImage) $("editNodeImgPreview").innerHTML = `<img src="data:image/jpeg;base64,${item.refImage}" style="width:100%;height:100%;object-fit:cover;">`;
+          }
+      }
+
+      $("nodeEditorTitle").textContent = title;
+  }
+
+  $("saveNodeBtn").onclick = () => {
+      const id = $("editNodeId").value;
+      const type = $("editNodeType").value;
+      const name = $("editNodeName").value;
+      if (!name) return alert("Nom requis");
+
+      if (!id) {
+          // --- CREATION ---
+          const newId = (type === 'group' ? 'grp_' : (type === 'folder' ? 'fol_' : 'sty_')) + Date.now();
+          const newItem = { id: newId, name };
+          
+          if (type === 'group') {
+              newItem.categoryId = state.tempParentId;
+              state.config.imgGroups.push(newItem);
+          } else {
+              // Folder ou Style
+              newItem.parentId = state.tempParentId;
+              newItem.parentType = state.tempParentType;
+              
+              if (type === 'style') {
+                  newItem.prompt = $("editNodePrompt").value;
+                  newItem.mode = $("editNodeMode").value;
+                  // Image
+                  const file = $("editNodeFile").files[0];
+                  if (file) {
+                       const r = new FileReader();
+                       r.onload = (e) => { newItem.refImage = e.target.result.split(",")[1]; state.config.imgStyles.push(newItem); closeNodeEditor(); renderConfigUI(); };
+                       r.readAsDataURL(file);
+                       return;
+                  }
+                  state.config.imgStyles.push(newItem);
+              } else {
+                  // Folder
+                  state.config.imgFolders.push(newItem);
+              }
+          }
+      } else {
+          // --- MODIFICATION ---
+          let list = null;
+          if (type === 'category') list = state.config.imgCategories;
+          if (type === 'group') list = state.config.imgGroups;
+          if (type === 'folder') list = state.config.imgFolders;
+          if (type === 'style') list = state.config.imgStyles;
+          
+          const item = list.find(x => x.id === id);
+          if (item) {
+              item.name = name;
+              if (type === 'style') {
+                  item.prompt = $("editNodePrompt").value;
+                  item.mode = $("editNodeMode").value;
+                  const file = $("editNodeFile").files[0];
+                  if (file) {
+                       const r = new FileReader();
+                       r.onload = (e) => { item.refImage = e.target.result.split(",")[1]; closeNodeEditor(); renderConfigUI(); };
+                       r.readAsDataURL(file);
+                       return;
+                  }
+              }
+          }
+      }
+      closeNodeEditor();
+      renderConfigUI();
+  };
+
+  $("deleteNodeBtn").onclick = () => {
+      const id = $("editNodeId").value;
+      const type = $("editNodeType").value;
+      if(!id) return closeNodeEditor(); // Annulation creation
+
+      if(!confirm("Supprimer cet élément et tout son contenu ?")) return;
+      
+      // Suppression récursive "brutale" (on filtre tout ce qui a cet ID comme parent)
+      if (type === 'category') {
+          state.config.imgCategories = state.config.imgCategories.filter(x => x.id !== id);
+          state.config.imgGroups = state.config.imgGroups.filter(x => x.categoryId !== id);
+          state.config.imgFolders = state.config.imgFolders.filter(x => !(x.parentType === 'category' && x.parentId === id));
+          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'category' && x.parentId === id));
+      } else if (type === 'group') {
+          state.config.imgGroups = state.config.imgGroups.filter(x => x.id !== id);
+          state.config.imgFolders = state.config.imgFolders.filter(x => !(x.parentType === 'group' && x.parentId === id));
+          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'group' && x.parentId === id));
+      } else if (type === 'folder') {
+          state.config.imgFolders = state.config.imgFolders.filter(x => x.id !== id);
+          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'folder' && x.parentId === id));
+      } else if (type === 'style') {
+          state.config.imgStyles = state.config.imgStyles.filter(x => x.id !== id);
+      }
+      
+      closeNodeEditor();
+      renderConfigUI();
+  };
+
+  $("cancelNodeBtn").onclick = closeNodeEditor;
+  function closeNodeEditor() { $("nodeEditorOverlay").classList.add("hidden"); }
+
+
+  window.moveNode = (src, dest) => {
+      // Logique de déplacement
+      const srcId = src.id;
+      const destId = dest.id;
+      const destType = dest.type;
+
+      if (src.type === 'group') {
+          const item = state.config.imgGroups.find(x => x.id === srcId);
+          if (item) item.categoryId = destId;
+      } else if (src.type === 'folder') {
+          const item = state.config.imgFolders.find(x => x.id === srcId);
+          if (item) { item.parentId = destId; item.parentType = destType; }
+      } else if (src.type === 'style') {
+          const item = state.config.imgStyles.find(x => x.id === srcId);
+          if (item) { item.parentId = destId; item.parentType = destType; }
+      }
+      renderConfigUI();
   };
 
 
-  /* --- RENDER STUDIO (HIERARCHIE) --- */
+  /* =========================================
+     STUDIO UI (AFFICHAGE HIERARCHIQUE)
+     ========================================= */
   
   function renderStudioCategories() {
       const container = $("imgGenCategoriesBar");
       if(!container) return;
-      const cats = [...(state.config.imgCategories || [])];
+      const cats = state.config.imgCategories || [];
+      
+      // Auto select first
+      if (!state.currentImgCategory && cats.length > 0) {
+          state.currentImgCategory = cats[0].id;
+      }
+
       container.innerHTML = cats.map(c => `
-         <div class="style-tag ${state.currentImgCategory === c ? 'selected' : ''}" 
-              onclick="window.setImgCategory('${c}')"
+         <div class="style-tag ${state.currentImgCategory === c.id ? 'selected' : ''}" 
+              onclick="window.setImgCategory('${c.id}')"
               style="font-size:10px; padding:4px 10px; border-radius:12px;">
-            ${c.toUpperCase()}
+            ${c.name.toUpperCase()}
          </div>
       `).join("");
   }
 
-  window.setImgCategory = (c) => {
-      state.currentImgCategory = c;
-      state.activeFolderId = null; // Reset folder on cat change
-      state.currentStudioGroup = ""; // Reset group on cat change
+  window.setImgCategory = (cId) => {
+      state.currentImgCategory = cId;
+      state.activeFolderId = null; 
+      state.currentStudioGroup = ""; 
       renderStudioCategories();
       renderImgStylesButtons();
   };
 
-  window.setStudioGroup = (g) => {
-      state.currentStudioGroup = g;
-      state.activeFolderId = null; // Reset folder on group change
+  window.setStudioGroup = (gId) => {
+      state.currentStudioGroup = gId;
+      state.activeFolderId = null; // Close folders when switching group
       renderImgStylesButtons();
   };
 
-  window.setStudioFolder = (fid) => {
-      // Toggle logic or switch logic?
-      // Si on clique sur le même, on peut désélectionner, ou juste garder. 
-      // Ici on switch simplement.
-      state.activeFolderId = (state.activeFolderId === fid) ? null : fid;
+  window.setStudioFolder = (fId) => {
+      state.activeFolderId = (state.activeFolderId === fId) ? null : fId;
       renderImgStylesButtons();
   };
 
-  // NOUVELLE VERSION : Groupes en Dropdown, Dossiers en Boutons, Styles en dessous
   function renderImgStylesButtons() {
       const container = $("imgGenStylesContainer");
       if(!container) return;
 
-      // 1. Filtrer les Dossiers pour la catégorie active
-      const activeFolders = (state.config.imgFolders || []).filter(f => f.category === state.currentImgCategory);
-
-      // 2. Extraire les Groupes disponibles dans ces dossiers
-      const availableGroups = [...new Set(activeFolders.map(f => f.group))].sort();
-      
-      // Auto-select first group if none selected or invalid
-      if (!state.currentStudioGroup || !availableGroups.includes(state.currentStudioGroup)) {
-          if (availableGroups.length > 0) state.currentStudioGroup = availableGroups[0];
-          else state.currentStudioGroup = "";
+      if (!state.currentImgCategory) {
+          container.innerHTML = `<div style="padding:10px; color:#999; text-align:center;">Veuillez créer des catégories dans les paramètres.</div>`;
+          return;
       }
 
       let html = "";
 
-      // A. RENDU DU DROPDOWN (Groupe)
-      if (availableGroups.length > 0) {
+      // 1. ITEMS GLOBAUX de la Catégorie (Folders ou Styles sans groupe)
+      const globalFolders = (state.config.imgFolders || []).filter(f => f.parentType === 'category' && f.parentId === state.currentImgCategory);
+      const globalStyles = (state.config.imgStyles || []).filter(s => s.parentType === 'category' && s.parentId === state.currentImgCategory);
+
+      if (globalFolders.length > 0 || globalStyles.length > 0) {
+          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid #f0f0f0;">`;
+          // Folders
+          globalFolders.forEach(f => {
+               html += renderFolderButton(f);
+          });
+          // Styles
+          globalStyles.forEach(s => {
+               html += renderStyleBtn(s);
+          });
+          html += `</div>`;
+          
+          // Si un folder global est ouvert
+          if (state.activeFolderId && globalFolders.find(f => f.id === state.activeFolderId)) {
+              html += renderFolderContent(state.activeFolderId);
+          }
+      }
+
+      // 2. GROUPES
+      // On affiche un selecteur de groupe
+      const catGroups = (state.config.imgGroups || []).filter(g => g.categoryId === state.currentImgCategory);
+      
+      if (catGroups.length > 0) {
+          // Auto select first group
+          if (!state.currentStudioGroup || !catGroups.find(g => g.id === state.currentStudioGroup)) {
+              state.currentStudioGroup = catGroups[0].id;
+          }
+
           html += `
           <div style="margin-bottom:10px;">
              <select onchange="window.setStudioGroup(this.value)" class="settings-select" style="margin-top:0; padding:6px; font-weight:bold;">
-                ${availableGroups.map(g => `<option value="${g}" ${g === state.currentStudioGroup ? 'selected' : ''}>${g}</option>`).join("")}
+                ${catGroups.map(g => `<option value="${g.id}" ${g.id === state.currentStudioGroup ? 'selected' : ''}>${g.name}</option>`).join("")}
              </select>
           </div>
           `;
-      } else {
-          html += `<div style="font-size:11px; color:#888; padding:10px;">Aucun dossier dans cette catégorie.</div>`;
-      }
 
-      // B. RENDU DES DOSSIERS (Boutons Tags) du Groupe Actif
-      const groupFolders = activeFolders.filter(f => f.group === state.currentStudioGroup);
-      
-      if (groupFolders.length > 0) {
-          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">`;
-          groupFolders.forEach(folder => {
-              const isActive = state.activeFolderId === folder.id;
-              // On utilise le style 'style-tag' pour ressembler aux prompts
-              html += `
-                <button onclick="window.setStudioFolder('${folder.id}')" 
-                        class="style-tag ${isActive ? 'selected' : ''}" 
-                        style="font-weight:bold; padding:6px 12px; font-size:11px;">
-                   📁 ${folder.name}
-                </button>
-              `;
-          });
-          html += `</div>`;
-      }
+          // Contenu du Groupe Selectionné
+          const activeGrpId = state.currentStudioGroup;
+          
+          // Items du Groupe (Folders + Styles)
+          const grpFolders = (state.config.imgFolders || []).filter(f => f.parentType === 'group' && f.parentId === activeGrpId);
+          const grpStyles = (state.config.imgStyles || []).filter(s => s.parentType === 'group' && s.parentId === activeGrpId);
 
-      // C. RENDU DES STYLES (Enfants du Dossier Actif)
-      if (state.activeFolderId) {
-          const folderStyles = (state.config.imgStyles || []).filter(s => s.folderId === state.activeFolderId);
-          
-          html += `<div style="background:#f9f9f9; border:1px solid #eee; border-radius:12px; padding:12px;">
-             <div style="font-size:10px; font-weight:bold; color:#888; margin-bottom:8px; text-transform:uppercase;">Prompts Disponibles</div>
-             <div style="display:flex; flex-wrap:wrap; gap:8px;">`;
-          
-          if (folderStyles.length === 0) {
-              html += `<span style="font-size:11px; color:#999;">Aucun prompt dans ce dossier.</span>`;
+          if (grpFolders.length > 0 || grpStyles.length > 0) {
+              html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">`;
+              grpFolders.forEach(f => html += renderFolderButton(f));
+              grpStyles.forEach(s => html += renderStyleBtn(s));
+              html += `</div>`;
           } else {
-              folderStyles.forEach(s => {
-                  html += renderStyleBtn(s);
-              });
+              html += `<div style="font-size:11px; color:#999;">Vide</div>`;
           }
-          
-          html += `</div></div>`;
-      }
+
+          // Si un folder du groupe est ouvert
+          if (state.activeFolderId && grpFolders.find(f => f.id === state.activeFolderId)) {
+              html += renderFolderContent(state.activeFolderId);
+          }
+      } 
 
       container.innerHTML = html;
+  }
+
+  function renderFolderButton(f) {
+      const isActive = state.activeFolderId === f.id;
+      return `
+        <button onclick="window.setStudioFolder('${f.id}')" 
+                class="style-tag ${isActive ? 'selected' : ''}" 
+                style="font-weight:bold; padding:6px 12px; font-size:11px;">
+           📁 ${f.name}
+        </button>
+      `;
+  }
+
+  function renderFolderContent(folderId) {
+      const children = (state.config.imgStyles || []).filter(s => s.parentType === 'folder' && s.parentId === folderId);
+      let html = `<div style="background:#f9f9f9; border:1px solid #eee; border-radius:12px; padding:12px; margin-bottom:10px;">
+         <div style="display:flex; flex-wrap:wrap; gap:8px;">`;
+      
+      if (children.length === 0) {
+          html += `<span style="font-size:11px; color:#999;">Aucun prompt.</span>`;
+      } else {
+          children.forEach(s => {
+              html += renderStyleBtn(s);
+          });
+      }
+      html += `</div></div>`;
+      return html;
   }
 
   function renderStyleBtn(s) {
@@ -399,16 +634,14 @@
   }
 
   document.addEventListener('click', function(e) {
-      // 1. Bouton Style (Enfant)
       const btn = e.target.closest('.style-btn-click');
       if (btn) {
           const name = btn.getAttribute('data-name');
           if (name) window.toggleImgStyle(name);
       }
-      // Note: Les clics dossiers sont gérés via onclick inline dans le HTML généré
   });
 
-  // --- LOGIQUE TOGGLE STYLE ---
+  // --- LOGIQUE TOGGLE STYLE (Identique avant) ---
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName);
       if(!style) return;
@@ -934,6 +1167,7 @@
         if (state.inputImages.length === 0) state.inputImages = [state.imageBase64];
         renderInputImages();
         $("imgGenModal").classList.remove("hidden");
+        // Mise à jour Studio
         renderStudioCategories();
         renderImgStylesButtons();
         renderGenImages();
