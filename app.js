@@ -1,16 +1,6 @@
 (() => {
   const $ = (id) => document.getElementById(id);
 
-  /* --- ICONS SVG --- */
-  const ICONS = {
-      category: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`,
-      group: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>`,
-      folder: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`,
-      style: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>`,
-      chevronDown: `<svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4 4-4"/></svg>`,
-      chevronRight: `<svg width="6" height="10" viewBox="0 0 6 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4-4 4"/></svg>`
-  };
-
   const DEFAULTS = {
     collections: [{ name: "Initial", meaning: "Letter jewelry." }],
     promptSystem: "Senior luxury jewelry copywriter.",
@@ -23,10 +13,19 @@
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }],
     
     // STRUCTURE HIERARCHIQUE
-    imgCategories: [ { id: "cat_1", name: "Collier" } ],
-    imgGroups: [ { id: "grp_1", name: "Petit collier", categoryId: "cat_1" } ],
-    imgFolders: [ { id: "fol_1", name: "Photo portée", parentId: "grp_1", parentType: "group" } ],
-    imgStyles: [ { id: "sty_1", name: "Sur cou", prompt: "On neck.", parentId: "fol_1", parentType: "folder" } ]
+    imgCategories: [
+        { id: "cat_1", name: "Collier" },
+        { id: "cat_2", name: "Bague" }
+    ],
+    imgGroups: [
+        { id: "grp_1", name: "Petit collier", categoryId: "cat_1" }
+    ],
+    imgFolders: [
+        { id: "fol_1", name: "Photo portée", parentId: "grp_1", parentType: "group" }
+    ],
+    imgStyles: [
+        { id: "sty_1", name: "Sur cou", prompt: "On neck.", parentId: "fol_1", parentType: "folder" }
+    ]
   };
 
   let state = {
@@ -34,29 +33,40 @@
     config: JSON.parse(JSON.stringify(DEFAULTS)),
     currentPage: 1, pageSize: 5, searchQuery: "", currentHistoryId: null,
     timerInterval: null, sessionHeadlines: [], sessionAds: [],
-    selectedHeadlines: [], selectedAds: [], selHlStyles: [], selAdStyles: [],
+    selectedHeadlines: [], selectedAds: [],
+    headlinesTrans: {}, adsTrans: {},
+    selHlStyles: [], selAdStyles: [],
     hlPage: 1, adPage: 1,
-    
-    // STATES IMAGES
-    inputImages: [], sessionGeneratedImages: [], savedGeneratedImages: [], selectedSessionImagesIdx: [],
-    
-    // STATES UI STUDIO
+    // ETATS IMAGES
+    inputImages: [], 
+    sessionGeneratedImages: [], 
+    savedGeneratedImages: [], 
+    selectedSessionImagesIdx: [],
+    // ETATS UI STUDIO
     currentImgCategory: "",
-    expandedGroups: [], // Liste des IDs de groupes ouverts
-    activeFolderId: null, // ID du bouton multiple ouvert
+    activeFolderId: null, 
     selectedImgStyles: [], 
     manualImgStyles: [],   
+    expandedGroups: [], // NOUVEAU: Pour les accordéons
     
-    // DRAG & DROP
+    // DRAG & DROP STATE
     draggedItem: null
   };
 
-  /* --- UTILS --- */
-  const startLoading = () => { let s = 0; $("timer").textContent = "00:00"; if(state.timerInterval) clearInterval(state.timerInterval); state.timerInterval = setInterval(() => { s++; $("timer").textContent = `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`; }, 1000); $("loading").classList.remove("hidden"); };
+  const startLoading = () => {
+    let s = 0; $("timer").textContent = "00:00";
+    if (state.timerInterval) clearInterval(state.timerInterval);
+    state.timerInterval = setInterval(() => { s++; const mm = String(Math.floor(s/60)).padStart(2,"0"); const ss = String(s%60).padStart(2,"0"); $("timer").textContent = `${mm}:${ss}`; }, 1000);
+    $("loading").classList.remove("hidden");
+  };
   const stopLoading = () => { clearInterval(state.timerInterval); $("loading").classList.add("hidden"); };
-  const formatLangUrl = (url, sub="en.") => url ? url.replace(/https:\/\/(en\.|dn\.|du\.|de\.|it\.|pl\.|pt-br\.|pt\.|es\.)/, "https://").replace("https://", `https://${sub}`) : "";
 
-  /* --- CONFIG LOAD --- */
+  const formatLangUrl = (url, sub = "en.") => {
+    if (!url) return "";
+    let cleanUrl = url.replace(/https:\/\/(en\.|dn\.|du\.|de\.|it\.|pl\.|pt-br\.|pt\.|es\.)/, "https://");
+    return cleanUrl.replace("https://", `https://${sub}`);
+  };
+
   async function loadConfig() {
     const res = await fetch("/api/settings");
     const data = await res.json();
@@ -65,7 +75,7 @@
       const parsed = JSON.parse(saved.value);
       state.config = { ...DEFAULTS, ...parsed }; 
       
-      // AUTO MIGRATION (Fix bugs old structure)
+      // MIGRATION AUTOMATIQUE (Si ancienne version texte)
       if (Array.isArray(state.config.imgCategories) && state.config.imgCategories.length > 0 && typeof state.config.imgCategories[0] === 'string') {
           state.config.imgCategories = state.config.imgCategories.map((c, i) => ({ id: "cat_" + i, name: c }));
           if (Array.isArray(state.config.imgGroups) && typeof state.config.imgGroups[0] === 'string') {
@@ -77,24 +87,27 @@
       }
     }
     
-    if (state.config.imgCategories.length > 0) state.currentImgCategory = state.config.imgCategories[0].id;
+    if (state.config.imgCategories.length > 0) {
+        state.currentImgCategory = state.config.imgCategories[0].id;
+    }
     renderConfigUI();
   }
 
   function renderConfigUI() {
-    ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => { if($(id)) $(id).value = state.config[id] || DEFAULTS[id]; });
+    ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => { 
+      if($(id)) $(id).value = state.config[id] || DEFAULTS[id]; 
+    });
     if($("configBlacklist")) $("configBlacklist").value = state.config.blacklist || "";
+    $("collectionsList").innerHTML = (state.config.collections || []).map((c, i) => `<div class="config-row collections-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${c.name}" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${c.meaning}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
+    $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
+    $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     
-    // Listes simples
-    $("collectionsList").innerHTML = (state.config.collections || []).map(c => `<div class="config-row collections-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${c.name}" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${c.meaning}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
-    $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map(s => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
-    $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map(s => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     $("collectionSelect").innerHTML = (state.config.collections || []).map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     
     renderStyleSelectors();
-    renderImgConfigTree(); // L'arbre
-    renderStudioCategories(); // La barre de navigation du studio
-    renderImgStylesButtons(); // Le contenu du studio
+    renderImgConfigTree();
+    renderStudioCategories();
+    renderImgStylesButtons();
   }
 
   function renderStyleSelectors() {
@@ -108,7 +121,7 @@
   };
 
   /* =========================================
-     TREE EDITOR (HIERARCHY)
+     NOUVEAU SYSTÈME HIERARCHIQUE (TREE EDITOR)
      ========================================= */
 
   function renderImgConfigTree() {
@@ -121,12 +134,17 @@
           container.appendChild(catNode);
           const childrenContainer = catNode.querySelector('.tree-children');
 
-          // A. Contenu GLOBAL (Directement dans Catégorie)
+          // A. Contenu GLOBAL de la Catégorie
           const globalFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'category' && f.parentId === cat.id);
           const globalStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'category' && s.parentId === cat.id);
-          [...globalFolders, ...globalStyles].forEach(item => childrenContainer.appendChild(createRecursiveNode(item.prompt!==undefined?'style':'folder', item)));
+          
+          [...globalFolders, ...globalStyles].forEach(item => {
+             const type = item.prompt !== undefined ? 'style' : 'folder';
+             const node = createRecursiveNode(type, item);
+             childrenContainer.appendChild(node);
+          });
 
-          // B. GROUPES
+          // B. GROUPES de la Catégorie
           const groups = (state.config.imgGroups||[]).filter(g => g.categoryId === cat.id);
           groups.forEach(grp => {
               const grpNode = createTreeNode("group", grp, cat.id);
@@ -136,7 +154,12 @@
               // C. Contenu du GROUPE
               const grpFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'group' && f.parentId === grp.id);
               const grpStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'group' && s.parentId === grp.id);
-              [...grpFolders, ...grpStyles].forEach(item => grpChildren.appendChild(createRecursiveNode(item.prompt!==undefined?'style':'folder', item)));
+
+              [...grpFolders, ...grpStyles].forEach(item => {
+                  const type = item.prompt !== undefined ? 'style' : 'folder';
+                  const node = createRecursiveNode(type, item);
+                  grpChildren.appendChild(node);
+              });
           });
       });
   }
@@ -146,7 +169,10 @@
       if (type === 'folder') {
           const childrenContainer = node.querySelector('.tree-children');
           const styles = (state.config.imgStyles||[]).filter(s => s.parentType === 'folder' && s.parentId === item.id);
-          styles.forEach(s => childrenContainer.appendChild(createRecursiveNode('style', s)));
+          styles.forEach(s => {
+              const sNode = createRecursiveNode('style', s);
+              childrenContainer.appendChild(sNode);
+          });
       }
       return node;
   }
@@ -158,20 +184,23 @@
       el.setAttribute('data-id', data.id);
       el.setAttribute('data-type', type);
       
-      let icon = ICONS[type] || ICONS.style;
-      let label = data.name;
-      if (type === 'folder') label = data.name; // "Bouton Multi" dans l'UI tree ? non on garde le nom
-
-      // Boutons d'ajout contextuels
+      let icon = "📁";
+      let labelType = "";
+      
+      if (type === "category") { icon = ""; } // Just text label
+      if (type === "group") { icon = "🔹"; }
+      if (type === "folder") { icon = "🗂️"; labelType = " (Bouton Multiple)"; }
+      if (type === "style") { icon = "🎨"; }
+      
       let addBtns = "";
-      if (type === "category") addBtns = `<button class="small-action-btn" onclick="window.addNode('group', '${data.id}')">+ Groupe</button> <button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'category')">+ Bouton Multi</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'category')">+ Style</button>`;
-      if (type === "group") addBtns = `<button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'group')">+ Bouton Multi</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'group')">+ Style</button>`;
+      if (type === "category") addBtns = `<button class="small-action-btn" onclick="window.addNode('group', '${data.id}')">+ Groupe</button> <button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'category')">+ Btn Multiple</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'category')">+ Style</button>`;
+      if (type === "group") addBtns = `<button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'group')">+ Btn Multiple</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'group')">+ Style</button>`;
       if (type === "folder") addBtns = `<button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'folder')">+ Style</button>`;
 
       el.innerHTML = `
         <div class="tree-header">
-            <span class="node-icon">${icon}</span>
-            <span class="node-label">${label}</span>
+            <span class="t-icon">${icon}</span>
+            <span>${data.name}${labelType}</span>
             <div class="node-actions">
                 ${addBtns}
                 <button class="small-action-btn" onclick="window.editNode('${type}', '${data.id}')">✏️</button>
@@ -180,38 +209,137 @@
         <div class="tree-children"></div>
       `;
 
-      // DRAG & DROP LOGIC
+      // --- DRAG & DROP LOGIC IMPROVED (SORTING) ---
       const header = el.querySelector('.tree-header');
       
       el.addEventListener('dragstart', (e) => {
-          state.draggedItem = { id: data.id, type: type };
-          e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; el.style.opacity = '0.5';
+          state.draggedItem = { id: data.id, type: type, parentId: parentId };
+          e.stopPropagation();
+          e.dataTransfer.effectAllowed = 'move';
+          el.style.opacity = '0.5';
       });
+
       el.addEventListener('dragend', (e) => {
-          el.style.opacity = '1'; state.draggedItem = null;
-          document.querySelectorAll('.drag-over-center').forEach(x => x.classList.remove('drag-over-center'));
+          el.style.opacity = '1';
+          document.querySelectorAll('.drag-over-center, .drag-over-top, .drag-over-bottom').forEach(x => {
+              x.classList.remove('drag-over-center', 'drag-over-top', 'drag-over-bottom');
+          });
+          state.draggedItem = null;
       });
+
+      // ZONES DE DROP : Top (Insert Before), Middle (Nest), Bottom (Insert After)
       header.addEventListener('dragover', (e) => {
           e.preventDefault(); e.stopPropagation();
           if(!state.draggedItem || state.draggedItem.id === data.id) return;
-          // Rules
-          const src = state.draggedItem.type; const dest = type;
-          let allow = false;
-          if (src === 'group' && dest === 'category') allow = true;
-          if (src === 'folder' && (dest === 'category' || dest === 'group')) allow = true;
-          if (src === 'style' && (dest === 'category' || dest === 'group' || dest === 'folder')) allow = true;
-          if (allow) header.classList.add('drag-over-center');
+
+          const rect = header.getBoundingClientRect();
+          const y = e.clientY - rect.top;
+          const height = rect.height;
+          
+          // Reset classes
+          header.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
+
+          const src = state.draggedItem.type;
+          const dest = type;
+
+          // Zone calculation
+          if (y < height * 0.25) {
+              // Top zone (Insert Before) - Valid only if same type level implies swapping or reordering
+              header.classList.add('drag-over-top');
+          } else if (y > height * 0.75) {
+              // Bottom zone (Insert After)
+              header.classList.add('drag-over-bottom');
+          } else {
+              // Middle zone (Nest) - Valid only if container
+              let canNest = false;
+              if (src === 'group' && dest === 'category') canNest = true;
+              if (src === 'folder' && (dest === 'category' || dest === 'group')) canNest = true;
+              if (src === 'style' && (dest === 'category' || dest === 'group' || dest === 'folder')) canNest = true;
+              
+              if (canNest) header.classList.add('drag-over-center');
+          }
       });
-      header.addEventListener('dragleave', (e) => header.classList.remove('drag-over-center'));
+
+      header.addEventListener('dragleave', (e) => {
+          header.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
+      });
+
       header.addEventListener('drop', (e) => {
-          e.preventDefault(); e.stopPropagation(); header.classList.remove('drag-over-center');
-          if(state.draggedItem && state.draggedItem.id !== data.id) window.moveNode(state.draggedItem, { id: data.id, type: type });
+          e.preventDefault(); e.stopPropagation();
+          
+          let action = 'nest';
+          if (header.classList.contains('drag-over-top')) action = 'before';
+          if (header.classList.contains('drag-over-bottom')) action = 'after';
+          
+          header.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
+          
+          if(state.draggedItem && state.draggedItem.id !== data.id) {
+              window.moveNode(state.draggedItem, { id: data.id, type: type, parentId: parentId }, action);
+          }
       });
 
       return el;
   }
 
-  /* --- CRUD ACTIONS --- */
+  // --- LOGIQUE DEPLACEMENT ET REORDONNEMENT ---
+  window.moveNode = (src, dest, action) => {
+      // Helper: Trouver la liste contenant un item
+      const getList = (type) => {
+          if (type === 'category') return state.config.imgCategories;
+          if (type === 'group') return state.config.imgGroups;
+          if (type === 'folder') return state.config.imgFolders;
+          if (type === 'style') return state.config.imgStyles;
+          return [];
+      };
+
+      const srcList = getList(src.type);
+      const srcIndex = srcList.findIndex(x => x.id === src.id);
+      if(srcIndex === -1) return;
+      const item = srcList[srcIndex]; // Objet complet
+
+      // 1. Si NEST (Imbrication dans le noeud cible)
+      if (action === 'nest') {
+          // On met à jour les propriétés parent
+          if (src.type === 'group') { item.categoryId = dest.id; } 
+          else { item.parentId = dest.id; item.parentType = dest.type; }
+          
+          // On le déplace à la fin de la liste pour qu'il s'affiche (simple) ou on le laisse là, 
+          // le render se chargera de l'afficher au bon endroit grâce aux IDs.
+          // Mais pour être propre, on peut le mettre à la fin.
+          srcList.splice(srcIndex, 1);
+          srcList.push(item);
+      }
+      
+      // 2. Si REORDER (Avant/Après le noeud cible)
+      else {
+          const destList = getList(dest.type);
+          const destIndex = destList.findIndex(x => x.id === dest.id);
+          
+          if (destIndex === -1) return; // Should not happen
+
+          // Si on bouge dans la même liste
+          if (src.type === dest.type) {
+              // Copier le parent du destinataire pour être sûr qu'ils sont frères
+              const target = destList[destIndex];
+              if (src.type === 'group') { item.categoryId = target.categoryId; }
+              else if (src.type !== 'category') { item.parentId = target.parentId; item.parentType = target.parentType; }
+
+              // Retirer source
+              srcList.splice(srcIndex, 1);
+              
+              // Recalculer index dest (car le retrait a pu décaler)
+              const newDestIndex = destList.findIndex(x => x.id === dest.id);
+              
+              // Insérer
+              if (action === 'before') destList.splice(newDestIndex, 0, item);
+              else destList.splice(newDestIndex + 1, 0, item);
+          }
+      }
+      
+      renderConfigUI();
+  };
+
+  /* --- CRUD BASIQUE (Ajout/Edition) --- */
   window.addCategoryBtn = $("addCategoryBtn");
   if(window.addCategoryBtn) window.addCategoryBtn.onclick = () => {
       const name = $("newCatName").value; if(!name) return;
@@ -226,32 +354,20 @@
       $("nodeEditorOverlay").classList.remove("hidden");
       $("editNodeId").value = id || ""; $("editNodeType").value = type;
       state.tempParentId = parentId; state.tempParentType = parentTypeContext;
-      
-      // Reset
       $("editNodeName").value = ""; $("editNodePrompt").value = ""; $("editNodeFile").value = "";
-      $("editNodeImgPreview").innerHTML = "Aucune"; $("editPromptContainer").classList.add("hidden");
+      $("editNodeImgPreview").innerHTML = ""; $("editPromptContainer").classList.add("hidden");
       
       let title = id ? "Modifier " : "Créer ";
-      let placeholder = "Nom...";
+      if (type === 'group') title += "Groupe";
+      if (type === 'folder') title += "Bouton Multiple";
+      if (type === 'style') { title += "Style (Prompt)"; $("editPromptContainer").classList.remove("hidden"); }
       
-      if (type === 'category') { title += "Catégorie"; }
-      else if (type === 'group') { title += "Groupe"; placeholder = "Ex: Matières, Couleurs..."; }
-      else if (type === 'folder') { title += "Bouton Multiple"; placeholder = "Nom du bouton (Ex: Photo Portée)"; }
-      else if (type === 'style') { 
-          title += "Style (Action)"; 
-          $("editPromptContainer").classList.remove("hidden"); 
-      }
-      
-      $("nodeEditorTitle").textContent = title;
-      $("editNodeName").placeholder = placeholder;
-
       if (id) {
           let item = null;
           if (type === 'category') item = state.config.imgCategories.find(x => x.id === id);
           if (type === 'group') item = state.config.imgGroups.find(x => x.id === id);
           if (type === 'folder') item = state.config.imgFolders.find(x => x.id === id);
           if (type === 'style') item = state.config.imgStyles.find(x => x.id === id);
-          
           if (item) {
               $("editNodeName").value = item.name;
               if (item.prompt) $("editNodePrompt").value = item.prompt;
@@ -259,259 +375,221 @@
               if (item.refImage) $("editNodeImgPreview").innerHTML = `<img src="data:image/jpeg;base64,${item.refImage}" style="width:100%;height:100%;object-fit:cover;">`;
           }
       }
+      $("nodeEditorTitle").textContent = title;
   }
 
   $("saveNodeBtn").onclick = () => {
       const id = $("editNodeId").value; const type = $("editNodeType").value; const name = $("editNodeName").value;
       if (!name) return alert("Nom requis");
 
-      // Helper save
-      const saveToState = (newItem) => {
-          if (!id) {
-              if(type === 'category') state.config.imgCategories.push(newItem);
-              else if(type === 'group') state.config.imgGroups.push(newItem);
-              else if(type === 'folder') state.config.imgFolders.push(newItem);
-              else state.config.imgStyles.push(newItem);
-          } else {
-              // Update existing references are handled because objects are ref types, but simplistic approach:
-              // We find the object again and update props
-              let list = (type === 'category') ? state.config.imgCategories : (type === 'group') ? state.config.imgGroups : (type === 'folder') ? state.config.imgFolders : state.config.imgStyles;
-              const found = list.find(x => x.id === id);
-              if(found) Object.assign(found, newItem);
-          }
-          closeNodeEditor(); renderConfigUI();
-      };
-
-      const newItem = id ? { id } : { id: (type === 'group' ? 'grp_' : (type === 'folder' ? 'fol_' : 'sty_')) + Date.now() };
-      newItem.name = name;
-      
       if (!id) {
-          if (type === 'group') newItem.categoryId = state.tempParentId;
-          else if (type === 'folder' || type === 'style') { newItem.parentId = state.tempParentId; newItem.parentType = state.tempParentType; }
-      }
-
-      if (type === 'style') {
-          newItem.prompt = $("editNodePrompt").value; newItem.mode = $("editNodeMode").value;
-          const file = $("editNodeFile").files[0];
-          if (file) {
-              const r = new FileReader();
-              r.onload = (e) => { newItem.refImage = e.target.result.split(",")[1]; saveToState(newItem); };
-              r.readAsDataURL(file);
-              return;
+          const newId = (type === 'group' ? 'grp_' : (type === 'folder' ? 'fol_' : 'sty_')) + Date.now();
+          const newItem = { id: newId, name };
+          if (type === 'group') { newItem.categoryId = state.tempParentId; state.config.imgGroups.push(newItem); } 
+          else {
+              newItem.parentId = state.tempParentId; newItem.parentType = state.tempParentType;
+              if (type === 'style') {
+                  newItem.prompt = $("editNodePrompt").value; newItem.mode = $("editNodeMode").value;
+                  const file = $("editNodeFile").files[0];
+                  if (file) { const r = new FileReader(); r.onload = (e) => { newItem.refImage = e.target.result.split(",")[1]; state.config.imgStyles.push(newItem); closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; }
+                  state.config.imgStyles.push(newItem);
+              } else { state.config.imgFolders.push(newItem); }
+          }
+      } else {
+          let list = (type === 'category') ? state.config.imgCategories : (type === 'group') ? state.config.imgGroups : (type === 'folder') ? state.config.imgFolders : state.config.imgStyles;
+          const item = list.find(x => x.id === id);
+          if (item) {
+              item.name = name;
+              if (type === 'style') {
+                  item.prompt = $("editNodePrompt").value; item.mode = $("editNodeMode").value;
+                  const file = $("editNodeFile").files[0];
+                  if (file) { const r = new FileReader(); r.onload = (e) => { item.refImage = e.target.result.split(",")[1]; closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; }
+              }
           }
       }
-      saveToState(newItem);
+      closeNodeEditor(); renderConfigUI();
   };
 
   $("deleteNodeBtn").onclick = () => {
       const id = $("editNodeId").value; const type = $("editNodeType").value;
       if(!id) return closeNodeEditor();
-      if(!confirm("Supprimer cet élément et tout son contenu ?")) return;
-      
-      // Cascade delete simple
-      const removeChildren = (parentId, parentType) => {
-          // Folders children of this parent
-          const folders = state.config.imgFolders.filter(f => f.parentId === parentId && f.parentType === parentType);
-          folders.forEach(f => removeChildren(f.id, 'folder')); // Recurse
-          state.config.imgFolders = state.config.imgFolders.filter(f => !(f.parentId === parentId && f.parentType === parentType));
-          
-          // Styles children of this parent
-          state.config.imgStyles = state.config.imgStyles.filter(s => !(s.parentId === parentId && s.parentType === parentType));
-      };
-
+      if(!confirm("Supprimer ?")) return;
       if (type === 'category') {
           state.config.imgCategories = state.config.imgCategories.filter(x => x.id !== id);
-          const groups = state.config.imgGroups.filter(g => g.categoryId === id);
-          groups.forEach(g => removeChildren(g.id, 'group'));
           state.config.imgGroups = state.config.imgGroups.filter(x => x.categoryId !== id);
-          removeChildren(id, 'category'); // Global items
+          state.config.imgFolders = state.config.imgFolders.filter(x => !(x.parentType === 'category' && x.parentId === id));
+          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'category' && x.parentId === id));
       } else if (type === 'group') {
           state.config.imgGroups = state.config.imgGroups.filter(x => x.id !== id);
-          removeChildren(id, 'group');
+          state.config.imgFolders = state.config.imgFolders.filter(x => !(x.parentType === 'group' && x.parentId === id));
+          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'group' && x.parentId === id));
       } else if (type === 'folder') {
           state.config.imgFolders = state.config.imgFolders.filter(x => x.id !== id);
-          removeChildren(id, 'folder');
-      } else if (type === 'style') {
-          state.config.imgStyles = state.config.imgStyles.filter(x => x.id !== id);
-      }
+          state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'folder' && x.parentId === id));
+      } else if (type === 'style') { state.config.imgStyles = state.config.imgStyles.filter(x => x.id !== id); }
       closeNodeEditor(); renderConfigUI();
   };
 
   $("cancelNodeBtn").onclick = closeNodeEditor;
   function closeNodeEditor() { $("nodeEditorOverlay").classList.add("hidden"); }
 
-  window.moveNode = (src, dest) => {
-      // Basic Drop logic: Update Parent
-      const itemList = (src.type === 'group') ? state.config.imgGroups : (src.type === 'folder') ? state.config.imgFolders : state.config.imgStyles;
-      const item = itemList.find(x => x.id === src.id);
-      if(!item) return;
-
-      if (src.type === 'group') item.categoryId = dest.id;
-      else { item.parentId = dest.id; item.parentType = dest.type; }
-      renderConfigUI();
-  };
-
 
   /* =========================================
-     STUDIO UI (NEW APPLE DESIGN)
+     STUDIO UI (AFFICHAGE HIERARCHIQUE)
      ========================================= */
   
   function renderStudioCategories() {
       const container = $("imgGenCategoriesBar");
       if(!container) return;
-      
       const cats = state.config.imgCategories || [];
-      // Auto select
       if (!state.currentImgCategory && cats.length > 0) state.currentImgCategory = cats[0].id;
 
-      container.className = "studio-cat-bar";
       container.innerHTML = cats.map(c => `
-         <div class="studio-cat-pill ${state.currentImgCategory === c.id ? 'selected' : ''}" 
-              onclick="window.setImgCategory('${c.id}')">
-            ${c.name}
+         <div class="style-tag ${state.currentImgCategory === c.id ? 'selected' : ''}" 
+              onclick="window.setImgCategory('${c.id}')"
+              style="font-size:10px; padding:4px 10px; border-radius:12px;">
+            ${c.name.toUpperCase()}
          </div>
       `).join("");
   }
 
   window.setImgCategory = (cId) => {
       state.currentImgCategory = cId;
+      state.activeFolderId = null; 
+      state.currentStudioGroup = ""; 
       state.expandedGroups = []; // Reset accordions
-      state.activeFolderId = null; // Close folders
       renderStudioCategories();
       renderImgStylesButtons();
   };
 
+  // NOUVEAU RENDU: LISTE GLOBAUX + ACCORDEONS GROUPES
   function renderImgStylesButtons() {
       const container = $("imgGenStylesContainer");
       if(!container) return;
-      container.innerHTML = "";
 
       if (!state.currentImgCategory) {
-          container.innerHTML = `<div style="padding:20px; color:#999; text-align:center;">Veuillez configurer des catégories.</div>`;
+          container.innerHTML = `<div style="padding:20px; color:#999; text-align:center; font-size:12px;">Créez une catégorie dans les paramètres.</div>`;
           return;
       }
 
-      const content = document.createElement('div');
-      content.className = "studio-content";
+      let html = "";
 
-      // 1. GLOBAL ITEMS (Top of the page)
+      // 1. ITEMS GLOBAUX (Au dessus des groupes)
       const globalFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'category' && f.parentId === state.currentImgCategory);
       const globalStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'category' && s.parentId === state.currentImgCategory);
 
       if (globalFolders.length > 0 || globalStyles.length > 0) {
-          const globalSection = document.createElement('div');
-          globalSection.className = "studio-global-section";
+          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:15px; padding-bottom:10px;">`;
+          globalFolders.forEach(f => html += renderFolderButton(f));
+          globalStyles.forEach(s => html += renderStyleBtn(s));
+          html += `</div>`;
           
-          globalFolders.forEach(f => globalSection.appendChild(renderFolderBtn(f)));
-          globalStyles.forEach(s => globalSection.appendChild(renderStyleBtn(s)));
-          
-          content.appendChild(globalSection);
-          
-          // Render Content of opened Global Folder immediately below
           if (state.activeFolderId && globalFolders.find(f => f.id === state.activeFolderId)) {
-              content.appendChild(renderFolderContent(state.activeFolderId));
+              html += renderFolderContent(state.activeFolderId);
           }
       }
 
-      // 2. GROUPS (Accordions)
-      const groups = (state.config.imgGroups||[]).filter(g => g.categoryId === state.currentImgCategory);
+      // 2. GROUPES EN ACCORDEON
+      const catGroups = (state.config.imgGroups||[]).filter(g => g.categoryId === state.currentImgCategory);
       
-      groups.forEach(grp => {
-          const groupEl = document.createElement('div');
-          groupEl.className = "accordion-group";
-          
-          const isOpen = state.expandedGroups.includes(grp.id);
-          
-          // Header
-          const header = document.createElement('div');
-          header.className = `accordion-header ${isOpen ? 'active' : ''}`;
-          header.innerHTML = `<span>${grp.name}</span> <span style="color:#999">${isOpen ? ICONS.chevronDown : ICONS.chevronRight}</span>`;
-          header.onclick = () => window.toggleGroup(grp.id);
-          groupEl.appendChild(header);
-
-          // Body
-          if (isOpen) {
-              const body = document.createElement('div');
-              body.className = "accordion-body";
+      if (catGroups.length > 0) {
+          catGroups.forEach(grp => {
+              const isExpanded = state.expandedGroups.includes(grp.id);
+              const chevron = isExpanded ? '▼' : '▶';
               
+              // Contenu du groupe
               const grpFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'group' && f.parentId === grp.id);
               const grpStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'group' && s.parentId === grp.id);
               
-              grpFolders.forEach(f => body.appendChild(renderFolderBtn(f)));
-              grpStyles.forEach(s => body.appendChild(renderStyleBtn(s)));
+              // Compteur items actifs pour style visuel
+              const hasActiveItems = grpStyles.some(s => state.selectedImgStyles.some(sel => sel.name === s.name)) || 
+                                     (state.activeFolderId && grpFolders.some(f => f.id === state.activeFolderId));
+
+              const headerStyle = hasActiveItems ? 'background:#E1F0FF; color:#007AFF;' : '';
+
+              html += `
+              <div class="studio-group-block">
+                  <div class="studio-group-header" onclick="window.toggleGroupAccordion('${grp.id}')" style="${headerStyle}">
+                      <span>${grp.name}</span>
+                      <span style="color:#bbb; font-size:10px;">${chevron}</span>
+                  </div>
+                  <div class="studio-group-content ${isExpanded ? '' : 'hidden'}">
+              `;
               
-              groupEl.appendChild(body);
-
-              // If a folder inside THIS group is open, render its content inside the group body or below it?
-              // User said "affochent les boutons associés en dessous". 
-              // We'll put it inside the body for visual grouping.
-              if (state.activeFolderId && grpFolders.find(f => f.id === state.activeFolderId)) {
-                  const folderContent = renderFolderContent(state.activeFolderId);
-                  folderContent.style.marginTop = "0"; // adjust spacing
-                  folderContent.style.borderTop = "1px solid #eee";
-                  folderContent.style.background = "#fafafa";
-                  groupEl.appendChild(folderContent);
+              if (isExpanded) {
+                  if (grpFolders.length === 0 && grpStyles.length === 0) {
+                      html += `<div style="width:100%; text-align:center; color:#ccc; font-size:11px;">Vide</div>`;
+                  } else {
+                      grpFolders.forEach(f => html += renderFolderButton(f));
+                      grpStyles.forEach(s => html += renderStyleBtn(s));
+                  }
+                  
+                  // Si un dossier de ce groupe est ouvert, on affiche son contenu juste en dessous
+                  if (state.activeFolderId && grpFolders.find(f => f.id === state.activeFolderId)) {
+                      html += `</div><div style="padding:10px; background:#f9f9f9; border-top:1px dashed #eee;">${renderFolderContent(state.activeFolderId, true)}</div>`; 
+                  } else {
+                      html += `</div>`; // Fin content
+                  }
+              } else {
+                  html += `</div>`; // Fin content hidden
               }
-          }
-          
-          content.appendChild(groupEl);
-      });
+              
+              html += `</div>`; // Fin block
+          });
+      }
 
-      container.appendChild(content);
+      container.innerHTML = html;
   }
 
-  window.toggleGroup = (grpId) => {
+  window.toggleGroupAccordion = (grpId) => {
       const idx = state.expandedGroups.indexOf(grpId);
       if (idx > -1) state.expandedGroups.splice(idx, 1);
       else state.expandedGroups.push(grpId);
       renderImgStylesButtons();
   };
 
-  window.toggleFolder = (fId) => {
+  window.setStudioFolder = (fId) => {
       state.activeFolderId = (state.activeFolderId === fId) ? null : fId;
       renderImgStylesButtons();
   };
 
-  function renderFolderBtn(f) {
-      const btn = document.createElement('button');
+  function renderFolderButton(f) {
       const isActive = state.activeFolderId === f.id;
-      btn.className = `studio-btn multi-btn ${isActive ? 'active' : ''}`;
-      // Note: "folder" icon inside button
-      btn.innerHTML = `<span>${ICONS.folder} ${f.name}</span> <span style="font-size:10px">${isActive ? '▼' : '▶'}</span>`;
-      btn.onclick = () => window.toggleFolder(f.id);
-      return btn;
+      // Style "Bouton Multiple" (Dossier)
+      return `<button onclick="window.setStudioFolder('${f.id}')" class="style-tag ${isActive ? 'selected' : ''}" style="font-weight:600; padding:6px 12px; font-size:11px; border:1px solid #ddd; background:${isActive ? '#007AFF' : '#fff'}; color:${isActive ? '#fff' : '#007AFF'}; display:inline-flex; align-items:center; gap:5px;">🗂️ ${f.name}</button>`;
   }
 
-  function renderFolderContent(folderId) {
-      const box = document.createElement('div');
-      box.className = "multi-content-box";
-      
+  function renderFolderContent(folderId, isInline = false) {
       const children = (state.config.imgStyles||[]).filter(s => s.parentType === 'folder' && s.parentId === folderId);
-      if (children.length === 0) {
-          box.innerHTML = `<span style="font-size:11px; color:#999;">Vide.</span>`;
-      } else {
-          children.forEach(s => box.appendChild(renderStyleBtn(s)));
-      }
-      return box;
+      // Si inline (dans accordéon), on enlève le container gris externe
+      let html = isInline ? `<div style="display:flex; flex-wrap:wrap; gap:8px;">` : `<div style="background:#f9f9f9; border:1px solid #eee; border-radius:12px; padding:12px; margin-bottom:15px; box-shadow:inset 0 1px 4px rgba(0,0,0,0.02);"><div style="display:flex; flex-wrap:wrap; gap:8px;">`;
+      
+      if (children.length === 0) html += `<span style="font-size:11px; color:#999;">Aucun prompt.</span>`;
+      else children.forEach(s => html += renderStyleBtn(s));
+      
+      html += `</div>`;
+      if (!isInline) html += `</div>`;
+      return html;
   }
 
   function renderStyleBtn(s) {
-      const btn = document.createElement('button');
-      const isManual = s.mode === 'manual';
-      const isSelected = isManual ? state.manualImgStyles.includes(s.name) : state.selectedImgStyles.some(sel => sel.name === s.name);
+      let isActive = false;
+      if (s.mode === 'manual') isActive = state.manualImgStyles.includes(s.name);
+      else isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
+
+      const borderStyle = s.mode === 'manual' ? 'border:1px dashed #007AFF;' : 'border:1px solid #e5e5e5;';
+      const bgColor = isActive ? '#007AFF' : '#fff';
+      const color = isActive ? '#fff' : '#1d1d1f';
+      const shadow = isActive ? 'box-shadow: 0 2px 5px rgba(0,122,255,0.3);' : 'box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
       
-      btn.className = `studio-btn ${isManual ? 'manual' : ''} ${isSelected ? 'selected' : ''}`;
-      
-      let iconHTML = "";
-      if (s.refImage) iconHTML = `<img src="data:image/jpeg;base64,${s.refImage}" class="studio-btn-icon">`;
-      
-      btn.innerHTML = `${iconHTML} ${s.name} ${isManual ? '<span style="font-size:9px">📝</span>' : ''}`;
-      
-      btn.onclick = () => window.toggleImgStyle(s.name);
-      return btn;
+      return `<button class="style-tag style-btn-click" data-name="${s.name.replace(/"/g, '&quot;')}" style="display:inline-flex; align-items:center; gap:5px; flex-shrink:0; ${borderStyle} background:${bgColor}; color:${color}; ${shadow} padding:5px 12px; border-radius:18px; transition: all 0.2s; font-weight:500; font-size:11px;">${s.refImage ? '<span style="width:14px; height:14px; background:#f0f0f0; border-radius:50%; display:inline-block; overflow:hidden; border:1px solid rgba(0,0,0,0.1);"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}<span>${s.name}</span>${s.mode === 'manual' ? '<span style="font-size:9px; opacity:0.7;">📝</span>' : ''}</button>`;
   }
 
-  // --- LOGIC TOGGLE STYLE ---
+  document.addEventListener('click', function(e) {
+      const btn = e.target.closest('.style-btn-click');
+      if (btn) { const name = btn.getAttribute('data-name'); if (name) window.toggleImgStyle(name); }
+  });
+
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName);
       if(!style) return;
@@ -540,8 +618,6 @@
       renderImgStylesButtons();
   };
 
-  /* --- Reste du code API (inchangé) --- */
-  
   async function apiCall(action, extra = {}) {
     if (!state.imageBase64) return;
     startLoading();
