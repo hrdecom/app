@@ -12,6 +12,8 @@
     headlineStyles: [{ name: "POV", prompt: "POV perspective." }],
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }],
     imgStyles: [], 
+    imgFolders: [], // NOUVEAU: { id, name, category, group }
+    imgGroups: ["Couleurs", "Matériaux"], // NOUVEAU
     imgCategories: ["Packaging", "Ambiance", "Mannequin"]
   };
 
@@ -39,7 +41,7 @@
     selectedImgStyles: [], 
     manualImgStyles: [],   
     editingImgStyleIndex: null,
-    expandedGroups: [] // NOUVEAU: Pour gérer les sous-menus ouverts
+    expandedFolders: [] // Pour ouvrir/fermer les dossiers
   };
 
   const startLoading = () => {
@@ -64,6 +66,8 @@
       const parsed = JSON.parse(saved.value);
       state.config = { ...DEFAULTS, ...parsed }; 
       if (!state.config.imgStyles) state.config.imgStyles = [];
+      if (!state.config.imgFolders) state.config.imgFolders = [];
+      if (!state.config.imgGroups) state.config.imgGroups = DEFAULTS.imgGroups;
       if (!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
     }
     if (state.config.imgCategories.length > 0) {
@@ -73,6 +77,7 @@
   }
 
   function renderConfigUI() {
+    // ... [Code inchangé pour Prompts Textuels] ...
     ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => { 
       if($(id)) $(id).value = state.config[id] || DEFAULTS[id]; 
     });
@@ -81,38 +86,57 @@
     $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
     
-    $("imgCategoriesList").innerHTML = (state.config.imgCategories || []).map((cat, i) => `
+    // 1. GROUPES
+    $("imgGroupsList").innerHTML = (state.config.imgGroups || []).map((g, i) => `
        <div class="style-tag" style="background:#eee; border:1px solid #ccc; padding:4px 10px; display:flex; gap:5px; align-items:center;">
-          ${cat} <span onclick="window.removeImgCategory(${i})" style="cursor:pointer; color:red; font-weight:bold;">×</span>
+          ${g} <span onclick="window.removeImgGroup(${i})" style="cursor:pointer; color:red; font-weight:bold;">×</span>
        </div>
     `).join("");
 
-    const catSelect = $("newImgStyleCategory");
-    const currentVal = catSelect.value;
-    catSelect.innerHTML = `<option value="">Général</option>` + (state.config.imgCategories || []).map(c => `<option value="${c}">${c}</option>`).join("");
-    if(currentVal) catSelect.value = currentVal;
+    // Update Dropdowns
+    const groupOpts = (state.config.imgGroups || []).map(g => `<option value="${g}">${g}</option>`).join("");
+    const catOpts = (state.config.imgCategories || []).map(c => `<option value="${c}">${c}</option>`).join("");
+    
+    if($("newFolderGroup")) $("newFolderGroup").innerHTML = `<option value="">Groupe...</option>` + groupOpts;
+    if($("newFolderCategory")) $("newFolderCategory").innerHTML = `<option value="">Catégorie...</option>` + catOpts;
 
-    $("imgStyleEditorList").innerHTML = (state.config.imgStyles || []).map((s, i) => `
+    // 2. DOSSIERS
+    $("imgFoldersList").innerHTML = (state.config.imgFolders || []).map((f, i) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:8px; border-radius:6px; border:1px solid #eee; margin-bottom:5px;">
+            <div>
+                <span style="font-weight:bold;">${f.name}</span>
+                <span style="font-size:10px; color:#888; margin-left:10px;">${f.category} > ${f.group}</span>
+            </div>
+            <button onclick="window.removeImgFolder(${i})" style="color:red; border:none; background:none;">×</button>
+        </div>
+    `).join("");
+
+    // Update Folder Select for Styles
+    const folderOpts = (state.config.imgFolders || []).map(f => `<option value="${f.id}">${f.name} (${f.group})</option>`).join("");
+    if($("newImgStyleFolder")) $("newImgStyleFolder").innerHTML = `<option value="">Choisir un Dossier...</option>` + folderOpts;
+
+    // 3. STYLES (Enfants)
+    $("imgStyleEditorList").innerHTML = (state.config.imgStyles || []).map((s, i) => {
+        const folder = state.config.imgFolders.find(f => f.id === s.folderId);
+        const folderName = folder ? folder.name : "Sans dossier";
+        return `
         <div style="display:flex; gap:10px; margin-bottom:10px; align-items:flex-start; background:#fff; padding:10px; border-radius:8px; border:1px solid #eee;">
-            <div style="width:50px; height:50px; background:#eee; border-radius:6px; overflow:hidden; flex-shrink:0;">
-                ${s.refImage ? `<img src="data:image/jpeg;base64,${s.refImage}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="display:flex;justify-content:center;align-items:center;height:100%;font-size:10px;">No Img</span>'}
+            <div style="width:40px; height:40px; background:#eee; border-radius:6px; overflow:hidden; flex-shrink:0;">
+                ${s.refImage ? `<img src="data:image/jpeg;base64,${s.refImage}" style="width:100%; height:100%; object-fit:cover;">` : ''}
             </div>
             <div style="flex:1;">
                 <div style="display:flex; justify-content:space-between;">
                     <div style="font-weight:bold; font-size:12px;">${s.name}</div>
-                    <div style="display:flex; gap:5px;">
-                        <span style="font-size:10px; background:#f0f0f0; padding:2px 6px; border-radius:4px;">${s.category || 'Général'} ${s.subcategory ? ' > '+s.subcategory : ''}</span>
-                        <span style="font-size:10px; background:${s.mode === 'manual' ? '#fff3cd' : '#e0f7fa'}; padding:2px 6px; border-radius:4px;">${s.mode === 'manual' ? 'MANUEL' : 'AUTO'}</span>
-                    </div>
+                    <div style="font-size:10px; background:#f0f0f0; padding:2px 6px; border-radius:4px;">Dans: ${folderName}</div>
                 </div>
-                <div style="font-size:11px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:300px;">${s.prompt}</div>
+                <div style="font-size:11px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:250px;">${s.prompt}</div>
             </div>
             <div style="display:flex; flex-direction:column; gap:5px;">
-                <button onclick="window.editImgStyle(${i})" style="color:var(--apple-blue); border:none; background:none; font-size:14px;">✏️</button>
-                <button onclick="window.removeImgStyle(${i})" style="color:red; border:none; background:none; font-size:14px;">×</button>
+                <button onclick="window.editImgStyle(${i})" style="color:var(--apple-blue); border:none; background:none;">✏️</button>
+                <button onclick="window.removeImgStyle(${i})" style="color:red; border:none; background:none;">×</button>
             </div>
         </div>
-    `).join("");
+    `}).join("");
 
     $("collectionSelect").innerHTML = (state.config.collections || []).map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     renderStyleSelectors();
@@ -130,22 +154,46 @@
     el.classList.toggle('selected');
   };
 
-  /* --- GESTION PARAMÈTRES IMAGES --- */
-  window.removeImgCategory = (i) => {
-      state.config.imgCategories.splice(i, 1);
+  /* --- CRUD GROUPES / DOSSIERS / STYLES --- */
+  
+  // 1. GROUPES
+  window.removeImgGroup = (i) => {
+      state.config.imgGroups.splice(i, 1);
       renderConfigUI();
   };
-  $("addImgCategoryBtn").onclick = () => {
-      const val = $("newImgCategoryInput").value.trim();
-      if(val && !state.config.imgCategories.includes(val)) {
-          state.config.imgCategories.push(val);
-          $("newImgCategoryInput").value = "";
+  $("addImgGroupBtn").onclick = () => {
+      const val = $("newImgGroupInput").value.trim();
+      if(val && !state.config.imgGroups.includes(val)) {
+          state.config.imgGroups.push(val);
+          $("newImgGroupInput").value = "";
           renderConfigUI();
       }
   };
 
+  // 2. DOSSIERS
+  window.removeImgFolder = (i) => {
+      if(!confirm("Supprimer ce dossier ?")) return;
+      // On pourrait supprimer les enfants en cascade ici si on voulait
+      state.config.imgFolders.splice(i, 1);
+      renderConfigUI();
+  };
+  $("addFolderBtn").onclick = () => {
+      const name = $("newFolderInput").value;
+      const cat = $("newFolderCategory").value;
+      const grp = $("newFolderGroup").value;
+      if(!name || !cat || !grp) return alert("Tout remplir svp");
+      
+      state.config.imgFolders.push({
+          id: "f_" + Date.now(),
+          name, category: cat, group: grp
+      });
+      $("newFolderInput").value = "";
+      renderConfigUI();
+  };
+
+  // 3. STYLES (Enfants)
   window.removeImgStyle = (i) => {
-      if(!confirm("Supprimer ce style ?")) return;
+      if(!confirm("Supprimer ?")) return;
       state.config.imgStyles.splice(i, 1);
       if(state.editingImgStyleIndex === i) window.cancelImgStyleEdit();
       renderConfigUI();
@@ -153,16 +201,14 @@
 
   window.editImgStyle = (i) => {
       const style = state.config.imgStyles[i];
-      if(!style) return;
       state.editingImgStyleIndex = i;
       $("newImgStyleName").value = style.name;
-      $("newImgStyleCategory").value = style.category || "";
-      $("newImgStyleSubCategory").value = style.subcategory || ""; 
+      $("newImgStyleFolder").value = style.folderId || "";
       $("newImgStylePrompt").value = style.prompt;
       $("newImgStyleMode").value = style.mode || "auto"; 
       $("newImgStyleFile").value = ""; 
       $("imgStyleFormTitle").textContent = "MODIFIER LE STYLE";
-      $("addImgStyleBtn").textContent = "Mettre à jour le Style";
+      $("addImgStyleBtn").textContent = "Mettre à jour";
       $("cancelImgStyleEditBtn").classList.remove("hidden");
       if(style.refImage) $("currentRefImgPreview").classList.remove("hidden");
       else $("currentRefImgPreview").classList.add("hidden");
@@ -172,8 +218,7 @@
   window.cancelImgStyleEdit = () => {
       state.editingImgStyleIndex = null;
       $("newImgStyleName").value = "";
-      $("newImgStyleCategory").value = "";
-      $("newImgStyleSubCategory").value = "";
+      $("newImgStyleFolder").value = "";
       $("newImgStylePrompt").value = "";
       $("newImgStyleMode").value = "auto";
       $("newImgStyleFile").value = "";
@@ -186,15 +231,15 @@
 
   $("addImgStyleBtn").onclick = () => {
       const name = $("newImgStyleName").value;
-      const category = $("newImgStyleCategory").value;
-      const subcategory = $("newImgStyleSubCategory").value; 
+      const folderId = $("newImgStyleFolder").value;
       const prompt = $("newImgStylePrompt").value;
       const mode = $("newImgStyleMode").value;
       const fileInput = $("newImgStyleFile");
-      if(!name || !prompt) return alert("Nom et Prompt requis.");
+      
+      if(!name || !prompt || !folderId) return alert("Nom, Prompt et Dossier requis.");
 
       const saveStyle = (imgBase64) => {
-          const styleData = { name, category, subcategory, prompt, mode };
+          const styleData = { name, folderId, prompt, mode };
           if(state.editingImgStyleIndex !== null) {
               const oldStyle = state.config.imgStyles[state.editingImgStyleIndex];
               styleData.refImage = imgBase64 || oldStyle.refImage;
@@ -202,9 +247,8 @@
               window.cancelImgStyleEdit(); 
           } else {
               styleData.refImage = imgBase64;
-              if(!state.config.imgStyles) state.config.imgStyles = [];
               state.config.imgStyles.push(styleData);
-              $("newImgStyleName").value = ""; $("newImgStylePrompt").value = ""; $("newImgStyleSubCategory").value = ""; fileInput.value = "";
+              $("newImgStyleName").value = ""; $("newImgStylePrompt").value = ""; fileInput.value = "";
           }
           renderConfigUI();
       };
@@ -218,7 +262,9 @@
       }
   };
 
-  /* --- STUDIO UI LOGIC (Groupes & Sous-menus) --- */
+
+  /* --- RENDER STUDIO (HIERARCHIE) --- */
+  
   function renderStudioCategories() {
       const container = $("imgGenCategoriesBar");
       if(!container) return;
@@ -234,7 +280,7 @@
 
   window.setImgCategory = (c) => {
       state.currentImgCategory = c;
-      state.expandedGroups = []; // Reset submenus on category change
+      state.expandedFolders = []; // Reset folders on tab change
       renderStudioCategories();
       renderImgStylesButtons();
   };
@@ -243,55 +289,60 @@
       const container = $("imgGenStylesContainer");
       if(!container) return;
       
-      const filtered = (state.config.imgStyles || []).filter(s => {
-          return (s.category || "") === state.currentImgCategory || (s.category === "" || s.category === "Général");
-      });
+      // 1. Filtrer les Dossiers pour la catégorie active
+      const activeFolders = (state.config.imgFolders || []).filter(f => f.category === state.currentImgCategory);
 
-      // Groupement par Sous-Catégorie
-      const groups = {};
-      const standalone = [];
-
-      filtered.forEach(s => {
-          if (s.subcategory && s.subcategory.trim() !== "") {
-              if(!groups[s.subcategory]) groups[s.subcategory] = [];
-              groups[s.subcategory].push(s);
-          } else {
-              standalone.push(s);
-          }
+      // 2. Grouper par "Group" (Sections)
+      const groupsMap = {};
+      activeFolders.forEach(f => {
+          if(!groupsMap[f.group]) groupsMap[f.group] = [];
+          groupsMap[f.group].push(f);
       });
 
       let html = "";
 
-      // 1. Boutons Indépendants
-      if(standalone.length > 0) {
-          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; padding-bottom:5px;">` + standalone.map(s => renderStyleBtn(s)).join("") + `</div>`;
-      }
-
-      // 2. Boutons Groupés (Sous-menus)
-      Object.keys(groups).forEach(subKey => {
-          const isExpanded = state.expandedGroups.includes(subKey);
+      // 3. Rendu par Groupe
+      Object.keys(groupsMap).forEach(groupName => {
+          html += `<div style="font-size:10px; font-weight:bold; color:#888; margin-top:8px; margin-bottom:4px; text-transform:uppercase; border-bottom:1px solid #eee; padding-bottom:2px;">${groupName}</div>`;
           
-          // Vérifie si un enfant est actif pour highlighter le parent
-          const isChildActive = groups[subKey].some(s =>
-             (s.mode === 'manual' && state.manualImgStyles.includes(s.name)) ||
-             (s.mode !== 'manual' && state.selectedImgStyles.some(sel => sel.name === s.name))
-          );
+          // Rendu des Dossiers dans ce groupe
+          groupsMap[groupName].forEach(folder => {
+             const isExpanded = state.expandedFolders.includes(folder.id);
+             
+             // Trouver les enfants
+             const children = (state.config.imgStyles || []).filter(s => s.folderId === folder.id);
+             const hasActiveChild = children.some(s => 
+                 (s.mode === 'manual' && state.manualImgStyles.includes(s.name)) ||
+                 (s.mode !== 'manual' && state.selectedImgStyles.some(sel => sel.name === s.name))
+             );
 
-          // Rendu du bouton parent
-          html += renderGroupBtn(subKey, isExpanded, isChildActive);
+             html += renderFolderBtn(folder, isExpanded, hasActiveChild);
 
-          // Rendu des enfants si ouvert
-          if (isExpanded) {
-               html += `<div style="display:flex; flex-wrap:wrap; gap:8px; padding:10px; background:#f9f9f9; border-radius:12px; margin-bottom:10px; border:1px solid #eee; box-shadow:inset 0 0 5px rgba(0,0,0,0.05);">` +
-                       groups[subKey].map(s => renderStyleBtn(s)).join("") +
-                       `</div>`;
-          }
+             if(isExpanded && children.length > 0) {
+                 html += `<div style="display:flex; flex-wrap:wrap; gap:6px; padding:8px; background:#f9f9f9; border-left:2px solid #ddd; margin-left:10px; margin-bottom:5px;">` +
+                         children.map(s => renderStyleBtn(s)).join("") +
+                         `</div>`;
+             }
+          });
       });
 
       container.innerHTML = html;
   }
 
-  // Rendu Bouton Style
+  function renderFolderBtn(folder, isExpanded, isActive) {
+      const bgColor = isActive ? '#E1F0FF' : '#fff';
+      const arrow = isExpanded ? '▼' : '▶';
+      
+      return `
+         <button class="folder-btn-click" 
+            data-folder="${folder.id}"
+            style="width:100%; text-align:left; display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid #eee; background:${bgColor}; padding:6px 10px; border-radius:8px; margin-bottom:2px; transition: all 0.2s; font-weight:500; color:#333; cursor:pointer; font-size:12px;">
+            <span>📁 ${folder.name}</span>
+            <span style="font-size:10px; color:#888;">${arrow}</span>
+         </button>
+      `;
+  }
+
   function renderStyleBtn(s) {
       let isActive = false;
       if (s.mode === 'manual') {
@@ -303,59 +354,38 @@
       const borderStyle = s.mode === 'manual' ? 'border:1px dashed #007AFF;' : 'border:1px solid #e5e5e5;';
       const bgColor = isActive ? '#007AFF' : '#fff';
       const color = isActive ? '#fff' : '#1d1d1f';
-      const shadow = isActive ? 'box-shadow: 0 2px 5px rgba(0,122,255,0.3);' : 'box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
-
+      
+      // IMPORTANT : Utilisation de data-name pour le clic
       return `
          <button class="style-tag style-btn-click" 
             data-name="${s.name.replace(/"/g, '&quot;')}"
-            style="display:flex; align-items:center; gap:6px; flex-shrink:0; ${borderStyle} background:${bgColor}; color:${color}; padding:6px 12px; border-radius:20px; transition: all 0.2s; ${shadow} font-weight:500;">
-            ${s.refImage ? '<span style="width:16px; height:16px; background:#f0f0f0; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
+            style="display:flex; align-items:center; gap:4px; flex-shrink:0; ${borderStyle} background:${bgColor}; color:${color}; padding:4px 10px; border-radius:15px; transition: all 0.2s; box-shadow:0 1px 2px rgba(0,0,0,0.05); font-weight:500; font-size:11px;">
+            ${s.refImage ? '<span style="width:12px; height:12px; background:#f0f0f0; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
             <span>${s.name}</span>
-            ${s.mode === 'manual' ? '<span style="font-size:10px; opacity:0.7;">📝</span>' : ''}
+            ${s.mode === 'manual' ? '<span style="font-size:9px; opacity:0.7;">📝</span>' : ''}
          </button>
       `;
   }
 
-  // Rendu Bouton Parent (Groupe)
-  function renderGroupBtn(name, isExpanded, isActive) {
-      const bgColor = isActive ? '#E1F0FF' : '#fff';
-      const arrow = isExpanded ? '▼' : '▶';
-      
-      return `
-         <button class="group-btn-click" 
-            data-group="${name.replace(/"/g, '&quot;')}"
-            style="width:100%; text-align:left; display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid #eee; background:${bgColor}; padding:8px 12px; border-radius:12px; margin-bottom:5px; transition: all 0.2s; font-weight:600; color:#333; cursor:pointer;">
-            <span>${name}</span>
-            <span style="font-size:10px; color:#888;">${arrow}</span>
-         </button>
-      `;
-  }
-
-  // --- EVENT LISTENERS ---
   document.addEventListener('click', function(e) {
-      // 1. Bouton Style
+      // 1. Bouton Style (Enfant)
       const btn = e.target.closest('.style-btn-click');
       if (btn) {
           const name = btn.getAttribute('data-name');
           if (name) window.toggleImgStyle(name);
       }
-
-      // 2. Bouton Groupe
-      const groupBtn = e.target.closest('.group-btn-click');
-      if (groupBtn) {
-          const group = groupBtn.getAttribute('data-group');
-          if (group) window.toggleGroup(group);
+      // 2. Bouton Folder (Parent)
+      const fBtn = e.target.closest('.folder-btn-click');
+      if (fBtn) {
+          const fid = fBtn.getAttribute('data-folder');
+          if (fid) window.toggleFolder(fid);
       }
   });
 
-  // --- LOGIQUE TOGGLE GROUP ---
-  window.toggleGroup = (groupName) => {
-      const idx = state.expandedGroups.indexOf(groupName);
-      if(idx > -1) {
-          state.expandedGroups.splice(idx, 1);
-      } else {
-          state.expandedGroups.push(groupName);
-      }
+  window.toggleFolder = (fid) => {
+      const idx = state.expandedFolders.indexOf(fid);
+      if(idx > -1) state.expandedFolders.splice(idx, 1);
+      else state.expandedFolders.push(fid);
       renderImgStylesButtons();
   };
 
@@ -367,12 +397,11 @@
       const promptClean = style.prompt.trim();
 
       if (style.mode === 'manual') {
-          // MODE MANUEL
           const idx = state.manualImgStyles.indexOf(styleName);
           let currentText = $("imgGenPrompt").value.trim();
           
           if (idx > -1) {
-              // DÉSACTIVATION
+              // Desactivation
               state.manualImgStyles.splice(idx, 1);
               if (currentText.includes(promptClean)) {
                   const parts = currentText.split(promptClean);
@@ -385,7 +414,7 @@
                   renderInputImages();
               }
           } else {
-              // ACTIVATION
+              // Activation
               state.manualImgStyles.push(styleName);
               if (!currentText.includes(promptClean)) {
                   $("imgGenPrompt").value = (currentText + " " + promptClean).trim();
@@ -396,7 +425,7 @@
               }
           }
       } else {
-          // MODE AUTO
+          // Auto
           const idx = state.selectedImgStyles.findIndex(s => s.name === styleName);
           if (idx > -1) { state.selectedImgStyles.splice(idx, 1); } 
           else { state.selectedImgStyles.push(style); }
@@ -404,6 +433,8 @@
       renderImgStylesButtons();
   };
 
+  // ... (LE RESTE DU CODE APP.JS RESTE IDENTIQUE A LA VERSION PRECEDENTE, JE NE LE REPETE PAS POUR GAGNER DE LA PLACE MAIS IL FAUT LE GARDER : apiCall, callGeminiImageGen, restore, etc.)
+  
   /* --- COMMON API --- */
   async function apiCall(action, extra = {}) {
     if (!state.imageBase64) return;
@@ -468,7 +499,6 @@
   
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   
-  // --- MOTEUR DE GÉNÉRATION ---
   async function callGeminiImageGen() {
       const userPrompt = $("imgGenPrompt").value;
       if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style.");
@@ -536,7 +566,6 @@
       $("imgGenPrompt").value = ""; 
       renderImgStylesButtons(); 
 
-      // EXECUTION
       newItems.forEach(async (item, index) => {
           const batchData = batches[index];
           try {
@@ -635,7 +664,6 @@
       $("imgGenSavedResults").innerHTML = savedHtml;
   }
 
-  // --- TOGGLE SAVED IMAGE ---
   window.toggleSavedImg = (index) => {
       const item = state.savedGeneratedImages[index];
       if(!item) return;
@@ -746,8 +774,6 @@
               throw new Error("Erreur serveur (" + res.status + "): " + errorText);
           }
 
-          const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
-          if (histItem) histItem.generated_images = payload.generated_images;
           alert("Images enregistrées !");
           renderGenImages();
           document.querySelector('button[data-tab="tab-img-saved"]').click();
