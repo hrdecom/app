@@ -14,17 +14,17 @@
     
     // STRUCTURE HIERARCHIQUE
     imgCategories: [
-        { id: "cat_1", name: "Collier" },
-        { id: "cat_2", name: "Bague" }
+        { id: "cat_1", name: "Collier", order: 0 },
+        { id: "cat_2", name: "Bague", order: 1 }
     ],
     imgGroups: [
-        { id: "grp_1", name: "Petit collier", categoryId: "cat_1" }
+        { id: "grp_1", name: "Petit collier", categoryId: "cat_1", order: 0 }
     ],
     imgFolders: [
-        { id: "fol_1", name: "Photo portée", parentId: "grp_1", parentType: "group" }
+        { id: "fol_1", name: "Photo portée", parentId: "grp_1", parentType: "group", order: 0 }
     ],
     imgStyles: [
-        { id: "sty_1", name: "Sur cou", prompt: "On neck.", parentId: "fol_1", parentType: "folder" }
+        { id: "sty_1", name: "Sur cou", prompt: "On neck.", parentId: "fol_1", parentType: "folder", order: 0 }
     ]
   };
 
@@ -47,7 +47,7 @@
     activeFolderId: null, 
     selectedImgStyles: [], 
     manualImgStyles: [],   
-    expandedGroups: [], // NOUVEAU: Pour les accordéons
+    expandedGroups: [], 
     
     // DRAG & DROP STATE
     draggedItem: null
@@ -75,16 +75,23 @@
       const parsed = JSON.parse(saved.value);
       state.config = { ...DEFAULTS, ...parsed }; 
       
-      // MIGRATION AUTOMATIQUE (Si ancienne version texte)
-      if (Array.isArray(state.config.imgCategories) && state.config.imgCategories.length > 0 && typeof state.config.imgCategories[0] === 'string') {
-          state.config.imgCategories = state.config.imgCategories.map((c, i) => ({ id: "cat_" + i, name: c }));
+      // MIGRATION & INIT ORDER
+      if (Array.isArray(state.config.imgCategories) && typeof state.config.imgCategories[0] === 'string') {
+          state.config.imgCategories = state.config.imgCategories.map((c, i) => ({ id: "cat_" + i, name: c, order: i }));
           if (Array.isArray(state.config.imgGroups) && typeof state.config.imgGroups[0] === 'string') {
                const defaultCatId = state.config.imgCategories[0].id;
-               state.config.imgGroups = state.config.imgGroups.map((g, i) => ({ id: "grp_" + i, name: g, categoryId: defaultCatId }));
+               state.config.imgGroups = state.config.imgGroups.map((g, i) => ({ id: "grp_" + i, name: g, categoryId: defaultCatId, order: i }));
           }
           if (!state.config.imgFolders) state.config.imgFolders = [];
           if (!state.config.imgStyles) state.config.imgStyles = [];
       }
+      
+      // Assurer que tout le monde a un 'order'
+      const initOrder = (list) => { list.forEach((x, i) => { if(x.order === undefined) x.order = i; }); };
+      initOrder(state.config.imgCategories || []);
+      initOrder(state.config.imgGroups || []);
+      initOrder(state.config.imgFolders || []);
+      initOrder(state.config.imgStyles || []);
     }
     
     if (state.config.imgCategories.length > 0) {
@@ -129,33 +136,38 @@
       if(!container) return;
       container.innerHTML = "";
 
-      state.config.imgCategories.forEach(cat => {
+      // Trier les catégories par ordre
+      const sortedCats = [...(state.config.imgCategories || [])].sort((a,b) => (a.order||0) - (b.order||0));
+
+      sortedCats.forEach(cat => {
           const catNode = createTreeNode("category", cat, null);
           container.appendChild(catNode);
           const childrenContainer = catNode.querySelector('.tree-children');
 
-          // A. Contenu GLOBAL de la Catégorie
+          // Contenu GLOBAL de la Catégorie (Folders + Styles) -> MIXED SORT
           const globalFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'category' && f.parentId === cat.id);
           const globalStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'category' && s.parentId === cat.id);
+          const globalMixed = [...globalFolders, ...globalStyles].sort((a,b) => (a.order||0) - (b.order||0));
           
-          [...globalFolders, ...globalStyles].forEach(item => {
+          globalMixed.forEach(item => {
              const type = item.prompt !== undefined ? 'style' : 'folder';
              const node = createRecursiveNode(type, item);
              childrenContainer.appendChild(node);
           });
 
-          // B. GROUPES de la Catégorie
-          const groups = (state.config.imgGroups||[]).filter(g => g.categoryId === cat.id);
+          // GROUPES de la Catégorie
+          const groups = (state.config.imgGroups||[]).filter(g => g.categoryId === cat.id).sort((a,b) => (a.order||0) - (b.order||0));
           groups.forEach(grp => {
               const grpNode = createTreeNode("group", grp, cat.id);
               childrenContainer.appendChild(grpNode);
               const grpChildren = grpNode.querySelector('.tree-children');
 
-              // C. Contenu du GROUPE
+              // Contenu du GROUPE (Mixed)
               const grpFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'group' && f.parentId === grp.id);
               const grpStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'group' && s.parentId === grp.id);
+              const grpMixed = [...grpFolders, ...grpStyles].sort((a,b) => (a.order||0) - (b.order||0));
 
-              [...grpFolders, ...grpStyles].forEach(item => {
+              grpMixed.forEach(item => {
                   const type = item.prompt !== undefined ? 'style' : 'folder';
                   const node = createRecursiveNode(type, item);
                   grpChildren.appendChild(node);
@@ -168,7 +180,7 @@
       const node = createTreeNode(type, item, item.parentId);
       if (type === 'folder') {
           const childrenContainer = node.querySelector('.tree-children');
-          const styles = (state.config.imgStyles||[]).filter(s => s.parentType === 'folder' && s.parentId === item.id);
+          const styles = (state.config.imgStyles||[]).filter(s => s.parentType === 'folder' && s.parentId === item.id).sort((a,b) => (a.order||0) - (b.order||0));
           styles.forEach(s => {
               const sNode = createRecursiveNode('style', s);
               childrenContainer.appendChild(sNode);
@@ -185,31 +197,32 @@
       el.setAttribute('data-type', type);
       
       let icon = "📁";
-      let labelType = "";
+      let label = data.name;
       
-      if (type === "category") { icon = ""; } // Just text label
-      if (type === "group") { icon = "🔹"; }
-      if (type === "folder") { icon = "🗂️"; labelType = " (Bouton Multiple)"; }
-      if (type === "style") { icon = "🎨"; }
+      if (type === "category") { icon = ""; } 
+      if (type === "group") { icon = "🗃️"; }
+      if (type === "folder") { icon = "📂"; }
+      if (type === "style") { icon = "⚪️"; } // Simple bouton
       
       let addBtns = "";
-      if (type === "category") addBtns = `<button class="small-action-btn" onclick="window.addNode('group', '${data.id}')">+ Groupe</button> <button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'category')">+ Btn Multiple</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'category')">+ Style</button>`;
-      if (type === "group") addBtns = `<button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'group')">+ Btn Multiple</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'group')">+ Style</button>`;
-      if (type === "folder") addBtns = `<button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'folder')">+ Style</button>`;
+      // Boutons "+" seulement sur conteneurs
+      if (type === "category") addBtns = `<button class="action-btn-ios" onclick="window.addNode('group', '${data.id}')" title="Ajouter Groupe">＋</button> <button class="action-btn-ios" onclick="window.addNode('folder', '${data.id}', 'category')" title="Ajouter Btn Multiple">📂</button> <button class="action-btn-ios" onclick="window.addNode('style', '${data.id}', 'category')" title="Ajouter Btn Simple">⚪️</button>`;
+      if (type === "group") addBtns = `<button class="action-btn-ios" onclick="window.addNode('folder', '${data.id}', 'group')" title="Ajouter Btn Multiple">📂</button> <button class="action-btn-ios" onclick="window.addNode('style', '${data.id}', 'group')" title="Ajouter Btn Simple">⚪️</button>`;
+      if (type === "folder") addBtns = `<button class="action-btn-ios" onclick="window.addNode('style', '${data.id}', 'folder')" title="Ajouter Btn Simple">⚪️</button>`;
 
       el.innerHTML = `
         <div class="tree-header">
-            <span class="t-icon">${icon}</span>
-            <span>${data.name}${labelType}</span>
-            <div class="node-actions">
+            ${icon ? `<span class="t-icon">${icon}</span>` : ''}
+            <span class="t-label">${label}</span>
+            <div class="t-actions">
                 ${addBtns}
-                <button class="small-action-btn" onclick="window.editNode('${type}', '${data.id}')">✏️</button>
+                <button class="action-btn-ios" onclick="window.editNode('${type}', '${data.id}')">✎</button>
             </div>
         </div>
         <div class="tree-children"></div>
       `;
 
-      // --- DRAG & DROP LOGIC IMPROVED (SORTING) ---
+      // --- DRAG & DROP LOGIC ---
       const header = el.querySelector('.tree-header');
       
       el.addEventListener('dragstart', (e) => {
@@ -227,7 +240,6 @@
           state.draggedItem = null;
       });
 
-      // ZONES DE DROP : Top (Insert Before), Middle (Nest), Bottom (Insert After)
       header.addEventListener('dragover', (e) => {
           e.preventDefault(); e.stopPropagation();
           if(!state.draggedItem || state.draggedItem.id === data.id) return;
@@ -236,27 +248,32 @@
           const y = e.clientY - rect.top;
           const height = rect.height;
           
-          // Reset classes
           header.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
 
           const src = state.draggedItem.type;
           const dest = type;
 
-          // Zone calculation
+          // ZONE DETECTION
           if (y < height * 0.25) {
-              // Top zone (Insert Before) - Valid only if same type level implies swapping or reordering
-              header.classList.add('drag-over-top');
+              header.classList.add('drag-over-top'); // Insert Before
           } else if (y > height * 0.75) {
-              // Bottom zone (Insert After)
-              header.classList.add('drag-over-bottom');
+              header.classList.add('drag-over-bottom'); // Insert After
           } else {
-              // Middle zone (Nest) - Valid only if container
+              // Middle Zone (Nesting)
+              // IMPORTANT: On n'autorise le nesting que si la destination est un conteneur
               let canNest = false;
-              if (src === 'group' && dest === 'category') canNest = true;
-              if (src === 'folder' && (dest === 'category' || dest === 'group')) canNest = true;
-              if (src === 'style' && (dest === 'category' || dest === 'group' || dest === 'folder')) canNest = true;
-              
-              if (canNest) header.classList.add('drag-over-center');
+              if (dest === 'category' && src === 'group') canNest = true;
+              if (dest === 'category' && (src === 'folder' || src === 'style')) canNest = true;
+              if (dest === 'group' && (src === 'folder' || src === 'style')) canNest = true;
+              if (dest === 'folder' && src === 'style') canNest = true;
+
+              if (canNest) {
+                  header.classList.add('drag-over-center');
+              } else {
+                  // Si pas nesting, on force le top/bottom selon la moitié
+                  if (y < height * 0.5) header.classList.add('drag-over-top');
+                  else header.classList.add('drag-over-bottom');
+              }
           }
       });
 
@@ -281,70 +298,125 @@
       return el;
   }
 
-  // --- LOGIQUE DEPLACEMENT ET REORDONNEMENT ---
+  // --- LOGIQUE DEPLACEMENT ET REORDONNEMENT (TRI MIXTE) ---
   window.moveNode = (src, dest, action) => {
-      // Helper: Trouver la liste contenant un item
-      const getList = (type) => {
-          if (type === 'category') return state.config.imgCategories;
-          if (type === 'group') return state.config.imgGroups;
-          if (type === 'folder') return state.config.imgFolders;
-          if (type === 'style') return state.config.imgStyles;
+      // 1. Identifier la liste source et l'objet source
+      const getList = (t) => {
+          if (t === 'category') return state.config.imgCategories;
+          if (t === 'group') return state.config.imgGroups;
+          if (t === 'folder') return state.config.imgFolders;
+          if (t === 'style') return state.config.imgStyles;
           return [];
       };
-
-      const srcList = getList(src.type);
-      const srcIndex = srcList.findIndex(x => x.id === src.id);
-      if(srcIndex === -1) return;
-      const item = srcList[srcIndex]; // Objet complet
-
-      // 1. Si NEST (Imbrication dans le noeud cible)
-      if (action === 'nest') {
-          // On met à jour les propriétés parent
-          if (src.type === 'group') { item.categoryId = dest.id; } 
-          else { item.parentId = dest.id; item.parentType = dest.type; }
-          
-          // On le déplace à la fin de la liste pour qu'il s'affiche (simple) ou on le laisse là, 
-          // le render se chargera de l'afficher au bon endroit grâce aux IDs.
-          // Mais pour être propre, on peut le mettre à la fin.
-          srcList.splice(srcIndex, 1);
-          srcList.push(item);
-      }
       
-      // 2. Si REORDER (Avant/Après le noeud cible)
-      else {
-          const destList = getList(dest.type);
-          const destIndex = destList.findIndex(x => x.id === dest.id);
+      const srcList = getList(src.type);
+      const srcItem = srcList.find(x => x.id === src.id);
+      if (!srcItem) return;
+
+      // 2. Préparer le changement de parent si nécessaire
+      if (action === 'nest') {
+          // Changement de parent
+          if (src.type === 'group') { srcItem.categoryId = dest.id; }
+          else { srcItem.parentId = dest.id; srcItem.parentType = dest.type; }
           
-          if (destIndex === -1) return; // Should not happen
+          // Mettre à la fin de l'ordre
+          srcItem.order = 9999; 
+      }
+      else {
+          // Reordering (Before/After)
+          // On doit trouver tous les "frères" de la destination pour recalculer l'ordre
+          // Attention: Les frères peuvent être mixtes (Folder + Style)
+          
+          let destContext = {}; // { parentId, parentType, categoryId }
+          const destListRaw = getList(dest.type);
+          const destItem = destListRaw.find(x => x.id === dest.id);
+          
+          if (dest.type === 'category') { 
+              // Reorder Category
+              const siblings = state.config.imgCategories.sort((a,b) => (a.order||0) - (b.order||0));
+              reorderInArray(siblings, srcItem, destItem, action);
+          } 
+          else if (dest.type === 'group') {
+               // Reorder Group
+               const siblings = state.config.imgGroups.filter(g => g.categoryId === destItem.categoryId).sort((a,b) => (a.order||0) - (b.order||0));
+               // Update src context to match dest
+               srcItem.categoryId = destItem.categoryId;
+               reorderInArray(siblings, srcItem, destItem, action);
+          }
+          else {
+               // Reorder Item (Folder or Style) - MIXED LIST
+               // Le parent peut être Category, Group ou Folder
+               let parentId = destItem.parentId;
+               let parentType = destItem.parentType;
+               
+               // Update src context
+               srcItem.parentId = parentId;
+               srcItem.parentType = parentType;
 
-          // Si on bouge dans la même liste
-          if (src.type === dest.type) {
-              // Copier le parent du destinataire pour être sûr qu'ils sont frères
-              const target = destList[destIndex];
-              if (src.type === 'group') { item.categoryId = target.categoryId; }
-              else if (src.type !== 'category') { item.parentId = target.parentId; item.parentType = target.parentType; }
-
-              // Retirer source
-              srcList.splice(srcIndex, 1);
-              
-              // Recalculer index dest (car le retrait a pu décaler)
-              const newDestIndex = destList.findIndex(x => x.id === dest.id);
-              
-              // Insérer
-              if (action === 'before') destList.splice(newDestIndex, 0, item);
-              else destList.splice(newDestIndex + 1, 0, item);
+               // Get mixed siblings
+               const sibFolders = state.config.imgFolders.filter(f => f.parentId === parentId && f.parentType === parentType);
+               const sibStyles = state.config.imgStyles.filter(s => s.parentId === parentId && s.parentType === parentType);
+               const mixedSiblings = [...sibFolders, ...sibStyles].sort((a,b) => (a.order||0) - (b.order||0));
+               
+               reorderInArray(mixedSiblings, srcItem, destItem, action);
           }
       }
       
+      // Normalisation des ordres (0, 1, 2...)
+      normalizeOrders();
       renderConfigUI();
   };
 
-  /* --- CRUD BASIQUE (Ajout/Edition) --- */
+  function reorderInArray(array, srcItem, destItem, action) {
+      // Retirer src de l'array (si présent visuellement)
+      const cleanArray = array.filter(x => x.id !== srcItem.id);
+      
+      // Trouver index destination
+      const destIndex = cleanArray.findIndex(x => x.id === destItem.id);
+      
+      // Insérer
+      if (action === 'before') {
+          cleanArray.splice(destIndex, 0, srcItem);
+      } else {
+          cleanArray.splice(destIndex + 1, 0, srcItem);
+      }
+      
+      // Appliquer les nouveaux ordres
+      cleanArray.forEach((item, index) => {
+          item.order = index;
+      });
+  }
+
+  function normalizeOrders() {
+      // Pour être sûr, on repasse sur tout le monde
+      if(state.config.imgCategories) state.config.imgCategories.sort((a,b) => (a.order||0)-(b.order||0)).forEach((x,i) => x.order = i);
+      // Groupes par categorie
+      if(state.config.imgGroups) {
+          const cats = [...new Set(state.config.imgGroups.map(g=>g.categoryId))];
+          cats.forEach(c => {
+              state.config.imgGroups.filter(g=>g.categoryId===c).sort((a,b)=>(a.order||0)-(b.order||0)).forEach((x,i)=>x.order=i);
+          });
+      }
+      // Items par parent
+      // On regroupe Folders et Styles par parentId pour normaliser l'ordre mixte
+      const allItems = [...(state.config.imgFolders||[]), ...(state.config.imgStyles||[])];
+      const parents = [...new Set(allItems.map(x => x.parentId + "|" + x.parentType))];
+      
+      parents.forEach(key => {
+          const [pId, pType] = key.split("|");
+          const siblings = allItems.filter(x => x.parentId == pId && x.parentType == pType);
+          siblings.sort((a,b) => (a.order||0) - (b.order||0));
+          siblings.forEach((x,i) => x.order = i);
+      });
+  }
+
+
+  /* --- CRUD --- */
   window.addCategoryBtn = $("addCategoryBtn");
   if(window.addCategoryBtn) window.addCategoryBtn.onclick = () => {
       const name = $("newCatName").value; if(!name) return;
-      state.config.imgCategories.push({ id: "cat_" + Date.now(), name: name });
-      $("newCatName").value = ""; renderConfigUI();
+      state.config.imgCategories.push({ id: "cat_" + Date.now(), name: name, order: 999 });
+      $("newCatName").value = ""; normalizeOrders(); renderConfigUI();
   };
 
   window.addNode = (newType, parentId, parentTypeContext) => openNodeEditor(null, newType, parentId, parentTypeContext);
@@ -360,7 +432,8 @@
       let title = id ? "Modifier " : "Créer ";
       if (type === 'group') title += "Groupe";
       if (type === 'folder') title += "Bouton Multiple";
-      if (type === 'style') { title += "Style (Prompt)"; $("editPromptContainer").classList.remove("hidden"); }
+      if (type === 'style') { title += "Bouton Simple"; $("editPromptContainer").classList.remove("hidden"); }
+      if (type === 'category') title += "Catégorie";
       
       if (id) {
           let item = null;
@@ -384,14 +457,14 @@
 
       if (!id) {
           const newId = (type === 'group' ? 'grp_' : (type === 'folder' ? 'fol_' : 'sty_')) + Date.now();
-          const newItem = { id: newId, name };
+          const newItem = { id: newId, name, order: 9999 }; // Order at end
           if (type === 'group') { newItem.categoryId = state.tempParentId; state.config.imgGroups.push(newItem); } 
           else {
               newItem.parentId = state.tempParentId; newItem.parentType = state.tempParentType;
               if (type === 'style') {
                   newItem.prompt = $("editNodePrompt").value; newItem.mode = $("editNodeMode").value;
                   const file = $("editNodeFile").files[0];
-                  if (file) { const r = new FileReader(); r.onload = (e) => { newItem.refImage = e.target.result.split(",")[1]; state.config.imgStyles.push(newItem); closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; }
+                  if (file) { const r = new FileReader(); r.onload = (e) => { newItem.refImage = e.target.result.split(",")[1]; state.config.imgStyles.push(newItem); normalizeOrders(); closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; }
                   state.config.imgStyles.push(newItem);
               } else { state.config.imgFolders.push(newItem); }
           }
@@ -407,6 +480,7 @@
               }
           }
       }
+      normalizeOrders();
       closeNodeEditor(); renderConfigUI();
   };
 
@@ -427,6 +501,7 @@
           state.config.imgFolders = state.config.imgFolders.filter(x => x.id !== id);
           state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'folder' && x.parentId === id));
       } else if (type === 'style') { state.config.imgStyles = state.config.imgStyles.filter(x => x.id !== id); }
+      normalizeOrders();
       closeNodeEditor(); renderConfigUI();
   };
 
@@ -435,13 +510,13 @@
 
 
   /* =========================================
-     STUDIO UI (AFFICHAGE HIERARCHIQUE)
+     STUDIO UI
      ========================================= */
   
   function renderStudioCategories() {
       const container = $("imgGenCategoriesBar");
       if(!container) return;
-      const cats = state.config.imgCategories || [];
+      const cats = (state.config.imgCategories || []).sort((a,b) => (a.order||0) - (b.order||0));
       if (!state.currentImgCategory && cats.length > 0) state.currentImgCategory = cats[0].id;
 
       container.innerHTML = cats.map(c => `
@@ -456,13 +531,11 @@
   window.setImgCategory = (cId) => {
       state.currentImgCategory = cId;
       state.activeFolderId = null; 
-      state.currentStudioGroup = ""; 
-      state.expandedGroups = []; // Reset accordions
+      state.expandedGroups = []; 
       renderStudioCategories();
       renderImgStylesButtons();
   };
 
-  // NOUVEAU RENDU: LISTE GLOBAUX + ACCORDEONS GROUPES
   function renderImgStylesButtons() {
       const container = $("imgGenStylesContainer");
       if(!container) return;
@@ -474,14 +547,17 @@
 
       let html = "";
 
-      // 1. ITEMS GLOBAUX (Au dessus des groupes)
+      // 1. ITEMS GLOBAUX (Mixed Sort)
       const globalFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'category' && f.parentId === state.currentImgCategory);
       const globalStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'category' && s.parentId === state.currentImgCategory);
+      const globalMixed = [...globalFolders, ...globalStyles].sort((a,b) => (a.order||0) - (b.order||0));
 
-      if (globalFolders.length > 0 || globalStyles.length > 0) {
+      if (globalMixed.length > 0) {
           html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:15px; padding-bottom:10px;">`;
-          globalFolders.forEach(f => html += renderFolderButton(f));
-          globalStyles.forEach(s => html += renderStyleBtn(s));
+          globalMixed.forEach(item => {
+              if (item.prompt !== undefined) html += renderStyleBtn(item);
+              else html += renderFolderButton(item);
+          });
           html += `</div>`;
           
           if (state.activeFolderId && globalFolders.find(f => f.id === state.activeFolderId)) {
@@ -490,18 +566,17 @@
       }
 
       // 2. GROUPES EN ACCORDEON
-      const catGroups = (state.config.imgGroups||[]).filter(g => g.categoryId === state.currentImgCategory);
+      const catGroups = (state.config.imgGroups||[]).filter(g => g.categoryId === state.currentImgCategory).sort((a,b) => (a.order||0) - (b.order||0));
       
       if (catGroups.length > 0) {
           catGroups.forEach(grp => {
               const isExpanded = state.expandedGroups.includes(grp.id);
               const chevron = isExpanded ? '▼' : '▶';
               
-              // Contenu du groupe
               const grpFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'group' && f.parentId === grp.id);
               const grpStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'group' && s.parentId === grp.id);
+              const grpMixed = [...grpFolders, ...grpStyles].sort((a,b) => (a.order||0) - (b.order||0));
               
-              // Compteur items actifs pour style visuel
               const hasActiveItems = grpStyles.some(s => state.selectedImgStyles.some(sel => sel.name === s.name)) || 
                                      (state.activeFolderId && grpFolders.some(f => f.id === state.activeFolderId));
 
@@ -517,24 +592,24 @@
               `;
               
               if (isExpanded) {
-                  if (grpFolders.length === 0 && grpStyles.length === 0) {
+                  if (grpMixed.length === 0) {
                       html += `<div style="width:100%; text-align:center; color:#ccc; font-size:11px;">Vide</div>`;
                   } else {
-                      grpFolders.forEach(f => html += renderFolderButton(f));
-                      grpStyles.forEach(s => html += renderStyleBtn(s));
+                      grpMixed.forEach(item => {
+                          if (item.prompt !== undefined) html += renderStyleBtn(item);
+                          else html += renderFolderButton(item);
+                      });
                   }
                   
-                  // Si un dossier de ce groupe est ouvert, on affiche son contenu juste en dessous
                   if (state.activeFolderId && grpFolders.find(f => f.id === state.activeFolderId)) {
                       html += `</div><div style="padding:10px; background:#f9f9f9; border-top:1px dashed #eee;">${renderFolderContent(state.activeFolderId, true)}</div>`; 
                   } else {
-                      html += `</div>`; // Fin content
+                      html += `</div>`; 
                   }
               } else {
-                  html += `</div>`; // Fin content hidden
+                  html += `</div>`; 
               }
-              
-              html += `</div>`; // Fin block
+              html += `</div>`; 
           });
       }
 
@@ -555,13 +630,11 @@
 
   function renderFolderButton(f) {
       const isActive = state.activeFolderId === f.id;
-      // Style "Bouton Multiple" (Dossier)
-      return `<button onclick="window.setStudioFolder('${f.id}')" class="style-tag ${isActive ? 'selected' : ''}" style="font-weight:600; padding:6px 12px; font-size:11px; border:1px solid #ddd; background:${isActive ? '#007AFF' : '#fff'}; color:${isActive ? '#fff' : '#007AFF'}; display:inline-flex; align-items:center; gap:5px;">🗂️ ${f.name}</button>`;
+      return `<button onclick="window.setStudioFolder('${f.id}')" class="style-tag ${isActive ? 'selected' : ''}" style="font-weight:600; padding:6px 12px; font-size:11px; border:1px solid #ddd; background:${isActive ? '#007AFF' : '#fff'}; color:${isActive ? '#fff' : '#007AFF'}; display:inline-flex; align-items:center; gap:5px;">📂 ${f.name}</button>`;
   }
 
   function renderFolderContent(folderId, isInline = false) {
-      const children = (state.config.imgStyles||[]).filter(s => s.parentType === 'folder' && s.parentId === folderId);
-      // Si inline (dans accordéon), on enlève le container gris externe
+      const children = (state.config.imgStyles||[]).filter(s => s.parentType === 'folder' && s.parentId === folderId).sort((a,b) => (a.order||0) - (b.order||0));
       let html = isInline ? `<div style="display:flex; flex-wrap:wrap; gap:8px;">` : `<div style="background:#f9f9f9; border:1px solid #eee; border-radius:12px; padding:12px; margin-bottom:15px; box-shadow:inset 0 1px 4px rgba(0,0,0,0.02);"><div style="display:flex; flex-wrap:wrap; gap:8px;">`;
       
       if (children.length === 0) html += `<span style="font-size:11px; color:#999;">Aucun prompt.</span>`;
