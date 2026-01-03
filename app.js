@@ -261,15 +261,13 @@
 
       let html = "";
 
-      // 1. Boutons sans sous-catégorie
       if(noSub.length > 0) {
-          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; padding-bottom:5px;">` + noSub.map(s => renderStyleBtn(s)).join("") + `</div>`;
+          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; padding-bottom:15px;">` + noSub.map(s => renderStyleBtn(s)).join("") + `</div>`;
       }
 
-      // 2. Boutons groupés
       Object.keys(groups).forEach(subKey => {
-          html += `<div style="font-size:10px; font-weight:bold; color:#888; margin-top:8px; margin-bottom:4px; text-transform:uppercase; border-bottom:1px solid #f5f5f5; padding-bottom:2px;">${subKey}</div>`;
-          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; padding-bottom:5px;">` + groups[subKey].map(s => renderStyleBtn(s)).join("") + `</div>`;
+          html += `<div style="font-size:11px; font-weight:700; color:#333; margin-top:5px; margin-bottom:8px; text-transform:uppercase; border-bottom:1px solid #eee; padding-bottom:4px;">${subKey}</div>`;
+          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; padding-bottom:15px;">` + groups[subKey].map(s => renderStyleBtn(s)).join("") + `</div>`;
       });
 
       container.innerHTML = html;
@@ -283,17 +281,21 @@
           isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
       }
 
-      // Design amélioré : Plus propre, style "Tag"
-      const borderStyle = s.mode === 'manual' ? 'border:1px dashed var(--apple-blue);' : 'border:1px solid #eee;';
-      const bgColor = isActive ? 'var(--apple-blue)' : '#f9f9f9';
-      const color = isActive ? '#fff' : '#333';
+      // Design moderne et propre
+      const borderStyle = s.mode === 'manual' ? 'border:1px dashed #007AFF;' : 'border:1px solid #e5e5e5;';
+      const bgColor = isActive ? '#007AFF' : '#fff';
+      const color = isActive ? '#fff' : '#1d1d1f';
+      const shadow = isActive ? 'box-shadow: 0 2px 5px rgba(0,122,255,0.3);' : 'box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
 
+      // Correction Bug "Manual Mode" : Utilisation de data-name pour gérer les apostrophes
       return `
-         <button class="style-tag" onclick="window.toggleImgStyle('${s.name}')" 
-            style="display:flex; align-items:center; gap:6px; flex-shrink:0; ${borderStyle} background:${bgColor}; color:${color}; padding:6px 12px; border-radius:20px; transition: all 0.2s;">
-            ${s.refImage ? '<span style="width:14px; height:14px; background:#ccc; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
-            <span style="font-size:11px; font-weight:500;">${s.name}</span>
-            ${s.mode === 'manual' ? '<span style="font-size:10px;">📝</span>' : ''}
+         <button class="style-tag" 
+            onclick="window.toggleImgStyle(this.getAttribute('data-name'))" 
+            data-name="${s.name.replace(/"/g, '&quot;')}"
+            style="display:flex; align-items:center; gap:6px; flex-shrink:0; ${borderStyle} background:${bgColor}; color:${color}; padding:6px 12px; border-radius:20px; transition: all 0.2s; ${shadow} font-weight:500;">
+            ${s.refImage ? '<span style="width:16px; height:16px; background:#f0f0f0; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
+            <span>${s.name}</span>
+            ${s.mode === 'manual' ? '<span style="font-size:10px; opacity:0.7;">📝</span>' : ''}
          </button>
       `;
   }
@@ -309,10 +311,11 @@
           const currentText = $("imgGenPrompt").value;
           
           if (idx > -1) {
-              // DÉSACTIVER (RETIRER LE TEXTE)
+              // DÉSACTIVER
               state.manualImgStyles.splice(idx, 1);
               if (currentText.includes(style.prompt)) {
-                  $("imgGenPrompt").value = currentText.replace(style.prompt, "").trim();
+                  // Retrait propre avec trim pour éviter les doubles espaces
+                  $("imgGenPrompt").value = currentText.replace(style.prompt, "").replace(/\s\s+/g, ' ').trim();
               }
               // RETIRER IMAGE REF
               if (style.refImage) {
@@ -321,7 +324,7 @@
                   renderInputImages();
               }
           } else {
-              // ACTIVER (AJOUTER LE TEXTE)
+              // ACTIVER
               state.manualImgStyles.push(styleName);
               const newText = (currentText + " " + style.prompt).trim();
               $("imgGenPrompt").value = newText;
@@ -366,7 +369,6 @@
           const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name, product_url: productUrl }) });
           const hData = await hRes.json();
           state.currentHistoryId = hData.id;
-          // Persistence auto
           localStorage.setItem('lastHistoryId', hData.id);
           
           state.sessionHeadlines = []; state.sessionAds = []; state.selectedHeadlines = []; state.selectedAds = []; state.headlinesTrans = {}; state.adsTrans = {}; 
@@ -470,7 +472,7 @@
       // 2. NETTOYAGE UI
       state.selectedImgStyles = []; 
       state.manualImgStyles = [];
-      $("imgGenPrompt").value = ""; 
+      $("imgGenPrompt").value = ""; // Vider le chat
       renderImgStylesButtons(); 
 
       // 3. EXECUTION
@@ -550,8 +552,8 @@
       }
 
       savedHtml += state.savedGeneratedImages.map((item, i) => {
-          // Check if selected for styling border
           const isSelected = state.inputImages.includes(item.image);
+          // Bordure Bleue si sélectionné
           const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : '';
 
           return `
@@ -565,6 +567,7 @@
              onclick="window.toggleSavedImg(${i})">
            <img src="data:image/jpeg;base64,${item.image}" style="pointer-events:none;">
            <div class="gen-image-overlay">${item.prompt}</div>
+           
            <button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button>
            <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:red; border:1px solid #ccc;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button>
         </div>
@@ -573,22 +576,23 @@
       $("imgGenSavedResults").innerHTML = savedHtml;
   }
 
-  // --- NOUVELLE FONCTION: SÉLECTION DES IMAGES ENREGISTRÉES ---
+  // --- SELECTION IMAGE ENREGISTRÉE (FIX) ---
   window.toggleSavedImg = (index) => {
+      // Ignorer si on vient de cliquer sur un bouton (géré par stopPropagation normalement, mais sécu)
       const item = state.savedGeneratedImages[index];
       if(!item) return;
       
       const idx = state.inputImages.indexOf(item.image);
       if(idx > -1) {
-          state.inputImages.splice(idx, 1); // Deselect
+          state.inputImages.splice(idx, 1); 
       } else {
-          state.inputImages.push(item.image); // Select
+          state.inputImages.push(item.image);
       }
       renderInputImages();
-      renderGenImages(); // Re-render to show border
+      renderGenImages(); // Rafraîchir pour la bordure bleue
   };
 
-  // --- DRAG AND DROP (FLUIDE VIA CSS) ---
+  // --- DRAG AND DROP (FLUIDE) ---
   let dragSrcIndex = null;
   window.dragStart = (e, i) => { 
       dragSrcIndex = i; 
@@ -749,9 +753,7 @@
 
   window.restore = async (id) => {
     state.currentHistoryId = id;
-    // SAVE ID FOR REFRESH
     localStorage.setItem('lastHistoryId', id);
-    
     renderHistoryUI();
     startLoading();
     try {
@@ -794,7 +796,6 @@
   
   window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
 
-  // LA FONCTION SWITCH TAB
   function switchTab(e) {
     const m = e.target.closest('.modal-content');
     if (!m) return;
