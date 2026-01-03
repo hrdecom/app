@@ -160,7 +160,7 @@
       $("newImgStyleCategory").value = style.category || "";
       $("newImgStyleSubCategory").value = style.subcategory || ""; 
       $("newImgStylePrompt").value = style.prompt;
-      $("newImgStyleMode").value = style.mode || "auto"; // NOUVEAU
+      $("newImgStyleMode").value = style.mode || "auto"; 
       $("newImgStyleFile").value = ""; 
       $("imgStyleFormTitle").textContent = "MODIFIER LE STYLE";
       $("addImgStyleBtn").textContent = "Mettre à jour le Style";
@@ -190,7 +190,7 @@
       const category = $("newImgStyleCategory").value;
       const subcategory = $("newImgStyleSubCategory").value; 
       const prompt = $("newImgStylePrompt").value;
-      const mode = $("newImgStyleMode").value; // NOUVEAU
+      const mode = $("newImgStyleMode").value;
       const fileInput = $("newImgStyleFile");
       if(!name || !prompt) return alert("Nom et Prompt requis.");
 
@@ -274,8 +274,6 @@
   }
 
   function renderStyleBtn(s) {
-      // Pour Auto: on vérifie state.selectedImgStyles
-      // Pour Manuel: on vérifie state.manualImgStyles
       let isActive = false;
       if (s.mode === 'manual') {
           isActive = state.manualImgStyles.includes(s.name);
@@ -283,7 +281,6 @@
           isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
       }
 
-      // Bordure différente pour mode manuel
       const borderStyle = s.mode === 'manual' ? 'border:1px dashed var(--apple-blue);' : 'border:1px solid #ddd;';
 
       return `
@@ -300,36 +297,31 @@
       if(!style) return;
 
       if (style.mode === 'manual') {
-          // LOGIQUE MANUELLE : On injecte/retire le texte et l'image directement dans l'input
+          // LOGIQUE MANUELLE
           const idx = state.manualImgStyles.indexOf(styleName);
           const currentText = $("imgGenPrompt").value;
           
           if (idx > -1) {
-              // DÉSACTIVER MANUEL
               state.manualImgStyles.splice(idx, 1);
-              // 1. Retirer Texte (si présent)
               if (currentText.includes(style.prompt)) {
                   $("imgGenPrompt").value = currentText.replace(style.prompt, "").trim();
               }
-              // 2. Retirer Image Ref (si présente)
               if (style.refImage) {
                   const imgIdx = state.inputImages.indexOf(style.refImage);
                   if (imgIdx > -1) state.inputImages.splice(imgIdx, 1);
                   renderInputImages();
               }
           } else {
-              // ACTIVER MANUEL
               state.manualImgStyles.push(styleName);
-              // 1. Ajouter Texte
-              $("imgGenPrompt").value = (currentText + " " + style.prompt).trim();
-              // 2. Ajouter Image Ref
+              const newText = (currentText + " " + style.prompt).trim();
+              $("imgGenPrompt").value = newText;
               if (style.refImage && !state.inputImages.includes(style.refImage)) {
                   state.inputImages.push(style.refImage);
                   renderInputImages();
               }
           }
       } else {
-          // LOGIQUE AUTO (Classique)
+          // LOGIQUE AUTO
           const idx = state.selectedImgStyles.findIndex(s => s.name === styleName);
           if (idx > -1) { state.selectedImgStyles.splice(idx, 1); } 
           else { state.selectedImgStyles.push(style); }
@@ -431,7 +423,7 @@
                   type: 'manual',
                   prompt: userPrompt,
                   refImage: null,
-                  label: userPrompt // Utilise le prompt utilisateur brut
+                  label: userPrompt
               }];
           }
 
@@ -462,10 +454,10 @@
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
 
-      // 2. NETTOYAGE UI (DEMANDE UTILISATEUR)
+      // 2. NETTOYAGE UI
       state.selectedImgStyles = []; 
-      state.manualImgStyles = []; // Reset visual manual states
-      $("imgGenPrompt").value = ""; // VIDER LE CHAT
+      state.manualImgStyles = [];
+      $("imgGenPrompt").value = ""; // ON VIDE LE CHAT COMME DEMANDÉ
       renderImgStylesButtons(); 
 
       // 3. EXECUTION
@@ -562,45 +554,27 @@
       $("imgGenSavedResults").innerHTML = savedHtml;
   }
 
-  // --- DRAG AND DROP (AMÉLIORÉ: LIVE SWAP) ---
+  // --- DRAG AND DROP (FLUIDE VIA CSS) ---
   let dragSrcIndex = null;
-  
   window.dragStart = (e, i) => { 
       dragSrcIndex = i; 
       e.dataTransfer.effectAllowed = 'move';
       e.target.style.opacity = '0.4';
   };
-  
-  window.allowDrop = (e) => { 
-      e.preventDefault(); // Necessary
-  };
-
-  // NOUVEAU: Swap immédiat au survol pour fluidité
+  window.allowDrop = (e) => { e.preventDefault(); };
   window.dragEnter = (e, targetIndex) => {
       if (dragSrcIndex === null || dragSrcIndex === targetIndex) return;
-      
-      // Swap dans le tableau local
       const item = state.savedGeneratedImages.splice(dragSrcIndex, 1)[0];
       state.savedGeneratedImages.splice(targetIndex, 0, item);
-      
-      // Mise à jour index source pour le prochain swap
       dragSrcIndex = targetIndex;
-      
       renderGenImages();
-      
-      // Ré-appliquer style dragging sur le nouvel élément DOM
       const cards = document.querySelectorAll('#imgGenSavedResults .gen-image-card');
       if(cards[dragSrcIndex]) cards[dragSrcIndex].style.opacity = '0.4';
   };
-
   window.drop = async (e, i) => {
       e.preventDefault();
-      // Reset opacity
-      const cards = document.querySelectorAll('#imgGenSavedResults .gen-image-card');
-      cards.forEach(c => c.style.opacity = '1');
+      document.querySelectorAll('.gen-image-card').forEach(c => c.style.opacity = '1');
       dragSrcIndex = null;
-
-      // Persist order
       if (state.currentHistoryId) {
           try {
               const payload = { id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) };
@@ -611,7 +585,6 @@
       }
   };
 
-  // --- INPUT MANAGEMENT (AJOUTER SAVED/ORIGINAL) ---
   window.addSavedToInput = (index) => {
       const item = state.savedGeneratedImages[index];
       if(item && !state.inputImages.includes(item.image)) {
@@ -680,7 +653,6 @@
           await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
           const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
           if (histItem) histItem.generated_images = payload.generated_images;
-          
           alert("Images enregistrées !");
           renderGenImages();
           document.querySelector('button[data-tab="tab-img-saved"]').click();
@@ -703,237 +675,83 @@
           renderGenImages();
       } catch(e) { alert(e.message); } finally { stopLoading(); }
   };
+
+  async function loadHistory() { 
+      try { 
+          const r = await fetch("/api/history"); 
+          state.historyCache = await r.json(); 
+          renderHistoryUI(); 
+      } catch(e){} 
+  }
+
+  function renderHistoryUI() {
+    const filtered = (state.historyCache || []).filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
+    const start = (state.currentPage - 1) * 5; 
+    const pag = filtered.slice(start, start + 5);
+    $("historyList").innerHTML = pag.map(item => `
+        <div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})">
+            <img src="data:image/jpeg;base64,${item.image}" class="history-img">
+            <div style="flex:1">
+                <h4>${item.title || "Sans titre"}</h4>
+            </div>
+            <button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button>
+        </div>
+    `).join("");
+    renderPagination(Math.ceil(filtered.length / 5));
+  }
+
+  function renderPagination(total) {
+    const p = $("pagination"); 
+    p.innerHTML = ""; 
+    if(total <= 1) return;
+    for(let i=1; i<=total; i++) {
+      const b = document.createElement("button"); 
+      b.textContent = i; 
+      if(i === state.currentPage) b.className = "active";
+      b.onclick = () => { state.currentPage = i; renderHistoryUI(); }; 
+      p.appendChild(b);
+    }
+  }
+
+  window.restore = async (id) => {
+    state.currentHistoryId = id;
+    renderHistoryUI();
+    startLoading();
+    try {
+        const res = await fetch(`/api/history?id=${id}`);
+        const item = await res.json();
+        state.sessionHeadlines = []; state.sessionAds = [];
+        state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; 
+        state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
+        state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; 
+        state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
+        state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
+        state.sessionGeneratedImages = []; 
+        $("titleText").textContent = item.title; 
+        $("descText").textContent = item.description; 
+        $("productUrlInput").value = item.product_url || "";
+        $("previewImg").src = `data:image/jpeg;base64,${item.image}`; 
+        state.imageBase64 = item.image; 
+        $("preview").classList.remove("hidden");
+        $("dropPlaceholder").style.display = "none"; 
+        $("generateBtn").disabled = false;
+        state.inputImages = [item.image]; 
+        renderInputImages(); 
+        renderGenImages();
+    } catch(e) {
+        alert("Erreur chargement: " + e.message);
+    } finally {
+        stopLoading();
+    }
+  };
+
+  window.deleteItem = async (id) => { 
+      if(!confirm("Supprimer ?")) return; 
+      await fetch(`/api/history?id=${id}`, { method: "DELETE" }); 
+      if(state.currentHistoryId == id) state.currentHistoryId = null; 
+      loadHistory(); 
+  };
   
-  /* --- FIN LOGIQUE IMAGES --- */
-
-  const renderHeadlines = () => {
-    const list = state.sessionHeadlines || [];
-    const pag = list.slice((state.hlPage-1)*12, state.hlPage*12);
-    $("headlinesResults").innerHTML = pag.map((text, i) => `<div class="headline-item" onclick="toggleItemSelect('hl', this)"><input type="checkbox"><span class="headline-text">${text}</span></div>`).join("");
-    renderPaginationLoc('hl');
-  };
-  const renderAds = () => {
-    const list = state.sessionAds || [];
-    const pag = list.slice((state.adPage-1)*12, state.adPage*12);
-    let html = "", lastStyle = "";
-    pag.forEach((item, i) => {
-      if (item.style !== lastStyle) { html += `<div style="margin: 10px 0 5px; font-size:11px; font-weight:bold; color:var(--apple-blue); border-bottom:1px solid #eee; padding-bottom:3px;">${item.style.toUpperCase()}</div>`; lastStyle = item.style; }
-      html += `<div class="headline-item" onclick="toggleItemSelect('ad', this)"><input type="checkbox"><div class="headline-text" style="white-space:pre-wrap;">${item.text}</div></div>`;
-    });
-    $("adsResults").innerHTML = html;
-    renderPaginationLoc('ad');
-  };
-
-  window.toggleItemSelect = (type, el) => {
-    const cb = el.querySelector('input'); cb.checked = !cb.checked; el.classList.toggle('selected', cb.checked);
-    const containerId = type === 'hl' ? 'headlinesResults' : 'adsResults';
-    const hasSelected = document.querySelectorAll(`#${containerId} .headline-item.selected`).length > 0;
-    if(type === 'hl') $("similarActions").classList.toggle('hidden', !hasSelected); else $("similarAdsActions").classList.toggle('hidden', !hasSelected);
-  };
-
-  function renderPaginationLoc(type) {
-    const list = type === 'hl' ? state.sessionHeadlines : state.sessionAds;
-    const container = type === 'hl' ? $("headlinesLocalPagination") : $("adsLocalPagination");
-    const total = Math.ceil((list || []).length / 12); container.innerHTML = ""; if (total <= 1) return;
-    for (let i = 1; i <= total; i++) {
-      const b = document.createElement("button"); b.textContent = i; if (i === (type === 'hl' ? state.hlPage : state.adPage)) b.className = "active";
-      b.onclick = () => { if(type === 'hl') state.hlPage = i; else state.adPage = i; type === 'hl' ? renderHeadlines() : renderAds(); }; container.appendChild(b);
-    }
-  }
-
-  const toggleMenu = (id) => $(id).classList.toggle('show');
-
-  function renderLangList(type, containerId) {
-    $(containerId).innerHTML = `
-      <div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:11px; font-weight:bold;">SÉLECTION MULTIPLE</span>
-        <button class="primary-btn" style="padding:4px 8px; font-size:10px;" onclick="window.runBatchTranslation('${type}')">Traduire</button>
-      </div>
-      <div style="max-height:300px; overflow-y:auto;">
-        ${Object.keys(LANGUAGES).map(l => `
-          <div class="lang-opt" style="display:flex; align-items:center; gap:10px;" onclick="event.stopPropagation();">
-            <input type="checkbox" class="lang-cb-${type}" value="${l}" id="cb-${type}-${l}">
-            <label for="cb-${type}-${l}" style="flex:1; cursor:pointer;">${l} (${LANGUAGES[l]})</label>
-          </div>
-        `).join("")}
-      </div>`;
-  }
-
-  $("translateHlMenuBtn").onclick = (e) => { e.stopPropagation(); if (!state.selectedHeadlines.length) return alert("Enregistrez d'abord."); renderLangList("hl", "hlLangList"); toggleMenu("hlLangList"); };
-  $("translateAdMenuBtn").onclick = (e) => { e.stopPropagation(); if (!state.selectedAds.length) return alert("Enregistrez d'abord."); renderLangList("ad", "adLangList"); toggleMenu("adLangList"); };
-
-  window.runBatchTranslation = async (type) => {
-    const selected = Array.from(document.querySelectorAll(`.lang-cb-${type}:checked`)).map(cb => cb.value);
-    if (!selected.length) return alert("Sélectionnez au moins une langue.");
-    document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
-    startLoading();
-    try {
-      for (const lang of selected) { await processTranslation(type, lang, false); }
-      alert("Traductions terminées !"); renderTranslationTabs(type);
-    } catch(e) { alert("Erreur: " + e.message); } finally { stopLoading(); }
-  };
-
-  window.processTranslation = async (type, lang, singleCall = true) => {
-    const itemsToTranslate = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
-    if (!(itemsToTranslate || []).length) return;
-    const targetUrl = formatLangUrl($("productUrlInput").value, LANGUAGES[lang]);
-
-    if (singleCall) startLoading();
-    let infoToTranslate = (type === 'ad') ? { title1: $("titleText").textContent, title2: $("titleText").textContent + " - Special Offer", title3: "Gift Idea - " + $("titleText").textContent, title4: $("titleText").textContent + " - Valentine's Day Gift Idea", sub: "Free Shipping Worldwide Today" } : null;
-
-    try {
-      const res = await fetch("/api/generate", { 
-        method: "POST", 
-        body: JSON.stringify({ 
-          action: "translate", itemsToTranslate, infoToTranslate, targetLang: lang, config: state.config, 
-          image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value, 
-          product_url: targetUrl 
-        }) 
-      });
-      const data = await res.json();
-      if (type === 'hl') { state.headlinesTrans[lang] = { items: data.translated_items }; } 
-      else { state.adsTrans[lang] = { items: data.translated_items, info: data.translated_info }; }
-
-      const payload = { id: state.currentHistoryId, [type==='hl'?'headlines_trans':'ads_trans']: JSON.stringify(type==='hl' ? state.headlinesTrans : state.adsTrans) };
-      await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
-      const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
-      if (histItem) histItem[type==='hl'?'headlines_trans':'ads_trans'] = payload[type==='hl'?'headlines_trans':'ads_trans'];
-
-      if (singleCall) { renderTranslationTabs(type); const tabBtn = document.querySelector(`button[data-tab="tab-${type}-${lang.replace(/\s/g,'')}"]`); if(tabBtn) tabBtn.click(); }
-    } catch(e) { if (singleCall) alert("Erreur Trad: " + e.message); else throw e; } 
-    finally { if (singleCall) stopLoading(); }
-  };
-
-  function renderTranslationTabs(type) {
-    const tabs = type === 'hl' ? $("headlinesTabs") : $("adsTabs");
-    const container = type === 'hl' ? $("headlinesTabContainer") : $("adsTabContainer");
-    let transData = type === 'hl' ? state.headlinesTrans : state.adsTrans;
-
-    let hasChanges = false;
-    Object.keys(transData).forEach(lang => {
-      if (!transData[lang].items || transData[lang].items.length === 0) {
-        delete transData[lang];
-        hasChanges = true;
-      }
-    });
-
-    if (hasChanges) {
-        const payload = { id: state.currentHistoryId, [type==='hl'?'headlines_trans':'ads_trans']: JSON.stringify(transData) };
-        fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
-    }
-
-    tabs.querySelectorAll(".lang-tab").forEach(t => t.remove());
-    container.querySelectorAll(".lang-tab-content").forEach(c => c.remove());
-
-    Object.keys(transData || {}).forEach(lang => {
-      const tabId = `tab-${type}-${lang.replace(/\s/g,'')}`;
-      const btn = document.createElement("button"); btn.className = "tab-link lang-tab"; btn.textContent = lang; btn.dataset.tab = tabId; btn.onclick = (e) => switchTab(e); tabs.appendChild(btn);
-      const content = document.createElement("div"); content.id = tabId; content.className = "tab-content hidden lang-tab-content";
-      
-      let html = `<div class="headlines-results">` + (transData[lang].items || []).map(t => `<div class="headline-item no-hover"><span class="headline-text" style="white-space:pre-wrap;">${t}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${t.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
-
-      if (type === 'ad' && transData[lang].info) {
-          const info = transData[lang].info; 
-          const langUrl = formatLangUrl($("productUrlInput").value, LANGUAGES[lang]);
-          html += `<div class="ads-info-block">` + [`TITRE 1|${info.title1}`, `TITRE 2|${info.title2}`, `TITRE 3|${info.title3}`, `TITRE 4|${info.title4}`, `SUB|${info.sub}`, `URL|${langUrl}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("") + `</div>`;
-      }
-      content.innerHTML = html; container.appendChild(content);
-    });
-  }
-
-  function switchTab(e) {
-    const m = e.target.closest('.modal-content');
-    m.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active"));
-    m.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
-    e.target.classList.add("active"); $(e.target.dataset.tab).classList.remove("hidden");
-  }
-
-  window.saveSelections = async (type) => {
-    if (!state.currentHistoryId) return;
-    const containerId = type === 'hl' ? 'headlinesResults' : 'adsResults';
-    const items = document.querySelectorAll(`#${containerId} .headline-item.selected .headline-text`);
-    const sel = Array.from(items).map(it => it.innerText.trim());
-    if (sel.length === 0) return alert("Sélectionnez des éléments.");
-    if (type === 'hl') { state.selectedHeadlines = [...new Set([...(state.selectedHeadlines || []), ...sel])]; } 
-    else { state.selectedAds = [...new Set([...(state.selectedAds || []), ...sel])]; }
-    startLoading();
-    try {
-      const val = JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds);
-      await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: val }) });
-      const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
-      if (histItem) histItem[type==='hl'?'headlines':'ad_copys'] = val;
-      type === 'hl' ? renderSavedHl() : renderSavedAds();
-      alert("Enregistré");
-    } catch(e) { alert(e.message); } finally { stopLoading(); }
-  };
-
-  window.editSavedItem = (index, type) => {
-      const selector = type === 'hl' ? `#hl-text-${index}` : `#ad-text-${index}`;
-      const el = document.querySelector(selector);
-      el.contentEditable = true; el.classList.add('editing-field'); el.focus();
-      el.onblur = async () => {
-          el.contentEditable = false; el.classList.remove('editing-field');
-          const newText = el.innerText.trim();
-          if (type === 'hl') state.selectedHeadlines[index] = newText;
-          else state.selectedAds[index] = newText;
-          const val = JSON.stringify(type === 'hl' ? state.selectedHeadlines : state.selectedAds);
-          await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: val }) });
-          const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
-          if (histItem) histItem[type==='hl'?'headlines':'ad_copys'] = val;
-      };
-  };
-
-  const renderSavedHl = () => {
-    const list = state.selectedHeadlines || [];
-    $("headlinesSavedList").innerHTML = list.map((h, i) => `
-      <div class="headline-item no-hover">
-        <span class="headline-text" id="hl-text-${i}">${h}</span>
-        <div style="display:flex;gap:5px;">
-          <button class="icon-btn-small" onclick="window.editSavedItem(${i}, 'hl')">✏️</button>
-          <button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/'/g,"\\'")}\`)">📋</button>
-          <button class="icon-btn-small" style="color:red" onclick="deleteSaved('hl',${i})">×</button>
-        </div>
-      </div>`).join("");
-  };
-
-  const renderSavedAds = () => {
-    const list = state.selectedAds || [];
-    $("adsSavedList").innerHTML = list.map((h, i) => `
-      <div class="headline-item no-hover" style="flex-direction:column;align-items:flex-start;">
-        <div style="display:flex;justify-content:space-between;width:100%">
-          <strong style="font-size:10px;color:var(--apple-blue)">PRIMARY ${i+1}</strong>
-          <div style="display:flex;gap:5px;">
-            <button class="icon-btn-small" onclick="window.editSavedItem(${i}, 'ad')">✏️</button>
-            <button class="icon-btn-small" onclick="window.copyToClip(\`${h.replace(/\n/g,"\\n").replace(/'/g,"\\'")}\`)">📋</button>
-            <button class="icon-btn-small" style="color:red" onclick="deleteSaved('ad',${i})">×</button>
-          </div>
-        </div>
-        <span class="headline-text" id="ad-text-${i}" style="white-space:pre-wrap;">${h}</span>
-      </div>`).join("");
-    const n = $("titleText").textContent;
-    const u = formatLangUrl($("productUrlInput").value, "en.");
-    $("adsDefaultInfoBlock").innerHTML = [`TITRE 1|${n}`, `TITRE 2|${n} - Special Offer`, `TITRE 3|Gift Idea - ${n}`, `TITRE 4|${n} - Valentine's Day Gift Idea`, `SUB|Free Shipping Worldwide Today`, `URL|${u}`].map(x => `<div class="ads-info-row"><span><span class="ads-info-label">${x.split('|')[0]}</span>${x.split('|')[1]}</span><button class="icon-btn-small" onclick="window.copyToClip(\`${x.split('|')[1].replace(/'/g,"\\'")}\`)">📋</button></div>`).join("");
-  };
-
-  window.deleteSaved = async (type, i) => {
-    if(!confirm("Supprimer ?")) return;
-    let list = type === 'hl' ? state.selectedHeadlines : state.selectedAds;
-    let trans = type === 'hl' ? state.headlinesTrans : state.adsTrans;
-    if (!list) return;
-    list.splice(i, 1);
-    Object.keys(trans || {}).forEach(lang => { if (trans[lang].items && trans[lang].items[i] !== undefined) trans[lang].items.splice(i, 1); });
-    startLoading();
-    try {
-      const payload = { id: state.currentHistoryId, [type==='hl'?'headlines':'ad_copys']: JSON.stringify(list), [type==='hl'?'headlines_trans':'ads_trans']: JSON.stringify(trans) };
-      await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
-      const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
-      if (histItem) { histItem[type === 'hl' ? 'headlines' : 'ad_copys'] = payload[type === 'hl' ? 'headlines' : 'ad_copys']; histItem[type === 'hl' ? 'headlines_trans' : 'ads_trans'] = payload[type === 'hl' ? 'headlines_trans' : 'ads_trans']; }
-      if (type === 'hl') { state.selectedHeadlines = list; renderSavedHl(); } else { state.selectedAds = list; renderSavedAds(); }
-      renderTranslationTabs(type);
-    } catch(e) { alert("Erreur suppression: " + e.message); } finally { stopLoading(); }
-  };
-
-  window.deleteItem = async (id) => { if(!confirm("Supprimer ?")) return; await fetch(`/api/history?id=${id}`, { method: "DELETE" }); if(state.currentHistoryId == id) state.currentHistoryId = null; loadHistory(); };
   window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
 
   function init() {
@@ -958,7 +776,6 @@
     $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
     $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
     
-    // IMAGE GEN
     $("openImgGenBtn").onclick = () => {
         if (!state.imageBase64) return alert("Veuillez d'abord uploader une image principale.");
         if (state.inputImages.length === 0) state.inputImages = [state.imageBase64];
