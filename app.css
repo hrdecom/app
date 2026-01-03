@@ -120,14 +120,18 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .tree-header.drag-over-center { background: #E1F0FF; z-index: 10; }
 
 /* Hierarchy Styling */
-.type-category > .tree-header { background: transparent; padding: 0 0 8px 16px; margin-top: 15px; min-height: 30px; }
+.type-category > .tree-header { background: #EFEFF4; padding: 12px 16px; margin-top: 20px; min-height: 30px; border-radius: 8px 8px 0 0; border: 1px solid #e5e5e5; border-bottom: none; }
 .type-category > .tree-header::after { display: none; }
 .type-category > .tree-header .t-label { font-size: 13px; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: -0.2px; }
-.type-category > .tree-children { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.type-category > .tree-children { background: #fff; border-radius: 0 0 12px 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid #e5e5e5; border-top: none; }
 
 .type-group > .tree-header { padding-left: 16px; background: #fff; }
 .type-folder > .tree-header { padding-left: 35px; } 
 .type-style > .tree-header { padding-left: 35px; }
+
+/* Indentation spécifique pour les enfants d'un folder (Bouton Multiple) */
+.type-folder > .tree-children .tree-header { padding-left: 60px; background: #fcfcfc; }
+.type-folder > .tree-children .tree-header::after { left: 60px; }
 
 /* Icon Styles with SVGs */
 .icon-svg { width: 22px; height: 22px; margin-right: 12px; fill: currentColor; display: flex; align-items: center; justify-content: center; }
@@ -143,6 +147,8 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .tree-header:hover .t-actions { opacity: 1; }
 .action-btn-ios { width: 28px; height: 28px; border-radius: 50%; border: none; background: #e5e5ea; color: #007AFF; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
 .action-btn-ios:hover { background: #007AFF; color: #fff; }
+.action-btn-ios.btn-delete { color: #FF3B30; background: #fff0f0; }
+.action-btn-ios.btn-delete:hover { background: #FF3B30; color: #fff; }
 .action-btn-ios svg { width: 14px; height: 14px; fill: currentColor; }
 
 /* STUDIO ACCORDIONS */
