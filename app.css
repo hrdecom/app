@@ -172,3 +172,11 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .studio-group-header:hover { background: #f5f5f7; }
 .studio-group-content { padding: 15px; border-top: 1px solid #eee; display: flex; flex-wrap: wrap; gap: 8px; }
 .studio-group-content.hidden { display: none; }
+
+/* FIX: Taille de l'icône dans les boutons du Studio Gemini */
+#imgGenStylesContainer button svg,
+.studio-group-content button svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+}
