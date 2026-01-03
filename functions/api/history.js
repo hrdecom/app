@@ -3,23 +3,24 @@ export async function onRequest(context) {
   const db = env.DB;
   const url = new URL(request.url);
 
-  // --- RECUPERATION (GET) ---
+  // --- RÉCUPÉRATION (GET) ---
   if (request.method === "GET") {
     const id = url.searchParams.get("id");
 
     if (id) {
-        // CAS 1 : Restauration complète (On charge tout, y compris les images générées)
+        // CAS 1 : Charger UN SEUL produit complet (avec les images lourdes)
+        // C'est ce qui est appelé quand on clique sur un historique ou qu'on restaure la session
         const item = await db.prepare("SELECT * FROM history WHERE id = ?").bind(id).first();
         return new Response(JSON.stringify(item), { headers: { "content-type": "application/json" } });
     } else {
-        // CAS 2 : Liste latérale (On charge LEGER : pas d'images générées, pas de textes longs)
-        // Cela empêche l'application de ramer quand il y a beaucoup d'historique
+        // CAS 2 : Charger la LISTE latérale (Version légère)
+        // On EXCLUT 'generated_images' pour que l'appli reste fluide
         const { results } = await db.prepare("SELECT id, title, description, image, product_name FROM history ORDER BY id DESC").all();
         return new Response(JSON.stringify(results), { headers: { "content-type": "application/json" } });
     }
   }
 
-  // --- CREATION (POST) ---
+  // --- CRÉATION (POST) ---
   if (request.method === "POST") {
     const { title, description, image, product_name, headlines, product_url, ad_copys } = await request.json();
     const result = await db.prepare(
@@ -34,12 +35,12 @@ export async function onRequest(context) {
       ad_copys || "[]", 
       "{}", 
       "{}",
-      "[]" // Champ pour les images générées
+      "[]" // Initialisation du tableau d'images vide
     ).run();
     return new Response(JSON.stringify({ id: result.meta.last_row_id }), { headers: { "content-type": "application/json" } });
   }
 
-  // --- MISE A JOUR (PATCH) ---
+  // --- MISE À JOUR (PATCH) ---
   if (request.method === "PATCH") {
     const body = await request.json();
     const { id } = body;
@@ -48,7 +49,7 @@ export async function onRequest(context) {
 
     const updates = [];
     const values = [];
-    // On autorise explicitement la mise à jour de 'generated_images'
+    // On autorise la sauvegarde de generated_images
     const fields = ['title', 'description', 'headlines', 'product_url', 'ad_copys', 'headlines_trans', 'ads_trans', 'generated_images'];
 
     for (const field of fields) {
