@@ -129,15 +129,15 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .type-folder > .tree-header { padding-left: 35px; } 
 .type-style > .tree-header { padding-left: 35px; }
 
-/* Indentation spécifique pour les enfants d'un folder (Bouton Multiple) */
+/* INDENTATION VISUELLE */
 .type-folder > .tree-children .tree-header { padding-left: 60px; background: #fcfcfc; }
 .type-folder > .tree-children .tree-header::after { left: 60px; }
 
-/* Icon Styles with SVGs */
+/* Icon Styles */
 .icon-svg { width: 22px; height: 22px; margin-right: 12px; fill: currentColor; display: flex; align-items: center; justify-content: center; }
 .type-group .icon-svg { color: #8E8E93; }
 .type-folder .icon-svg { color: #007AFF; }
-.type-style .icon-svg { color: #FF9500; } /* Orange pour images/styles */
+.type-style .icon-svg { color: #FF9500; }
 
 .t-label { font-size: 16px; color: #000; font-weight: 400; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .type-group > .tree-header .t-label { font-weight: 600; }
