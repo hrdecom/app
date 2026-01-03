@@ -11,7 +11,7 @@
     promptTranslate: "Professional luxury translator. TASK: Translate into {targetLang}. URL: {product_url}",
     headlineStyles: [{ name: "POV", prompt: "POV perspective." }],
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }],
-    imgStyles: [], // [{ name, category, subcategory, prompt, refImage, mode }]
+    imgStyles: [], 
     imgCategories: ["Packaging", "Ambiance", "Mannequin"]
   };
 
@@ -261,13 +261,15 @@
 
       let html = "";
 
+      // 1. Boutons sans sous-catégorie
       if(noSub.length > 0) {
-          html += `<div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:5px;">` + noSub.map(s => renderStyleBtn(s)).join("") + `</div>`;
+          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; padding-bottom:5px;">` + noSub.map(s => renderStyleBtn(s)).join("") + `</div>`;
       }
 
+      // 2. Boutons groupés
       Object.keys(groups).forEach(subKey => {
-          html += `<div style="font-size:10px; font-weight:bold; color:#888; margin-top:5px; margin-bottom:2px;">${subKey.toUpperCase()}</div>`;
-          html += `<div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:5px;">` + groups[subKey].map(s => renderStyleBtn(s)).join("") + `</div>`;
+          html += `<div style="font-size:10px; font-weight:bold; color:#888; margin-top:8px; margin-bottom:4px; text-transform:uppercase; border-bottom:1px solid #f5f5f5; padding-bottom:2px;">${subKey}</div>`;
+          html += `<div style="display:flex; flex-wrap:wrap; gap:8px; padding-bottom:5px;">` + groups[subKey].map(s => renderStyleBtn(s)).join("") + `</div>`;
       });
 
       container.innerHTML = html;
@@ -281,12 +283,17 @@
           isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
       }
 
-      const borderStyle = s.mode === 'manual' ? 'border:1px dashed var(--apple-blue);' : 'border:1px solid #ddd;';
+      // Design amélioré : Plus propre, style "Tag"
+      const borderStyle = s.mode === 'manual' ? 'border:1px dashed var(--apple-blue);' : 'border:1px solid #eee;';
+      const bgColor = isActive ? 'var(--apple-blue)' : '#f9f9f9';
+      const color = isActive ? '#fff' : '#333';
 
       return `
-         <button class="style-tag ${isActive ? 'selected' : ''}" onclick="window.toggleImgStyle('${s.name}')" style="display:flex; align-items:center; gap:5px; flex-shrink:0; ${borderStyle} ${isActive ? 'background:var(--apple-blue); color:white;' : 'background:#fff;'}">
-            ${s.refImage ? '<span style="width:12px; height:12px; background:#ccc; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
-            ${s.name} ${s.mode === 'manual' ? '📝' : ''}
+         <button class="style-tag" onclick="window.toggleImgStyle('${s.name}')" 
+            style="display:flex; align-items:center; gap:6px; flex-shrink:0; ${borderStyle} background:${bgColor}; color:${color}; padding:6px 12px; border-radius:20px; transition: all 0.2s;">
+            ${s.refImage ? '<span style="width:14px; height:14px; background:#ccc; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
+            <span style="font-size:11px; font-weight:500;">${s.name}</span>
+            ${s.mode === 'manual' ? '<span style="font-size:10px;">📝</span>' : ''}
          </button>
       `;
   }
@@ -302,19 +309,23 @@
           const currentText = $("imgGenPrompt").value;
           
           if (idx > -1) {
+              // DÉSACTIVER (RETIRER LE TEXTE)
               state.manualImgStyles.splice(idx, 1);
               if (currentText.includes(style.prompt)) {
                   $("imgGenPrompt").value = currentText.replace(style.prompt, "").trim();
               }
+              // RETIRER IMAGE REF
               if (style.refImage) {
                   const imgIdx = state.inputImages.indexOf(style.refImage);
                   if (imgIdx > -1) state.inputImages.splice(imgIdx, 1);
                   renderInputImages();
               }
           } else {
+              // ACTIVER (AJOUTER LE TEXTE)
               state.manualImgStyles.push(styleName);
               const newText = (currentText + " " + style.prompt).trim();
               $("imgGenPrompt").value = newText;
+              // AJOUTER IMAGE REF
               if (style.refImage && !state.inputImages.includes(style.refImage)) {
                   state.inputImages.push(style.refImage);
                   renderInputImages();
@@ -355,6 +366,9 @@
           const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name, product_url: productUrl }) });
           const hData = await hRes.json();
           state.currentHistoryId = hData.id;
+          // Persistence auto
+          localStorage.setItem('lastHistoryId', hData.id);
+          
           state.sessionHeadlines = []; state.sessionAds = []; state.selectedHeadlines = []; state.selectedAds = []; state.headlinesTrans = {}; state.adsTrans = {}; 
           state.savedGeneratedImages = []; state.sessionGeneratedImages = []; state.inputImages = [state.imageBase64]; renderInputImages(); renderGenImages();
           await loadHistory();
@@ -456,7 +470,7 @@
       // 2. NETTOYAGE UI
       state.selectedImgStyles = []; 
       state.manualImgStyles = [];
-      $("imgGenPrompt").value = ""; // Clean input
+      $("imgGenPrompt").value = ""; 
       renderImgStylesButtons(); 
 
       // 3. EXECUTION
@@ -535,23 +549,44 @@
           </div>`;
       }
 
-      savedHtml += state.savedGeneratedImages.map((item, i) => `
+      savedHtml += state.savedGeneratedImages.map((item, i) => {
+          // Check if selected for styling border
+          const isSelected = state.inputImages.includes(item.image);
+          const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : '';
+
+          return `
         <div class="gen-image-card" 
+             style="${borderStyle}"
              draggable="true" 
              ondragstart="dragStart(event, ${i})" 
              ondrop="drop(event, ${i})" 
              ondragenter="dragEnter(event, ${i})"
-             ondragover="allowDrop(event)">
+             ondragover="allowDrop(event)"
+             onclick="window.toggleSavedImg(${i})">
            <img src="data:image/jpeg;base64,${item.image}" style="pointer-events:none;">
            <div class="gen-image-overlay">${item.prompt}</div>
-           <button class="icon-btn-small" style="position:absolute; top:5px; right:55px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInput(${i})" title="Utiliser">＋</button>
            <button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button>
            <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:red; border:1px solid #ccc;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button>
         </div>
-      `).join("");
+      `}).join("");
       
       $("imgGenSavedResults").innerHTML = savedHtml;
   }
+
+  // --- NOUVELLE FONCTION: SÉLECTION DES IMAGES ENREGISTRÉES ---
+  window.toggleSavedImg = (index) => {
+      const item = state.savedGeneratedImages[index];
+      if(!item) return;
+      
+      const idx = state.inputImages.indexOf(item.image);
+      if(idx > -1) {
+          state.inputImages.splice(idx, 1); // Deselect
+      } else {
+          state.inputImages.push(item.image); // Select
+      }
+      renderInputImages();
+      renderGenImages(); // Re-render to show border
+  };
 
   // --- DRAG AND DROP (FLUIDE VIA CSS) ---
   let dragSrcIndex = null;
@@ -714,6 +749,9 @@
 
   window.restore = async (id) => {
     state.currentHistoryId = id;
+    // SAVE ID FOR REFRESH
+    localStorage.setItem('lastHistoryId', id);
+    
     renderHistoryUI();
     startLoading();
     try {
@@ -747,13 +785,16 @@
   window.deleteItem = async (id) => { 
       if(!confirm("Supprimer ?")) return; 
       await fetch(`/api/history?id=${id}`, { method: "DELETE" }); 
-      if(state.currentHistoryId == id) state.currentHistoryId = null; 
+      if(state.currentHistoryId == id) {
+          state.currentHistoryId = null; 
+          localStorage.removeItem('lastHistoryId');
+      }
       loadHistory(); 
   };
   
   window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
 
-  // LA FONCTION MANQUANTE QUI CAUSAIT LE BUG
+  // LA FONCTION SWITCH TAB
   function switchTab(e) {
     const m = e.target.closest('.modal-content');
     if (!m) return;
@@ -786,7 +827,6 @@
     $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
     $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
     
-    // IMAGE GEN
     $("openImgGenBtn").onclick = () => {
         if (!state.imageBase64) return alert("Veuillez d'abord uploader une image principale.");
         if (state.inputImages.length === 0) state.inputImages = [state.imageBase64];
@@ -837,7 +877,13 @@
     };
     $("removeImage").onclick = (e) => { e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null; $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block"; $("generateBtn").disabled = true; };
     $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
-    loadConfig(); loadHistory();
+    loadConfig(); 
+    
+    // RESTORE LAST SESSION IF EXISTS
+    const lastId = localStorage.getItem('lastHistoryId');
+    loadHistory().then(() => {
+        if(lastId) window.restore(lastId);
+    });
   }
 
   init();
