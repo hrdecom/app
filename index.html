@@ -22,7 +22,7 @@
         <button class="tab-link" data-tab="tab-prompts">Prompts IA</button>
         <button class="tab-link" data-tab="tab-headlines-config">Headlines</button>
         <button class="tab-link" data-tab="tab-ads-config">Ad Copys</button>
-        <button class="tab-link" data-tab="tab-img-styles">Studio Images (Arbre)</button>
+        <button class="tab-link" data-tab="tab-img-styles">Studio Images</button>
         <button class="tab-link" data-tab="tab-translate-config">Traduction</button>
         <button class="tab-link" data-tab="tab-blacklist">Blacklist</button>
       </div>
@@ -52,38 +52,47 @@
                 <button id="addCategoryBtn" class="primary-btn small-btn">+ Catégorie</button>
              </div>
              <div class="tree-editor-container" id="treeEditor">
-                <div style="padding:20px; text-align:center; color:#888;">Chargement de la structure...</div>
+                <div style="padding:40px; text-align:center; color:#999;">Chargement de la structure...</div>
              </div>
 
-             <div id="nodeEditorOverlay" class="hidden" style="position:absolute; inset:0; background:rgba(255,255,255,0.95); z-index:10; display:flex; flex-direction:column; padding:20px;">
-                <h3 id="nodeEditorTitle" style="margin-top:0;">Éditer</h3>
+             <div id="nodeEditorOverlay" class="hidden" style="position:absolute; inset:0; background:rgba(255,255,255,0.98); z-index:10; display:flex; flex-direction:column; padding:30px;">
+                <h2 id="nodeEditorTitle" style="margin-top:0; font-size:20px; color:#1d1d1f;">Éditer</h2>
                 <input type="hidden" id="editNodeId">
                 <input type="hidden" id="editNodeType">
                 
-                <label>Nom</label>
-                <input type="text" id="editNodeName" class="settings-select">
+                <div class="setting-group">
+                    <label>Nom de l'élément</label>
+                    <input type="text" id="editNodeName" class="settings-select" placeholder="Ex: Or Jaune">
+                </div>
                 
                 <div id="editPromptContainer" class="hidden">
-                    <label>Prompt IA</label>
-                    <textarea id="editNodePrompt" rows="3" class="settings-select"></textarea>
-                    
-                    <label>Image de référence (Optionnel)</label>
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <div id="editNodeImgPreview" style="width:40px; height:40px; background:#eee; border-radius:6px; overflow:hidden;"></div>
-                        <input type="file" id="editNodeFile" accept="image/*">
+                    <div class="setting-group">
+                        <label>Prompt IA</label>
+                        <textarea id="editNodePrompt" rows="4" class="settings-select" placeholder="Instructions pour l'IA..."></textarea>
                     </div>
                     
-                    <label>Mode</label>
-                    <select id="editNodeMode" class="settings-select">
-                        <option value="auto">⚡ Auto (Envoi direct)</option>
-                        <option value="manual">📝 Manuel (Ajout texte)</option>
-                    </select>
+                    <div class="setting-group">
+                        <label>Image de référence</label>
+                        <div style="display:flex; gap:15px; align-items:center;">
+                            <div id="editNodeImgPreview" style="width:50px; height:50px; background:#f5f5f7; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; color:#ccc; font-size:10px;">Aucune</div>
+                            <input type="file" id="editNodeFile" accept="image/*" style="font-size:12px;">
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <label>Mode d'action</label>
+                        <select id="editNodeMode" class="settings-select">
+                            <option value="auto">⚡ Auto (Envoie direct)</option>
+                            <option value="manual">📝 Manuel (Ajoute au texte)</option>
+                        </select>
+                    </div>
                 </div>
 
-                <div style="margin-top:20px; display:flex; gap:10px;">
-                    <button id="saveNodeBtn" class="primary-btn">Valider</button>
+                <div style="margin-top:auto; display:flex; gap:10px; padding-top:20px; border-top:1px solid #eee;">
+                    <button id="deleteNodeBtn" class="secondary-btn" style="color:var(--apple-red); border-color:var(--apple-red);">Supprimer</button>
+                    <div style="flex:1;"></div>
                     <button id="cancelNodeBtn" class="secondary-btn">Annuler</button>
-                    <button id="deleteNodeBtn" class="secondary-btn" style="color:red; margin-left:auto;">Supprimer</button>
+                    <button id="saveNodeBtn" class="primary-btn">Enregistrer</button>
                 </div>
              </div>
           </div>
