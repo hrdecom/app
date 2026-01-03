@@ -22,7 +22,7 @@
         <button class="tab-link" data-tab="tab-prompts">Prompts IA</button>
         <button class="tab-link" data-tab="tab-headlines-config">Headlines</button>
         <button class="tab-link" data-tab="tab-ads-config">Ad Copys</button>
-        <button class="tab-link" data-tab="tab-img-styles">Styles Images</button>
+        <button class="tab-link" data-tab="tab-img-styles">Studio Images (Arbre)</button>
         <button class="tab-link" data-tab="tab-translate-config">Traduction</button>
         <button class="tab-link" data-tab="tab-blacklist">Blacklist</button>
       </div>
@@ -46,69 +46,46 @@
             <label>Boutons de Styles Ads</label><div id="adStyleButtonsEditor"></div><button id="addAdStyleBtn" class="secondary-btn">+ Ajouter style</button>
           </div>
 
-          <div id="tab-img-styles" class="tab-content hidden">
-             
-             <div class="config-section">
-                <label>1. GROUPES (Sections Visuelles)</label>
-                <div id="imgGroupsList" class="tags-container"></div>
-                <div style="display:flex; gap:10px; margin-top:5px;">
-                   <input type="text" id="newImgGroupInput" placeholder="Nouveau groupe (ex: Couleurs)" style="flex:1;">
-                   <button id="addImgGroupBtn" class="secondary-btn">+ Créer Groupe</button>
-                </div>
+          <div id="tab-img-styles" class="tab-content hidden" style="padding:0;">
+             <div class="tree-toolbar">
+                <input type="text" id="newCatName" placeholder="Nouvelle Catégorie..." style="flex:1;">
+                <button id="addCategoryBtn" class="primary-btn small-btn">+ Catégorie</button>
+             </div>
+             <div class="tree-editor-container" id="treeEditor">
+                <div style="padding:20px; text-align:center; color:#888;">Chargement de la structure...</div>
              </div>
 
-             <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
-
-             <div class="config-section">
-                <label>2. BOUTONS À CHOIX MULTIPLE (Dossiers)</label>
-                <div id="imgFoldersList" class="list-container"></div>
+             <div id="nodeEditorOverlay" class="hidden" style="position:absolute; inset:0; background:rgba(255,255,255,0.95); z-index:10; display:flex; flex-direction:column; padding:20px;">
+                <h3 id="nodeEditorTitle" style="margin-top:0;">Éditer</h3>
+                <input type="hidden" id="editNodeId">
+                <input type="hidden" id="editNodeType">
                 
-                <div class="add-box">
-                    <span style="font-size:10px; font-weight:bold; color:#666; margin-bottom:5px; display:block;">NOUVEAU DOSSIER</span>
-                    <div style="display:flex; gap:10px;">
-                        <input type="text" id="newFolderInput" placeholder="Nom (ex: Or Jaune)" style="flex:1;">
-                        <select id="newFolderCategory" style="flex:1;"><option value="">Catégorie...</option></select>
-                        <select id="newFolderGroup" style="flex:1;"><option value="">Groupe...</option></select>
-                        <button id="addFolderBtn" class="primary-btn" style="padding:5px 10px;">Ajouter</button>
-                    </div>
-                </div>
-             </div>
-
-             <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
-
-             <div class="config-section">
-                <label>3. BOUTONS PROMPTS (Actions)</label>
-                <p style="font-size:11px; color:#888; margin-bottom:10px;">Ces boutons seront placés DANS un dossier ci-dessus.</p>
-                <div id="imgStyleEditorList" class="list-container"></div>
+                <label>Nom</label>
+                <input type="text" id="editNodeName" class="settings-select">
                 
-                <div id="imgStyleEditorForm" class="add-box">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <label style="font-size:10px; font-weight:bold; color:#007AFF;" id="imgStyleFormTitle">AJOUTER UN PROMPT</label>
-                        <button id="cancelImgStyleEditBtn" class="secondary-btn hidden" style="font-size:10px; padding:2px 8px;">Annuler</button>
+                <div id="editPromptContainer" class="hidden">
+                    <label>Prompt IA</label>
+                    <textarea id="editNodePrompt" rows="3" class="settings-select"></textarea>
+                    
+                    <label>Image de référence (Optionnel)</label>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <div id="editNodeImgPreview" style="width:40px; height:40px; background:#eee; border-radius:6px; overflow:hidden;"></div>
+                        <input type="file" id="editNodeFile" accept="image/*">
                     </div>
                     
-                    <div style="display:grid; grid-template-columns: 2fr 1fr; gap:10px; margin-bottom:10px;">
-                       <input type="text" id="newImgStyleName" placeholder="Nom du bouton (ex: Brillant)" style="width:100%;">
-                       <select id="newImgStyleFolder" style="width:100%; font-weight:bold;">
-                          <option value="">Choisir un Dossier...</option>
-                       </select>
-                    </div>
+                    <label>Mode</label>
+                    <select id="editNodeMode" class="settings-select">
+                        <option value="auto">⚡ Auto (Envoi direct)</option>
+                        <option value="manual">📝 Manuel (Ajout texte)</option>
+                    </select>
+                </div>
 
-                    <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
-                        <select id="newImgStyleMode" style="flex:1;">
-                           <option value="auto">⚡ Auto (Envoi direct)</option>
-                           <option value="manual">📝 Manuel (Ajout texte)</option>
-                        </select>
-                        <input type="file" id="newImgStyleFile" accept="image/*" style="font-size:11px; flex:1;">
-                        <div id="currentRefImgPreview" class="hidden" style="font-size:10px; color:green;">Img OK</div>
-                    </div>
-                    
-                    <textarea id="newImgStylePrompt" rows="2" placeholder="Prompt IA..." style="width:100%;"></textarea>
-                    
-                    <button id="addImgStyleBtn" class="secondary-btn" style="width:100%; margin-top:10px;">+ Enregistrer le Prompt</button>
+                <div style="margin-top:20px; display:flex; gap:10px;">
+                    <button id="saveNodeBtn" class="primary-btn">Valider</button>
+                    <button id="cancelNodeBtn" class="secondary-btn">Annuler</button>
+                    <button id="deleteNodeBtn" class="secondary-btn" style="color:red; margin-left:auto;">Supprimer</button>
                 </div>
              </div>
-
           </div>
 
           <div id="tab-translate-config" class="tab-content hidden">
