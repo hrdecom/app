@@ -12,8 +12,7 @@
     headlineStyles: [{ name: "POV", prompt: "POV perspective." }],
     adStyles: [{ name: "Cadeau", prompt: "Gifting emotion." }],
     
-    // NOUVELLE STRUCTURE HIERARCHIQUE
-    // Nous utilisons une liste plate d'objets liés par ID pour la flexibilité (CMS style)
+    // NOUVELLE STRUCTURE HIERARCHIQUE PAR DEFAUT
     imgCategories: [
         { id: "cat_1", name: "Collier" },
         { id: "cat_2", name: "Bague" },
@@ -25,13 +24,11 @@
     ],
     imgFolders: [
         { id: "fol_1", name: "Photo portée", parentId: "grp_1", parentType: "group" },
-        { id: "fol_2", name: "Changer couleur", parentId: "cat_1", parentType: "category" } // Global
+        { id: "fol_2", name: "Changer couleur", parentId: "cat_1", parentType: "category" }
     ],
     imgStyles: [
         { id: "sty_1", name: "Sur cou", prompt: "On neck.", parentId: "fol_1", parentType: "folder" },
-        { id: "sty_2", name: "Sur main", prompt: "On hand.", parentId: "fol_1", parentType: "folder" },
-        { id: "sty_3", name: "Or", prompt: "Gold material.", parentId: "fol_2", parentType: "folder" },
-        { id: "sty_4", name: "Argent", prompt: "Silver material.", parentId: "fol_2", parentType: "folder" }
+        { id: "sty_2", name: "Sur main", prompt: "On hand.", parentId: "fol_1", parentType: "folder" }
     ]
   };
 
@@ -52,7 +49,7 @@
     // ETATS UI STUDIO
     currentImgCategory: "",
     currentStudioGroup: "", 
-    activeFolderId: null, // Pour afficher les enfants d'un dossier (multi-choice)
+    activeFolderId: null, 
     selectedImgStyles: [], 
     manualImgStyles: [],   
     
@@ -82,14 +79,26 @@
       const parsed = JSON.parse(saved.value);
       state.config = { ...DEFAULTS, ...parsed }; 
       
-      // Migration sécurité : s'assurer que les nouvelles listes existent
-      if(!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
-      if(!state.config.imgGroups) state.config.imgGroups = DEFAULTS.imgGroups;
-      if(!state.config.imgFolders) state.config.imgFolders = DEFAULTS.imgFolders;
-      if(!state.config.imgStyles) state.config.imgStyles = DEFAULTS.imgStyles;
+      // --- MIGRATION AUTOMATIQUE (Correction du bug "undefined") ---
+      // Si les catégories sont encore sous forme de chaînes de caractères (ancienne version)
+      if (Array.isArray(state.config.imgCategories) && state.config.imgCategories.length > 0 && typeof state.config.imgCategories[0] === 'string') {
+          console.log("Migration des catégories détectée...");
+          state.config.imgCategories = state.config.imgCategories.map((c, i) => ({ id: "cat_" + i, name: c }));
+          
+          // Migration basique des groupes s'ils étaient des chaînes
+          if (Array.isArray(state.config.imgGroups) && typeof state.config.imgGroups[0] === 'string') {
+               const defaultCatId = state.config.imgCategories[0].id;
+               state.config.imgGroups = state.config.imgGroups.map((g, i) => ({ id: "grp_" + i, name: g, categoryId: defaultCatId }));
+          }
+          
+          // Initialisation des listes manquantes si nécessaire
+          if (!state.config.imgFolders) state.config.imgFolders = [];
+          if (!state.config.imgStyles) state.config.imgStyles = [];
+      }
+      // --- FIN MIGRATION ---
     }
     
-    // Init Studio Category
+    // Init Studio Category avec le premier ID disponible
     if (state.config.imgCategories.length > 0) {
         state.currentImgCategory = state.config.imgCategories[0].id;
     }
@@ -97,7 +106,6 @@
   }
 
   function renderConfigUI() {
-    // ... [Prompts Textuels inchangés] ...
     ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => { 
       if($(id)) $(id).value = state.config[id] || DEFAULTS[id]; 
     });
@@ -109,11 +117,7 @@
     $("collectionSelect").innerHTML = (state.config.collections || []).map(c => `<option value="${c.name}">${c.name}</option>`).join("");
     
     renderStyleSelectors();
-    
-    // NOUVEAU : Rendu de l'arbre
     renderImgConfigTree();
-    
-    // Rendu Studio (Impacté par la config)
     renderStudioCategories();
     renderImgStylesButtons();
   }
@@ -137,17 +141,14 @@
       if(!container) return;
       container.innerHTML = "";
 
-      // 1. On itère sur les CATÉGORIES (Racine)
       state.config.imgCategories.forEach(cat => {
           const catNode = createTreeNode("category", cat, null);
           container.appendChild(catNode);
-          
           const childrenContainer = catNode.querySelector('.tree-children');
 
-          // A. Contenu GLOBAL de la Catégorie (Folders/Styles attachés à la Catégorie directement)
-          // Ces éléments sont "au-dessus des groupes"
-          const globalFolders = state.config.imgFolders.filter(f => f.parentType === 'category' && f.parentId === cat.id);
-          const globalStyles = state.config.imgStyles.filter(s => s.parentType === 'category' && s.parentId === cat.id);
+          // A. Contenu GLOBAL de la Catégorie
+          const globalFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'category' && f.parentId === cat.id);
+          const globalStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'category' && s.parentId === cat.id);
           
           [...globalFolders, ...globalStyles].forEach(item => {
              const type = item.prompt !== undefined ? 'style' : 'folder';
@@ -156,16 +157,15 @@
           });
 
           // B. GROUPES de la Catégorie
-          const groups = state.config.imgGroups.filter(g => g.categoryId === cat.id);
+          const groups = (state.config.imgGroups||[]).filter(g => g.categoryId === cat.id);
           groups.forEach(grp => {
-              const grpNode = createTreeNode("group", grp, cat.id); // ParentID logic for display if needed
+              const grpNode = createTreeNode("group", grp, cat.id);
               childrenContainer.appendChild(grpNode);
-              
               const grpChildren = grpNode.querySelector('.tree-children');
 
-              // C. Contenu du GROUPE (Folders/Styles)
-              const grpFolders = state.config.imgFolders.filter(f => f.parentType === 'group' && f.parentId === grp.id);
-              const grpStyles = state.config.imgStyles.filter(s => s.parentType === 'group' && s.parentId === grp.id);
+              // C. Contenu du GROUPE
+              const grpFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'group' && f.parentId === grp.id);
+              const grpStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'group' && s.parentId === grp.id);
 
               [...grpFolders, ...grpStyles].forEach(item => {
                   const type = item.prompt !== undefined ? 'style' : 'folder';
@@ -177,13 +177,10 @@
   }
 
   function createRecursiveNode(type, item) {
-      // Crée un noeud (Folder ou Style). Si Folder, cherche ses enfants.
       const node = createTreeNode(type, item, item.parentId);
-      
       if (type === 'folder') {
           const childrenContainer = node.querySelector('.tree-children');
-          // Chercher les Styles dans ce Folder
-          const styles = state.config.imgStyles.filter(s => s.parentType === 'folder' && s.parentId === item.id);
+          const styles = (state.config.imgStyles||[]).filter(s => s.parentType === 'folder' && s.parentId === item.id);
           styles.forEach(s => {
               const sNode = createRecursiveNode('style', s);
               childrenContainer.appendChild(sNode);
@@ -199,13 +196,11 @@
       el.setAttribute('data-id', data.id);
       el.setAttribute('data-type', type);
       
-      // Icon & Label
       let icon = "📁";
       if (type === "category") icon = "📦";
       if (type === "group") icon = "🔹";
       if (type === "style") icon = "🎨";
       
-      // Actions HTML
       let addBtns = "";
       if (type === "category") addBtns = `<button class="small-action-btn" onclick="window.addNode('group', '${data.id}')">+ Groupe</button> <button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'category')">+ Dossier Global</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'category')">+ Style Global</button>`;
       if (type === "group") addBtns = `<button class="small-action-btn" onclick="window.addNode('folder', '${data.id}', 'group')">+ Dossier</button> <button class="small-action-btn" onclick="window.addNode('style', '${data.id}', 'group')">+ Style</button>`;
@@ -222,16 +217,13 @@
         <div class="tree-children"></div>
       `;
 
-      // DRAG EVENTS
       const header = el.querySelector('.tree-header');
-      
       el.addEventListener('dragstart', (e) => {
           state.draggedItem = { id: data.id, type: type };
           e.stopPropagation();
           e.dataTransfer.effectAllowed = 'move';
           el.style.opacity = '0.5';
       });
-
       el.addEventListener('dragend', (e) => {
           el.style.opacity = '1';
           document.querySelectorAll('.drag-over-center, .drag-over-top, .drag-over-bottom').forEach(x => {
@@ -239,105 +231,53 @@
           });
           state.draggedItem = null;
       });
-
-      // DROP ZONE LOGIC
       header.addEventListener('dragover', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if(!state.draggedItem || state.draggedItem.id === data.id) return; // Can't drop on self
-
-          // Définir les règles de Drop valides
-          const src = state.draggedItem.type;
-          const dest = type;
+          e.preventDefault(); e.stopPropagation();
+          if(!state.draggedItem || state.draggedItem.id === data.id) return;
+          const src = state.draggedItem.type; const dest = type;
           let allow = false;
-
-          // Règles :
-          // Group -> dans Category
-          // Folder -> dans Category, Group
-          // Style -> dans Category, Group, Folder
-          
           if (src === 'group' && dest === 'category') allow = true;
           if (src === 'folder' && (dest === 'category' || dest === 'group')) allow = true;
           if (src === 'style' && (dest === 'category' || dest === 'group' || dest === 'folder')) allow = true;
-          
-          // Reordering within same list? (Pas implémenté full, focus nesting)
-          
-          if (allow) {
-             header.classList.add('drag-over-center');
-          }
+          if (allow) header.classList.add('drag-over-center');
       });
-
-      header.addEventListener('dragleave', (e) => {
-          header.classList.remove('drag-over-center');
-      });
-
+      header.addEventListener('dragleave', (e) => header.classList.remove('drag-over-center'));
       header.addEventListener('drop', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+          e.preventDefault(); e.stopPropagation();
           header.classList.remove('drag-over-center');
-          
-          if(state.draggedItem && state.draggedItem.id !== data.id) {
-              window.moveNode(state.draggedItem, { id: data.id, type: type });
-          }
+          if(state.draggedItem && state.draggedItem.id !== data.id) window.moveNode(state.draggedItem, { id: data.id, type: type });
       });
-
       return el;
   }
 
-  /* --- LOGIQUE CRUD ARBRE --- */
-
   window.addCategoryBtn = $("addCategoryBtn");
   if(window.addCategoryBtn) window.addCategoryBtn.onclick = () => {
-      const name = $("newCatName").value;
-      if(!name) return;
+      const name = $("newCatName").value; if(!name) return;
       state.config.imgCategories.push({ id: "cat_" + Date.now(), name: name });
-      $("newCatName").value = "";
-      renderConfigUI();
+      $("newCatName").value = ""; renderConfigUI();
   };
 
-  window.addNode = (newType, parentId, parentTypeContext) => {
-      // Ouvre l'overlay d'édition en mode création
-      openNodeEditor(null, newType, parentId, parentTypeContext);
-  };
-
-  window.editNode = (type, id) => {
-      openNodeEditor(id, type, null, null);
-  };
+  window.addNode = (newType, parentId, parentTypeContext) => openNodeEditor(null, newType, parentId, parentTypeContext);
+  window.editNode = (type, id) => openNodeEditor(id, type, null, null);
 
   function openNodeEditor(id, type, parentId, parentTypeContext) {
       $("nodeEditorOverlay").classList.remove("hidden");
-      $("editNodeId").value = id || ""; // Si vide = création
-      $("editNodeType").value = type;
+      $("editNodeId").value = id || ""; $("editNodeType").value = type;
+      state.tempParentId = parentId; state.tempParentType = parentTypeContext;
+      $("editNodeName").value = ""; $("editNodePrompt").value = ""; $("editNodeFile").value = "";
+      $("editNodeImgPreview").innerHTML = ""; $("editPromptContainer").classList.add("hidden");
       
-      // Stocker le contexte parent pour la création
-      state.tempParentId = parentId;
-      state.tempParentType = parentTypeContext;
-
-      // Reset form
-      $("editNodeName").value = "";
-      $("editNodePrompt").value = "";
-      $("editNodeFile").value = "";
-      $("editNodeImgPreview").innerHTML = "";
-      $("editPromptContainer").classList.add("hidden");
-      
-      let title = "Créer ";
-      if (id) title = "Modifier ";
-      
+      let title = id ? "Modifier " : "Créer ";
       if (type === 'group') title += "Groupe";
-      if (type === 'folder') title += "Bouton Multiple (Dossier)";
-      if (type === 'style') {
-          title += "Style (Prompt)";
-          $("editPromptContainer").classList.remove("hidden");
-      }
+      if (type === 'folder') title += "Bouton Multiple";
+      if (type === 'style') { title += "Style (Prompt)"; $("editPromptContainer").classList.remove("hidden"); }
       
-      // Si modification, charger les données
       if (id) {
           let item = null;
           if (type === 'category') item = state.config.imgCategories.find(x => x.id === id);
           if (type === 'group') item = state.config.imgGroups.find(x => x.id === id);
           if (type === 'folder') item = state.config.imgFolders.find(x => x.id === id);
           if (type === 'style') item = state.config.imgStyles.find(x => x.id === id);
-          
           if (item) {
               $("editNodeName").value = item.name;
               if (item.prompt) $("editNodePrompt").value = item.prompt;
@@ -345,82 +285,45 @@
               if (item.refImage) $("editNodeImgPreview").innerHTML = `<img src="data:image/jpeg;base64,${item.refImage}" style="width:100%;height:100%;object-fit:cover;">`;
           }
       }
-
       $("nodeEditorTitle").textContent = title;
   }
 
   $("saveNodeBtn").onclick = () => {
-      const id = $("editNodeId").value;
-      const type = $("editNodeType").value;
-      const name = $("editNodeName").value;
+      const id = $("editNodeId").value; const type = $("editNodeType").value; const name = $("editNodeName").value;
       if (!name) return alert("Nom requis");
 
       if (!id) {
-          // --- CREATION ---
           const newId = (type === 'group' ? 'grp_' : (type === 'folder' ? 'fol_' : 'sty_')) + Date.now();
           const newItem = { id: newId, name };
-          
-          if (type === 'group') {
-              newItem.categoryId = state.tempParentId;
-              state.config.imgGroups.push(newItem);
-          } else {
-              // Folder ou Style
-              newItem.parentId = state.tempParentId;
-              newItem.parentType = state.tempParentType;
-              
+          if (type === 'group') { newItem.categoryId = state.tempParentId; state.config.imgGroups.push(newItem); } 
+          else {
+              newItem.parentId = state.tempParentId; newItem.parentType = state.tempParentType;
               if (type === 'style') {
-                  newItem.prompt = $("editNodePrompt").value;
-                  newItem.mode = $("editNodeMode").value;
-                  // Image
+                  newItem.prompt = $("editNodePrompt").value; newItem.mode = $("editNodeMode").value;
                   const file = $("editNodeFile").files[0];
-                  if (file) {
-                       const r = new FileReader();
-                       r.onload = (e) => { newItem.refImage = e.target.result.split(",")[1]; state.config.imgStyles.push(newItem); closeNodeEditor(); renderConfigUI(); };
-                       r.readAsDataURL(file);
-                       return;
-                  }
+                  if (file) { const r = new FileReader(); r.onload = (e) => { newItem.refImage = e.target.result.split(",")[1]; state.config.imgStyles.push(newItem); closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; }
                   state.config.imgStyles.push(newItem);
-              } else {
-                  // Folder
-                  state.config.imgFolders.push(newItem);
-              }
+              } else { state.config.imgFolders.push(newItem); }
           }
       } else {
-          // --- MODIFICATION ---
-          let list = null;
-          if (type === 'category') list = state.config.imgCategories;
-          if (type === 'group') list = state.config.imgGroups;
-          if (type === 'folder') list = state.config.imgFolders;
-          if (type === 'style') list = state.config.imgStyles;
-          
+          let list = (type === 'category') ? state.config.imgCategories : (type === 'group') ? state.config.imgGroups : (type === 'folder') ? state.config.imgFolders : state.config.imgStyles;
           const item = list.find(x => x.id === id);
           if (item) {
               item.name = name;
               if (type === 'style') {
-                  item.prompt = $("editNodePrompt").value;
-                  item.mode = $("editNodeMode").value;
+                  item.prompt = $("editNodePrompt").value; item.mode = $("editNodeMode").value;
                   const file = $("editNodeFile").files[0];
-                  if (file) {
-                       const r = new FileReader();
-                       r.onload = (e) => { item.refImage = e.target.result.split(",")[1]; closeNodeEditor(); renderConfigUI(); };
-                       r.readAsDataURL(file);
-                       return;
-                  }
+                  if (file) { const r = new FileReader(); r.onload = (e) => { item.refImage = e.target.result.split(",")[1]; closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; }
               }
           }
       }
-      closeNodeEditor();
-      renderConfigUI();
+      closeNodeEditor(); renderConfigUI();
   };
 
   $("deleteNodeBtn").onclick = () => {
-      const id = $("editNodeId").value;
-      const type = $("editNodeType").value;
-      if(!id) return closeNodeEditor(); // Annulation creation
-
-      if(!confirm("Supprimer cet élément et tout son contenu ?")) return;
-      
-      // Suppression récursive "brutale" (on filtre tout ce qui a cet ID comme parent)
+      const id = $("editNodeId").value; const type = $("editNodeType").value;
+      if(!id) return closeNodeEditor();
+      if(!confirm("Supprimer ?")) return;
       if (type === 'category') {
           state.config.imgCategories = state.config.imgCategories.filter(x => x.id !== id);
           state.config.imgGroups = state.config.imgGroups.filter(x => x.categoryId !== id);
@@ -433,37 +336,20 @@
       } else if (type === 'folder') {
           state.config.imgFolders = state.config.imgFolders.filter(x => x.id !== id);
           state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'folder' && x.parentId === id));
-      } else if (type === 'style') {
-          state.config.imgStyles = state.config.imgStyles.filter(x => x.id !== id);
-      }
-      
-      closeNodeEditor();
-      renderConfigUI();
+      } else if (type === 'style') { state.config.imgStyles = state.config.imgStyles.filter(x => x.id !== id); }
+      closeNodeEditor(); renderConfigUI();
   };
 
   $("cancelNodeBtn").onclick = closeNodeEditor;
   function closeNodeEditor() { $("nodeEditorOverlay").classList.add("hidden"); }
 
-
   window.moveNode = (src, dest) => {
-      // Logique de déplacement
-      const srcId = src.id;
-      const destId = dest.id;
-      const destType = dest.type;
-
-      if (src.type === 'group') {
-          const item = state.config.imgGroups.find(x => x.id === srcId);
-          if (item) item.categoryId = destId;
-      } else if (src.type === 'folder') {
-          const item = state.config.imgFolders.find(x => x.id === srcId);
-          if (item) { item.parentId = destId; item.parentType = destType; }
-      } else if (src.type === 'style') {
-          const item = state.config.imgStyles.find(x => x.id === srcId);
-          if (item) { item.parentId = destId; item.parentType = destType; }
-      }
+      const srcId = src.id; const destId = dest.id; const destType = dest.type;
+      if (src.type === 'group') { const item = state.config.imgGroups.find(x => x.id === srcId); if (item) item.categoryId = destId; } 
+      else if (src.type === 'folder') { const item = state.config.imgFolders.find(x => x.id === srcId); if (item) { item.parentId = destId; item.parentType = destType; } } 
+      else if (src.type === 'style') { const item = state.config.imgStyles.find(x => x.id === srcId); if (item) { item.parentId = destId; item.parentType = destType; } }
       renderConfigUI();
   };
-
 
   /* =========================================
      STUDIO UI (AFFICHAGE HIERARCHIQUE)
@@ -473,11 +359,7 @@
       const container = $("imgGenCategoriesBar");
       if(!container) return;
       const cats = state.config.imgCategories || [];
-      
-      // Auto select first
-      if (!state.currentImgCategory && cats.length > 0) {
-          state.currentImgCategory = cats[0].id;
-      }
+      if (!state.currentImgCategory && cats.length > 0) state.currentImgCategory = cats[0].id;
 
       container.innerHTML = cats.map(c => `
          <div class="style-tag ${state.currentImgCategory === c.id ? 'selected' : ''}" 
@@ -498,7 +380,7 @@
 
   window.setStudioGroup = (gId) => {
       state.currentStudioGroup = gId;
-      state.activeFolderId = null; // Close folders when switching group
+      state.activeFolderId = null;
       renderImgStylesButtons();
   };
 
@@ -518,174 +400,100 @@
 
       let html = "";
 
-      // 1. ITEMS GLOBAUX de la Catégorie (Folders ou Styles sans groupe)
-      const globalFolders = (state.config.imgFolders || []).filter(f => f.parentType === 'category' && f.parentId === state.currentImgCategory);
-      const globalStyles = (state.config.imgStyles || []).filter(s => s.parentType === 'category' && s.parentId === state.currentImgCategory);
+      // 1. ITEMS GLOBAUX
+      const globalFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'category' && f.parentId === state.currentImgCategory);
+      const globalStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'category' && s.parentId === state.currentImgCategory);
 
       if (globalFolders.length > 0 || globalStyles.length > 0) {
           html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid #f0f0f0;">`;
-          // Folders
-          globalFolders.forEach(f => {
-               html += renderFolderButton(f);
-          });
-          // Styles
-          globalStyles.forEach(s => {
-               html += renderStyleBtn(s);
-          });
+          globalFolders.forEach(f => html += renderFolderButton(f));
+          globalStyles.forEach(s => html += renderStyleBtn(s));
           html += `</div>`;
-          
-          // Si un folder global est ouvert
-          if (state.activeFolderId && globalFolders.find(f => f.id === state.activeFolderId)) {
-              html += renderFolderContent(state.activeFolderId);
-          }
+          if (state.activeFolderId && globalFolders.find(f => f.id === state.activeFolderId)) html += renderFolderContent(state.activeFolderId);
       }
 
       // 2. GROUPES
-      // On affiche un selecteur de groupe
-      const catGroups = (state.config.imgGroups || []).filter(g => g.categoryId === state.currentImgCategory);
-      
+      const catGroups = (state.config.imgGroups||[]).filter(g => g.categoryId === state.currentImgCategory);
       if (catGroups.length > 0) {
-          // Auto select first group
-          if (!state.currentStudioGroup || !catGroups.find(g => g.id === state.currentStudioGroup)) {
-              state.currentStudioGroup = catGroups[0].id;
-          }
+          if (!state.currentStudioGroup || !catGroups.find(g => g.id === state.currentStudioGroup)) state.currentStudioGroup = catGroups[0].id;
 
-          html += `
-          <div style="margin-bottom:10px;">
-             <select onchange="window.setStudioGroup(this.value)" class="settings-select" style="margin-top:0; padding:6px; font-weight:bold;">
-                ${catGroups.map(g => `<option value="${g.id}" ${g.id === state.currentStudioGroup ? 'selected' : ''}>${g.name}</option>`).join("")}
-             </select>
-          </div>
-          `;
+          html += `<div style="margin-bottom:10px;"><select onchange="window.setStudioGroup(this.value)" class="settings-select" style="margin-top:0; padding:6px; font-weight:bold;">${catGroups.map(g => `<option value="${g.id}" ${g.id === state.currentStudioGroup ? 'selected' : ''}>${g.name}</option>`).join("")}</select></div>`;
 
-          // Contenu du Groupe Selectionné
           const activeGrpId = state.currentStudioGroup;
-          
-          // Items du Groupe (Folders + Styles)
-          const grpFolders = (state.config.imgFolders || []).filter(f => f.parentType === 'group' && f.parentId === activeGrpId);
-          const grpStyles = (state.config.imgStyles || []).filter(s => s.parentType === 'group' && s.parentId === activeGrpId);
+          const grpFolders = (state.config.imgFolders||[]).filter(f => f.parentType === 'group' && f.parentId === activeGrpId);
+          const grpStyles = (state.config.imgStyles||[]).filter(s => s.parentType === 'group' && s.parentId === activeGrpId);
 
           if (grpFolders.length > 0 || grpStyles.length > 0) {
               html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">`;
               grpFolders.forEach(f => html += renderFolderButton(f));
               grpStyles.forEach(s => html += renderStyleBtn(s));
               html += `</div>`;
-          } else {
-              html += `<div style="font-size:11px; color:#999;">Vide</div>`;
-          }
+          } else { html += `<div style="font-size:11px; color:#999;">Vide</div>`; }
 
-          // Si un folder du groupe est ouvert
-          if (state.activeFolderId && grpFolders.find(f => f.id === state.activeFolderId)) {
-              html += renderFolderContent(state.activeFolderId);
-          }
+          if (state.activeFolderId && grpFolders.find(f => f.id === state.activeFolderId)) html += renderFolderContent(state.activeFolderId);
       } 
-
       container.innerHTML = html;
   }
 
   function renderFolderButton(f) {
       const isActive = state.activeFolderId === f.id;
-      return `
-        <button onclick="window.setStudioFolder('${f.id}')" 
-                class="style-tag ${isActive ? 'selected' : ''}" 
-                style="font-weight:bold; padding:6px 12px; font-size:11px;">
-           📁 ${f.name}
-        </button>
-      `;
+      return `<button onclick="window.setStudioFolder('${f.id}')" class="style-tag ${isActive ? 'selected' : ''}" style="font-weight:bold; padding:6px 12px; font-size:11px;">📁 ${f.name}</button>`;
   }
 
   function renderFolderContent(folderId) {
-      const children = (state.config.imgStyles || []).filter(s => s.parentType === 'folder' && s.parentId === folderId);
-      let html = `<div style="background:#f9f9f9; border:1px solid #eee; border-radius:12px; padding:12px; margin-bottom:10px;">
-         <div style="display:flex; flex-wrap:wrap; gap:8px;">`;
-      
-      if (children.length === 0) {
-          html += `<span style="font-size:11px; color:#999;">Aucun prompt.</span>`;
-      } else {
-          children.forEach(s => {
-              html += renderStyleBtn(s);
-          });
-      }
+      const children = (state.config.imgStyles||[]).filter(s => s.parentType === 'folder' && s.parentId === folderId);
+      let html = `<div style="background:#f9f9f9; border:1px solid #eee; border-radius:12px; padding:12px; margin-bottom:10px;"><div style="display:flex; flex-wrap:wrap; gap:8px;">`;
+      if (children.length === 0) html += `<span style="font-size:11px; color:#999;">Aucun prompt.</span>`;
+      else children.forEach(s => html += renderStyleBtn(s));
       html += `</div></div>`;
       return html;
   }
 
   function renderStyleBtn(s) {
       let isActive = false;
-      if (s.mode === 'manual') {
-          isActive = state.manualImgStyles.includes(s.name);
-      } else {
-          isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
-      }
+      if (s.mode === 'manual') isActive = state.manualImgStyles.includes(s.name);
+      else isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
 
       const borderStyle = s.mode === 'manual' ? 'border:1px dashed #007AFF;' : 'border:1px solid #e5e5e5;';
       const bgColor = isActive ? '#007AFF' : '#fff';
       const color = isActive ? '#fff' : '#1d1d1f';
       
-      return `
-         <button class="style-tag style-btn-click" 
-            data-name="${s.name.replace(/"/g, '&quot;')}"
-            style="display:flex; align-items:center; gap:4px; flex-shrink:0; ${borderStyle} background:${bgColor}; color:${color}; padding:4px 10px; border-radius:15px; transition: all 0.2s; box-shadow:0 1px 2px rgba(0,0,0,0.05); font-weight:500; font-size:11px;">
-            ${s.refImage ? '<span style="width:12px; height:12px; background:#f0f0f0; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
-            <span>${s.name}</span>
-            ${s.mode === 'manual' ? '<span style="font-size:9px; opacity:0.7;">📝</span>' : ''}
-         </button>
-      `;
+      return `<button class="style-tag style-btn-click" data-name="${s.name.replace(/"/g, '&quot;')}" style="display:flex; align-items:center; gap:4px; flex-shrink:0; ${borderStyle} background:${bgColor}; color:${color}; padding:4px 10px; border-radius:15px; transition: all 0.2s; box-shadow:0 1px 2px rgba(0,0,0,0.05); font-weight:500; font-size:11px;">${s.refImage ? '<span style="width:12px; height:12px; background:#f0f0f0; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}<span>${s.name}</span>${s.mode === 'manual' ? '<span style="font-size:9px; opacity:0.7;">📝</span>' : ''}</button>`;
   }
 
   document.addEventListener('click', function(e) {
       const btn = e.target.closest('.style-btn-click');
-      if (btn) {
-          const name = btn.getAttribute('data-name');
-          if (name) window.toggleImgStyle(name);
-      }
+      if (btn) { const name = btn.getAttribute('data-name'); if (name) window.toggleImgStyle(name); }
   });
 
-  // --- LOGIQUE TOGGLE STYLE (Identique avant) ---
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName);
       if(!style) return;
-
       const promptClean = style.prompt.trim();
 
       if (style.mode === 'manual') {
           const idx = state.manualImgStyles.indexOf(styleName);
           let currentText = $("imgGenPrompt").value.trim();
-          
           if (idx > -1) {
-              // Desactivation
               state.manualImgStyles.splice(idx, 1);
               if (currentText.includes(promptClean)) {
                   const parts = currentText.split(promptClean);
                   currentText = parts.map(p => p.trim()).filter(p => p).join(" ");
                   $("imgGenPrompt").value = currentText;
               }
-              if (style.refImage) {
-                  const imgIdx = state.inputImages.indexOf(style.refImage);
-                  if (imgIdx > -1) state.inputImages.splice(imgIdx, 1);
-                  renderInputImages();
-              }
+              if (style.refImage) { const imgIdx = state.inputImages.indexOf(style.refImage); if (imgIdx > -1) state.inputImages.splice(imgIdx, 1); renderInputImages(); }
           } else {
-              // Activation
               state.manualImgStyles.push(styleName);
-              if (!currentText.includes(promptClean)) {
-                  $("imgGenPrompt").value = (currentText + " " + promptClean).trim();
-              }
-              if (style.refImage && !state.inputImages.includes(style.refImage)) {
-                  state.inputImages.push(style.refImage);
-                  renderInputImages();
-              }
+              if (!currentText.includes(promptClean)) $("imgGenPrompt").value = (currentText + " " + promptClean).trim();
+              if (style.refImage && !state.inputImages.includes(style.refImage)) { state.inputImages.push(style.refImage); renderInputImages(); }
           }
       } else {
-          // Auto
           const idx = state.selectedImgStyles.findIndex(s => s.name === styleName);
-          if (idx > -1) { state.selectedImgStyles.splice(idx, 1); } 
-          else { state.selectedImgStyles.push(style); }
+          if (idx > -1) state.selectedImgStyles.splice(idx, 1); else state.selectedImgStyles.push(style);
       }
       renderImgStylesButtons();
   };
 
-  /* --- COMMON API --- */
   async function apiCall(action, extra = {}) {
     if (!state.imageBase64) return;
     startLoading();
@@ -712,7 +520,6 @@
           const hData = await hRes.json();
           state.currentHistoryId = hData.id;
           localStorage.setItem('lastHistoryId', hData.id);
-          
           state.sessionHeadlines = []; state.sessionAds = []; state.selectedHeadlines = []; state.selectedAds = []; state.headlinesTrans = {}; state.adsTrans = {}; 
           state.savedGeneratedImages = []; state.sessionGeneratedImages = []; state.inputImages = [state.imageBase64]; renderInputImages(); renderGenImages();
           await loadHistory();
@@ -733,18 +540,12 @@
     finally { stopLoading(); }
   }
 
-  /* --- LOGIQUE GENERATION IMAGES --- */
-  
   function renderInputImages() {
     const container = $("inputImagesPreview");
     if (state.inputImages.length === 0) { container.classList.add("hidden"); return; }
     container.classList.remove("hidden");
     container.innerHTML = state.inputImages.map((img, i) => `
-        <div class="input-img-wrapper">
-            <img src="data:image/jpeg;base64,${img}" class="input-img-thumb">
-            <div class="remove-input-img" onclick="window.removeInputImg(${i})">×</div>
-        </div>
-    `).join("");
+        <div class="input-img-wrapper"><img src="data:image/jpeg;base64,${img}" class="input-img-thumb"><div class="remove-input-img" onclick="window.removeInputImg(${i})">×</div></div>`).join("");
   }
   
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
@@ -752,15 +553,11 @@
   async function callGeminiImageGen() {
       const userPrompt = $("imgGenPrompt").value;
       if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style.");
-      
       const count = parseInt($("imgCount").value) || 1;
       const aspectRatio = $("imgAspectRatio").value;
       const resolution = $("imgResolution").value;
 
-      if (state.inputImages.length === 0 && state.imageBase64) {
-          state.inputImages = [state.imageBase64];
-          renderInputImages();
-      }
+      if (state.inputImages.length === 0 && state.imageBase64) { state.inputImages = [state.imageBase64]; renderInputImages(); }
 
       const batches = [];
       const inputsToProcess = state.inputImages.length > 0 ? state.inputImages : [null];
@@ -768,87 +565,37 @@
       inputsToProcess.forEach(inputImg => {
           let tasks = [];
           if (state.selectedImgStyles.length > 0) {
-              tasks = state.selectedImgStyles.map(s => ({
-                  type: 'style',
-                  styleObj: s,
-                  prompt: userPrompt ? (userPrompt + " " + s.prompt) : s.prompt,
-                  refImage: s.refImage,
-                  label: s.name 
-              }));
-          } else {
-              tasks = [{
-                  type: 'manual',
-                  prompt: userPrompt,
-                  refImage: null,
-                  label: userPrompt
-              }];
-          }
+              tasks = state.selectedImgStyles.map(s => ({ type: 'style', styleObj: s, prompt: userPrompt ? (userPrompt + " " + s.prompt) : s.prompt, refImage: s.refImage, label: s.name }));
+          } else { tasks = [{ type: 'manual', prompt: userPrompt, refImage: null, label: userPrompt }]; }
 
           tasks.forEach(task => {
               let contextImages = [];
               if (inputImg) contextImages.push(inputImg); 
               if (task.refImage) contextImages.push(task.refImage); 
-
-              for (let i = 0; i < count; i++) {
-                  batches.push({
-                      prompt: task.prompt,
-                      images: contextImages,
-                      aspectRatio: aspectRatio,
-                      resolution: resolution,
-                      label: task.label
-                  });
-              }
+              for (let i = 0; i < count; i++) { batches.push({ prompt: task.prompt, images: contextImages, aspectRatio: aspectRatio, resolution: resolution, label: task.label }); }
           });
       });
 
-      const newItems = batches.map(b => ({
-          id: Date.now() + Math.random(), 
-          loading: true, 
-          prompt: b.label, 
-          aspectRatio: b.aspectRatio
-      }));
+      const newItems = batches.map(b => ({ id: Date.now() + Math.random(), loading: true, prompt: b.label, aspectRatio: b.aspectRatio }));
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
 
-      // NETTOYAGE UI
-      state.selectedImgStyles = []; 
-      state.manualImgStyles = [];
-      $("imgGenPrompt").value = ""; 
-      renderImgStylesButtons(); 
+      state.selectedImgStyles = []; state.manualImgStyles = []; $("imgGenPrompt").value = ""; renderImgStylesButtons(); 
 
       newItems.forEach(async (item, index) => {
           const batchData = batches[index];
           try {
-              const res = await fetch("/api/gemini", { 
-                  method: "POST", 
-                  body: JSON.stringify({ 
-                      prompt: batchData.prompt,
-                      images: batchData.images, 
-                      aspectRatio: batchData.aspectRatio,
-                      resolution: batchData.resolution
-                  }) 
-              });
-              
+              const res = await fetch("/api/gemini", { method: "POST", body: JSON.stringify({ prompt: batchData.prompt, images: batchData.images, aspectRatio: batchData.aspectRatio, resolution: batchData.resolution }) });
               const data = await res.json();
-              
               const targetItem = state.sessionGeneratedImages.find(x => x.id === item.id);
               if (targetItem) {
-                  if (data.error) {
-                      targetItem.loading = false;
-                      targetItem.error = data.error;
-                  } else {
-                      targetItem.loading = false;
-                      targetItem.image = data.image;
-                  }
+                  if (data.error) { targetItem.loading = false; targetItem.error = data.error; } 
+                  else { targetItem.loading = false; targetItem.image = data.image; }
                   renderGenImages();
               }
           } catch(e) {
               const targetItem = state.sessionGeneratedImages.find(x => x.id === item.id);
-              if (targetItem) {
-                  targetItem.loading = false;
-                  targetItem.error = e.message;
-                  renderGenImages();
-              }
+              if (targetItem) { targetItem.loading = false; targetItem.error = e.message; renderGenImages(); }
           }
       });
   }
@@ -856,297 +603,125 @@
   function renderGenImages() {
       const sessionContainer = $("imgGenSessionResults");
       sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => {
-        if (item.loading) {
-            return `
-            <div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#eee; height:150px; flex-direction:column; gap:10px;">
-               <div class="spinner" style="width:20px; height:20px; border-width:2px;"></div>
-               <span style="font-size:10px; color:#666;">Génération...</span>
-               <div class="gen-image-overlay">${item.prompt}</div>
-            </div>`;
-        }
-        if (item.error) {
-            return `
-            <div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#ffebeb; height:150px; flex-direction:column; gap:5px; padding:10px; text-align:center;">
-               <span style="font-size:20px;">⚠️</span>
-               <span style="font-size:10px; color:red;">Erreur</span>
-               <div class="gen-image-overlay" style="color:red;">${item.error}</div>
-            </div>`;
-        }
-        return `
-        <div class="gen-image-card ${state.selectedSessionImagesIdx.includes(item) ? 'selected' : ''}" onclick="window.toggleSessionImg('${item.id}')">
-           <img src="data:image/jpeg;base64,${item.image}">
-           <div class="gen-image-overlay">${item.prompt}</div>
-           <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button>
-        </div>
-      `}).join("");
+        if (item.loading) { return `<div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#eee; height:150px; flex-direction:column; gap:10px;"><div class="spinner" style="width:20px; height:20px; border-width:2px;"></div><span style="font-size:10px; color:#666;">Génération...</span><div class="gen-image-overlay">${item.prompt}</div></div>`; }
+        if (item.error) { return `<div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#ffebeb; height:150px; flex-direction:column; gap:5px; padding:10px; text-align:center;"><span style="font-size:20px;">⚠️</span><span style="font-size:10px; color:red;">Erreur</span><div class="gen-image-overlay" style="color:red;">${item.error}</div></div>`; }
+        return `<div class="gen-image-card ${state.selectedSessionImagesIdx.includes(item) ? 'selected' : ''}" onclick="window.toggleSessionImg('${item.id}')"><img src="data:image/jpeg;base64,${item.image}"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button></div>`;
+      }).join("");
 
-      // Saved Results
       let savedHtml = "";
-      if(state.imageBase64) {
-          savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default;">
-             <img src="data:image/jpeg;base64,${state.imageBase64}">
-             <div class="gen-image-overlay" style="background:var(--text-main); color:white; font-weight:bold;">ORIGINAL</div>
-             <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInputOrig()" title="Utiliser">＋</button>
-          </div>`;
-      }
+      if(state.imageBase64) { savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default;"><img src="data:image/jpeg;base64,${state.imageBase64}"><div class="gen-image-overlay" style="background:var(--text-main); color:white; font-weight:bold;">ORIGINAL</div><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInputOrig()" title="Utiliser">＋</button></div>`; }
 
       savedHtml += state.savedGeneratedImages.map((item, i) => {
           const isSelected = state.inputImages.includes(item.image);
           const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : '';
-
-          return `
-        <div class="gen-image-card" 
-             style="${borderStyle}"
-             draggable="true" 
-             ondragstart="dragStart(event, ${i})" 
-             ondrop="drop(event, ${i})" 
-             ondragenter="dragEnter(event, ${i})"
-             ondragover="allowDrop(event)"
-             onclick="window.toggleSavedImg(${i})">
-           <img src="data:image/jpeg;base64,${item.image}" style="pointer-events:none;">
-           <div class="gen-image-overlay">${item.prompt}</div>
-           
-           <button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button>
-           <button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:red; border:1px solid #ccc;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button>
-        </div>
-      `}).join("");
-      
+          return `<div class="gen-image-card" style="${borderStyle}" draggable="true" ondragstart="dragStart(event, ${i})" ondrop="drop(event, ${i})" ondragenter="dragEnter(event, ${i})" ondragover="allowDrop(event)" onclick="window.toggleSavedImg(${i})"><img src="data:image/jpeg;base64,${item.image}" style="pointer-events:none;"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:red; border:1px solid #ccc;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button></div>`;
+      }).join("");
       $("imgGenSavedResults").innerHTML = savedHtml;
   }
 
   window.toggleSavedImg = (index) => {
-      const item = state.savedGeneratedImages[index];
-      if(!item) return;
-      const idx = state.inputImages.indexOf(item.image);
-      if(idx > -1) { state.inputImages.splice(idx, 1); } 
-      else { state.inputImages.push(item.image); }
-      renderInputImages();
-      renderGenImages();
+      const item = state.savedGeneratedImages[index]; if(!item) return;
+      const idx = state.inputImages.indexOf(item.image); if(idx > -1) state.inputImages.splice(idx, 1); else state.inputImages.push(item.image);
+      renderInputImages(); renderGenImages();
   };
 
   let dragSrcIndex = null;
-  window.dragStart = (e, i) => { 
-      dragSrcIndex = i; 
-      e.dataTransfer.effectAllowed = 'move';
-      e.target.style.opacity = '0.4';
-  };
+  window.dragStart = (e, i) => { dragSrcIndex = i; e.dataTransfer.effectAllowed = 'move'; e.target.style.opacity = '0.4'; };
   window.allowDrop = (e) => { e.preventDefault(); };
   window.dragEnter = (e, targetIndex) => {
       if (dragSrcIndex === null || dragSrcIndex === targetIndex) return;
-      const item = state.savedGeneratedImages.splice(dragSrcIndex, 1)[0];
-      state.savedGeneratedImages.splice(targetIndex, 0, item);
-      dragSrcIndex = targetIndex;
-      renderGenImages();
-      const cards = document.querySelectorAll('#imgGenSavedResults .gen-image-card');
-      if(cards[dragSrcIndex]) cards[dragSrcIndex].style.opacity = '0.4';
+      const item = state.savedGeneratedImages.splice(dragSrcIndex, 1)[0]; state.savedGeneratedImages.splice(targetIndex, 0, item);
+      dragSrcIndex = targetIndex; renderGenImages();
+      const cards = document.querySelectorAll('#imgGenSavedResults .gen-image-card'); if(cards[dragSrcIndex]) cards[dragSrcIndex].style.opacity = '0.4';
   };
   window.drop = async (e, i) => {
-      e.preventDefault();
-      document.querySelectorAll('.gen-image-card').forEach(c => c.style.opacity = '1');
-      dragSrcIndex = null;
-      if (state.currentHistoryId) {
-          try {
-              const payload = { id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) };
-              await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
-          } catch(err) {}
-      }
+      e.preventDefault(); document.querySelectorAll('.gen-image-card').forEach(c => c.style.opacity = '1'); dragSrcIndex = null;
+      if (state.currentHistoryId) { try { await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) }); } catch(err) {} }
   };
 
   window.addSavedToInput = (index) => {
-      const item = state.savedGeneratedImages[index];
-      if(item && !state.inputImages.includes(item.image)) {
-          state.inputImages.push(item.image);
-          renderInputImages();
-          document.querySelector('button[data-tab="tab-img-chat"]').click();
-      }
+      const item = state.savedGeneratedImages[index]; if(item && !state.inputImages.includes(item.image)) { state.inputImages.push(item.image); renderInputImages(); document.querySelector('button[data-tab="tab-img-chat"]').click(); }
   };
 
   window.addSavedToInputOrig = () => {
-      if(state.imageBase64 && !state.inputImages.includes(state.imageBase64)) {
-          state.inputImages.push(state.imageBase64);
-          renderInputImages();
-          document.querySelector('button[data-tab="tab-img-chat"]').click();
-      }
+      if(state.imageBase64 && !state.inputImages.includes(state.imageBase64)) { state.inputImages.push(state.imageBase64); renderInputImages(); document.querySelector('button[data-tab="tab-img-chat"]').click(); }
   };
 
   window.toggleSessionImg = (id) => {
-      const item = state.sessionGeneratedImages.find(x => x.id == id);
-      if(!item) return;
+      const item = state.sessionGeneratedImages.find(x => x.id == id); if(!item) return;
       const idx = state.selectedSessionImagesIdx.indexOf(item);
-      if (idx > -1) {
-          state.selectedSessionImagesIdx.splice(idx, 1);
-          const imgToRemove = item.image;
-          const inputIdx = state.inputImages.indexOf(imgToRemove);
-          if (inputIdx > -1) state.inputImages.splice(inputIdx, 1);
-      }
-      else {
-          state.selectedSessionImagesIdx.push(item);
-          if (!state.inputImages.includes(item.image)) {
-              state.inputImages.push(item.image);
-          }
-      }
-      renderInputImages(); 
-      renderGenImages();
+      if (idx > -1) { state.selectedSessionImagesIdx.splice(idx, 1); const imgToRemove = item.image; const inputIdx = state.inputImages.indexOf(imgToRemove); if (inputIdx > -1) state.inputImages.splice(inputIdx, 1); }
+      else { state.selectedSessionImagesIdx.push(item); if (!state.inputImages.includes(item.image)) state.inputImages.push(item.image); }
+      renderInputImages(); renderGenImages();
   };
 
   window.viewImage = (b64) => {
-      const byteCharacters = atob(b64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], {type: 'image/jpeg'});
-      const blobUrl = URL.createObjectURL(blob);
-      window.open(blobUrl, '_blank');
+      const byteCharacters = atob(b64); const byteNumbers = new Array(byteCharacters.length); for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
+      const byteArray = new Uint8Array(byteNumbers); const blob = new Blob([byteArray], {type: 'image/jpeg'}); const blobUrl = URL.createObjectURL(blob); window.open(blobUrl, '_blank');
   };
 
   window.saveImgSelection = async () => {
       if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
       if (state.selectedSessionImagesIdx.length === 0) return alert("Aucune image sélectionnée.");
-
-      const newImages = state.selectedSessionImagesIdx.map(item => ({ 
-          image: item.image, 
-          prompt: item.prompt, 
-          aspectRatio: item.aspectRatio 
-      }));
-      state.savedGeneratedImages = [...newImages, ...state.savedGeneratedImages];
-      state.selectedSessionImagesIdx = [];
-      
+      const newImages = state.selectedSessionImagesIdx.map(item => ({ image: item.image, prompt: item.prompt, aspectRatio: item.aspectRatio }));
+      state.savedGeneratedImages = [...newImages, ...state.savedGeneratedImages]; state.selectedSessionImagesIdx = [];
       startLoading();
       try {
-          const payload = { 
-              id: state.currentHistoryId, 
-              generated_images: JSON.stringify(state.savedGeneratedImages) 
-          };
-          const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
-          
-          if (!res.ok) {
-              const errorText = await res.text();
-              throw new Error("Erreur serveur (" + res.status + "): " + errorText);
-          }
-
-          alert("Images enregistrées !");
-          renderGenImages();
-          document.querySelector('button[data-tab="tab-img-saved"]').click();
-      } catch(e) {
-          alert("Erreur sauvegarde: " + e.message);
-      } finally {
-          stopLoading();
-      }
+          const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) });
+          if (!res.ok) throw new Error("Erreur serveur");
+          alert("Images enregistrées !"); renderGenImages(); document.querySelector('button[data-tab="tab-img-saved"]').click();
+      } catch(e) { alert("Erreur sauvegarde: " + e.message); } finally { stopLoading(); }
   };
 
   window.deleteSavedImage = async (index) => {
       if(!confirm("Supprimer cette image ?")) return;
-      state.savedGeneratedImages.splice(index, 1);
-      startLoading();
-      try {
-          const payload = { id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) };
-          const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
-          if(!res.ok) throw new Error("Erreur serveur lors de la suppression.");
-          renderGenImages();
-      } catch(e) { alert(e.message); } finally { stopLoading(); }
+      state.savedGeneratedImages.splice(index, 1); startLoading();
+      try { await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) }); renderGenImages(); } catch(e) { alert(e.message); } finally { stopLoading(); }
   };
 
-  async function loadHistory() { 
-      try { 
-          const r = await fetch("/api/history"); 
-          state.historyCache = await r.json(); 
-          renderHistoryUI(); 
-      } catch(e){} 
-  }
+  async function loadHistory() { try { const r = await fetch("/api/history"); state.historyCache = await r.json(); renderHistoryUI(); } catch(e){} }
 
   function renderHistoryUI() {
     const filtered = (state.historyCache || []).filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase()));
-    const start = (state.currentPage - 1) * 5; 
-    const pag = filtered.slice(start, start + 5);
-    $("historyList").innerHTML = pag.map(item => `
-        <div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})">
-            <img src="data:image/jpeg;base64,${item.image}" class="history-img">
-            <div style="flex:1">
-                <h4>${item.title || "Sans titre"}</h4>
-            </div>
-            <button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button>
-        </div>
-    `).join("");
+    const start = (state.currentPage - 1) * 5; const pag = filtered.slice(start, start + 5);
+    $("historyList").innerHTML = pag.map(item => `<div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})"><img src="data:image/jpeg;base64,${item.image}" class="history-img"><div style="flex:1"><h4>${item.title || "Sans titre"}</h4></div><button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button></div>`).join("");
     renderPagination(Math.ceil(filtered.length / 5));
   }
 
   function renderPagination(total) {
-    const p = $("pagination"); 
-    p.innerHTML = ""; 
-    if(total <= 1) return;
-    for(let i=1; i<=total; i++) {
-      const b = document.createElement("button"); 
-      b.textContent = i; 
-      if(i === state.currentPage) b.className = "active";
-      b.onclick = () => { state.currentPage = i; renderHistoryUI(); }; 
-      p.appendChild(b);
-    }
+    const p = $("pagination"); p.innerHTML = ""; if(total <= 1) return;
+    for(let i=1; i<=total; i++) { const b = document.createElement("button"); b.textContent = i; if(i === state.currentPage) b.className = "active"; b.onclick = () => { state.currentPage = i; renderHistoryUI(); }; p.appendChild(b); }
   }
 
   window.restore = async (id) => {
-    state.currentHistoryId = id;
-    localStorage.setItem('lastHistoryId', id);
-    renderHistoryUI();
-    startLoading();
+    state.currentHistoryId = id; localStorage.setItem('lastHistoryId', id); renderHistoryUI(); startLoading();
     try {
-        const res = await fetch(`/api/history?id=${id}`);
-        const item = await res.json();
+        const res = await fetch(`/api/history?id=${id}`); const item = await res.json();
         state.sessionHeadlines = []; state.sessionAds = [];
-        state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; 
-        state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
-        state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; 
-        state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
-        
+        state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
+        state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
         state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
-        
-        state.sessionGeneratedImages = []; 
-        $("titleText").textContent = item.title; 
-        $("descText").textContent = item.description; 
-        $("productUrlInput").value = item.product_url || "";
-        $("previewImg").src = `data:image/jpeg;base64,${item.image}`; 
-        state.imageBase64 = item.image; 
-        $("preview").classList.remove("hidden");
-        $("dropPlaceholder").style.display = "none"; 
-        $("generateBtn").disabled = false;
-        state.inputImages = [item.image]; 
-        renderInputImages(); 
-        renderGenImages();
-    } catch(e) {
-        alert("Erreur chargement: " + e.message);
-    } finally {
-        stopLoading();
-    }
+        state.sessionGeneratedImages = []; $("titleText").textContent = item.title; $("descText").textContent = item.description; 
+        $("productUrlInput").value = item.product_url || ""; $("previewImg").src = `data:image/jpeg;base64,${item.image}`; state.imageBase64 = item.image; 
+        $("preview").classList.remove("hidden"); $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false;
+        state.inputImages = [item.image]; renderInputImages(); renderGenImages();
+    } catch(e) { alert("Erreur chargement: " + e.message); } finally { stopLoading(); }
   };
 
-  window.deleteItem = async (id) => { 
-      if(!confirm("Supprimer ?")) return; 
-      await fetch(`/api/history?id=${id}`, { method: "DELETE" }); 
-      if(state.currentHistoryId == id) {
-          state.currentHistoryId = null; 
-          localStorage.removeItem('lastHistoryId');
-      }
-      loadHistory(); 
-  };
+  window.deleteItem = async (id) => { if(!confirm("Supprimer ?")) return; await fetch(`/api/history?id=${id}`, { method: "DELETE" }); if(state.currentHistoryId == id) { state.currentHistoryId = null; localStorage.removeItem('lastHistoryId'); } loadHistory(); };
   
   window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
 
   function switchTab(e) {
-    const m = e.target.closest('.modal-content');
-    if (!m) return;
-    m.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active"));
-    m.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
-    e.target.classList.add("active"); 
-    const target = $(e.target.dataset.tab);
-    if(target) target.classList.remove("hidden");
+    const m = e.target.closest('.modal-content'); if (!m) return;
+    m.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active")); m.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
+    e.target.classList.add("active"); const target = $(e.target.dataset.tab); if(target) target.classList.remove("hidden");
   }
 
   function init() {
     $("loading").classList.add("hidden");
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
-    $("closeSettings").onclick = () => {
-        $("settingsModal").classList.add("hidden");
-        if(window.cancelImgStyleEdit) window.cancelImgStyleEdit();
-    };
+    $("closeSettings").onclick = () => { $("settingsModal").classList.add("hidden"); if(window.cancelImgStyleEdit) window.cancelImgStyleEdit(); };
     $("saveConfig").onclick = async () => {
       ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => state.config[id] = $(id).value);
       state.config.blacklist = $("configBlacklist").value;
@@ -1167,7 +742,6 @@
         if (state.inputImages.length === 0) state.inputImages = [state.imageBase64];
         renderInputImages();
         $("imgGenModal").classList.remove("hidden");
-        // Mise à jour Studio
         renderStudioCategories();
         renderImgStylesButtons();
         renderGenImages();
@@ -1177,15 +751,7 @@
     $("addInputImgBtn").onclick = () => $("extraImgInput").click();
     $("extraImgInput").onchange = (e) => {
         const files = Array.from(e.target.files);
-        files.forEach(f => {
-            const r = new FileReader();
-            r.onload = (ev) => {
-                const b64 = ev.target.result.split(",")[1];
-                state.inputImages.push(b64);
-                renderInputImages();
-            };
-            r.readAsDataURL(f);
-        });
+        files.forEach(f => { const r = new FileReader(); r.onload = (ev) => { const b64 = ev.target.result.split(",")[1]; state.inputImages.push(b64); renderInputImages(); }; r.readAsDataURL(f); });
     };
     $("saveImgSelectionBtn").onclick = window.saveImgSelection;
     
@@ -1216,9 +782,7 @@
     loadConfig(); 
     
     const lastId = localStorage.getItem('lastHistoryId');
-    loadHistory().then(() => {
-        if(lastId) window.restore(lastId);
-    });
+    loadHistory().then(() => { if(lastId) window.restore(lastId); });
   }
 
   init();
