@@ -1,7 +1,3 @@
-{
-type: uploaded file
-fileName: hrdecom/app/app-0c9ef930b25fd034277c072055e9cefc92f8be42/app.js
-fullContent:
 (() => {
   const $ = (id) => document.getElementById(id);
 
@@ -65,7 +61,7 @@ fullContent:
     const saved = data.find(i => i.id === 'full_config');
     if (saved) {
       const parsed = JSON.parse(saved.value);
-      state.config = { ...DEFAULTS, ...parsed }; // Merge
+      state.config = { ...DEFAULTS, ...parsed }; 
       if (!state.config.imgStyles) state.config.imgStyles = [];
       if (!state.config.imgCategories) state.config.imgCategories = DEFAULTS.imgCategories;
     }
@@ -223,7 +219,7 @@ fullContent:
       }
   };
 
-  /* --- STUDIO UI LOGIC (Général + Sous-Catégories) --- */
+  /* --- STUDIO UI LOGIC --- */
   function renderStudioCategories() {
       const container = $("imgGenCategoriesBar");
       if(!container) return;
@@ -285,13 +281,12 @@ fullContent:
           isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
       }
 
-      // Design moderne "Tag"
       const borderStyle = s.mode === 'manual' ? 'border:1px dashed #007AFF;' : 'border:1px solid #e5e5e5;';
       const bgColor = isActive ? '#007AFF' : '#fff';
       const color = isActive ? '#fff' : '#1d1d1f';
       const shadow = isActive ? 'box-shadow: 0 2px 5px rgba(0,122,255,0.3);' : 'box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
 
-      // NOTE CRUCIALE : Ajout de la classe "style-btn-click" pour l'event listener
+      // IMPORTANT : la classe "style-btn-click" permet l'écoute d'événement global
       return `
          <button class="style-tag style-btn-click" 
             data-name="${s.name.replace(/"/g, '&quot;')}"
@@ -305,6 +300,7 @@ fullContent:
 
   // --- EVENT LISTENER ROBUSTE POUR LES CLICS ---
   document.addEventListener('click', function(e) {
+      // On cherche le bouton le plus proche avec la classe
       const btn = e.target.closest('.style-btn-click');
       if (btn) {
           const name = btn.getAttribute('data-name');
@@ -312,7 +308,7 @@ fullContent:
       }
   });
 
-  // --- LOGIQUE TOGGLE ROBUSTE (FIX) ---
+  // --- LOGIQUE TOGGLE ROBUSTE ---
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName);
       if(!style) return;
@@ -325,10 +321,11 @@ fullContent:
           let currentText = $("imgGenPrompt").value.trim();
           
           if (idx > -1) {
-              // DÉSACTIVATION
+              // DESACTIVATION
               state.manualImgStyles.splice(idx, 1);
               
               if (currentText.includes(promptClean)) {
+                  // On retire le prompt proprement
                   const parts = currentText.split(promptClean);
                   currentText = parts.map(p => p.trim()).filter(p => p).join(" ");
                   $("imgGenPrompt").value = currentText;
@@ -490,7 +487,7 @@ fullContent:
       // NETTOYAGE UI (POST-SEND)
       state.selectedImgStyles = []; 
       state.manualImgStyles = [];
-      $("imgGenPrompt").value = ""; 
+      $("imgGenPrompt").value = ""; // ON VIDE
       renderImgStylesButtons(); 
 
       // EXECUTION
@@ -532,7 +529,6 @@ fullContent:
   }
 
   function renderGenImages() {
-      // 1. Session Results
       const sessionContainer = $("imgGenSessionResults");
       sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => {
         if (item.loading) {
@@ -559,7 +555,7 @@ fullContent:
         </div>
       `}).join("");
 
-      // 2. Saved Results
+      // Saved Results
       let savedHtml = "";
       if(state.imageBase64) {
           savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default;">
@@ -570,6 +566,7 @@ fullContent:
       }
 
       savedHtml += state.savedGeneratedImages.map((item, i) => {
+          // SELECTION VISUELLE : BORDURE BLEUE
           const isSelected = state.inputImages.includes(item.image);
           const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : '';
 
@@ -593,22 +590,18 @@ fullContent:
       $("imgGenSavedResults").innerHTML = savedHtml;
   }
 
-  // --- TOGGLE SAVED IMAGE (SELECTION CLICK) ---
+  // --- TOGGLE SAVED IMAGE ---
   window.toggleSavedImg = (index) => {
       const item = state.savedGeneratedImages[index];
       if(!item) return;
-      
       const idx = state.inputImages.indexOf(item.image);
-      if(idx > -1) {
-          state.inputImages.splice(idx, 1);
-      } else {
-          state.inputImages.push(item.image);
-      }
+      if(idx > -1) { state.inputImages.splice(idx, 1); } 
+      else { state.inputImages.push(item.image); }
       renderInputImages();
       renderGenImages();
   };
 
-  // --- DRAG AND DROP (FLUIDE VIA CSS) ---
+  // --- DRAG AND DROP ---
   let dragSrcIndex = null;
   window.dragStart = (e, i) => { 
       dragSrcIndex = i; 
@@ -636,15 +629,6 @@ fullContent:
               const histItem = state.historyCache.find(h => h.id === state.currentHistoryId);
               if (histItem) histItem.generated_images = payload.generated_images;
           } catch(err) {}
-      }
-  };
-
-  window.addSavedToInput = (index) => {
-      const item = state.savedGeneratedImages[index];
-      if(item && !state.inputImages.includes(item.image)) {
-          state.inputImages.push(item.image);
-          renderInputImages();
-          document.querySelector('button[data-tab="tab-img-chat"]').click();
       }
   };
 
