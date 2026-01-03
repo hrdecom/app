@@ -281,17 +281,16 @@
           isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
       }
 
-      // Design moderne et propre
+      // Design amélioré
       const borderStyle = s.mode === 'manual' ? 'border:1px dashed #007AFF;' : 'border:1px solid #e5e5e5;';
       const bgColor = isActive ? '#007AFF' : '#fff';
       const color = isActive ? '#fff' : '#1d1d1f';
       const shadow = isActive ? 'box-shadow: 0 2px 5px rgba(0,122,255,0.3);' : 'box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
 
-      // Correction Bug "Manual Mode" : Utilisation de data-name pour gérer les apostrophes
+      // NOTE: On utilise data-name pour l'event listener afin d'éviter les problèmes d'échappement de quotes
       return `
-         <button class="style-tag" 
-            onclick="window.toggleImgStyle(this.getAttribute('data-name'))" 
-            data-name="${s.name.replace(/"/g, '&quot;')}"
+         <button class="style-tag style-btn-click" 
+            data-name="${s.name}" 
             style="display:flex; align-items:center; gap:6px; flex-shrink:0; ${borderStyle} background:${bgColor}; color:${color}; padding:6px 12px; border-radius:20px; transition: all 0.2s; ${shadow} font-weight:500;">
             ${s.refImage ? '<span style="width:16px; height:16px; background:#f0f0f0; border-radius:50%; display:inline-block; overflow:hidden;"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}
             <span>${s.name}</span>
@@ -300,42 +299,63 @@
       `;
   }
 
-  // --- LOGIQUE TOGGLE (AUTO vs MANUEL) ---
+  // GLOBAL CLICK DELEGATION POUR LES BOUTONS STYLES
+  // (Empêche les bugs d'injection HTML/Onclick)
+  document.addEventListener('click', function(e) {
+      const btn = e.target.closest('.style-btn-click');
+      if (btn) {
+          const name = btn.getAttribute('data-name');
+          if (name) window.toggleImgStyle(name);
+      }
+  });
+
+  // --- LOGIQUE TOGGLE ROBUSTE (FIX) ---
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName);
       if(!style) return;
 
+      const promptClean = style.prompt.trim(); // Prompt du bouton nettoyé
+
       if (style.mode === 'manual') {
-          // LOGIQUE MANUELLE
+          // MODE MANUEL
           const idx = state.manualImgStyles.indexOf(styleName);
-          const currentText = $("imgGenPrompt").value;
+          let currentText = $("imgGenPrompt").value.trim();
           
           if (idx > -1) {
-              // DÉSACTIVER
+              // DÉSACTIVATION
               state.manualImgStyles.splice(idx, 1);
-              if (currentText.includes(style.prompt)) {
-                  // Retrait propre avec trim pour éviter les doubles espaces
-                  $("imgGenPrompt").value = currentText.replace(style.prompt, "").replace(/\s\s+/g, ' ').trim();
+              
+              // Suppression Robuste (Split/Join) pour ignorer les espaces multiples
+              if (currentText.includes(promptClean)) {
+                  const parts = currentText.split(promptClean);
+                  // On recolle les morceaux et on nettoie les doubles espaces
+                  currentText = parts.map(p => p.trim()).filter(p => p).join(" ");
+                  $("imgGenPrompt").value = currentText;
               }
-              // RETIRER IMAGE REF
+
+              // Retrait Image
               if (style.refImage) {
                   const imgIdx = state.inputImages.indexOf(style.refImage);
                   if (imgIdx > -1) state.inputImages.splice(imgIdx, 1);
                   renderInputImages();
               }
           } else {
-              // ACTIVER
+              // ACTIVATION
               state.manualImgStyles.push(styleName);
-              const newText = (currentText + " " + style.prompt).trim();
-              $("imgGenPrompt").value = newText;
-              // AJOUTER IMAGE REF
+              
+              // Ajout texte (si pas déjà dedans)
+              if (!currentText.includes(promptClean)) {
+                  $("imgGenPrompt").value = (currentText + " " + promptClean).trim();
+              }
+
+              // Ajout Image
               if (style.refImage && !state.inputImages.includes(style.refImage)) {
                   state.inputImages.push(style.refImage);
                   renderInputImages();
               }
           }
       } else {
-          // LOGIQUE AUTO
+          // MODE AUTO
           const idx = state.selectedImgStyles.findIndex(s => s.name === styleName);
           if (idx > -1) { state.selectedImgStyles.splice(idx, 1); } 
           else { state.selectedImgStyles.push(style); }
@@ -469,13 +489,13 @@
       state.sessionGeneratedImages.unshift(...newItems);
       renderGenImages();
 
-      // 2. NETTOYAGE UI
+      // NETTOYAGE UI (POST-SEND)
       state.selectedImgStyles = []; 
       state.manualImgStyles = [];
-      $("imgGenPrompt").value = ""; // Vider le chat
+      $("imgGenPrompt").value = ""; 
       renderImgStylesButtons(); 
 
-      // 3. EXECUTION
+      // EXECUTION
       newItems.forEach(async (item, index) => {
           const batchData = batches[index];
           try {
@@ -552,8 +572,8 @@
       }
 
       savedHtml += state.savedGeneratedImages.map((item, i) => {
+          // CORRECTION: Sélection visuelle si dans inputImages
           const isSelected = state.inputImages.includes(item.image);
-          // Bordure Bleue si sélectionné
           const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : '';
 
           return `
@@ -576,23 +596,22 @@
       $("imgGenSavedResults").innerHTML = savedHtml;
   }
 
-  // --- SELECTION IMAGE ENREGISTRÉE (FIX) ---
+  // --- TOGGLE SAVED IMAGE (SELECTION CLICK) ---
   window.toggleSavedImg = (index) => {
-      // Ignorer si on vient de cliquer sur un bouton (géré par stopPropagation normalement, mais sécu)
       const item = state.savedGeneratedImages[index];
       if(!item) return;
       
       const idx = state.inputImages.indexOf(item.image);
       if(idx > -1) {
-          state.inputImages.splice(idx, 1); 
+          state.inputImages.splice(idx, 1);
       } else {
           state.inputImages.push(item.image);
       }
       renderInputImages();
-      renderGenImages(); // Rafraîchir pour la bordure bleue
+      renderGenImages();
   };
 
-  // --- DRAG AND DROP (FLUIDE) ---
+  // --- DRAG AND DROP (FLUIDE VIA CSS) ---
   let dragSrcIndex = null;
   window.dragStart = (e, i) => { 
       dragSrcIndex = i; 
@@ -880,7 +899,6 @@
     $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
     loadConfig(); 
     
-    // RESTORE LAST SESSION IF EXISTS
     const lastId = localStorage.getItem('lastHistoryId');
     loadHistory().then(() => {
         if(lastId) window.restore(lastId);
