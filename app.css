@@ -133,6 +133,10 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .type-folder > .tree-children .tree-header { padding-left: 60px; background: #fcfcfc; }
 .type-folder > .tree-children .tree-header::after { left: 60px; }
 
+/* CHEVRON (ACCORDEON SETTINGS) */
+.tree-chevron { font-size: 10px; color: #999; margin-right: 8px; cursor: pointer; transition: transform 0.2s; display: inline-block; width: 15px; text-align: center; }
+.tree-chevron:hover { color: #007AFF; }
+
 /* Icon Styles */
 .t-icon { margin-right: 12px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
 .t-icon svg { width: 100%; height: 100%; fill: currentColor; }
@@ -140,10 +144,6 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .type-group .t-icon { color: #8E8E93; }
 .type-folder .t-icon { color: #007AFF; }
 .type-style .t-icon { color: #FF9500; }
-
-/* CHEVRON (ACCORDEON SETTINGS) */
-.tree-chevron { font-size: 10px; color: #999; margin-right: 8px; cursor: pointer; transition: transform 0.2s; display: inline-block; width: 15px; text-align: center; }
-.tree-chevron:hover { color: #007AFF; }
 
 /* RÈGLE SPÉCIALE : STYLE DANS UN FOLDER (BLEU) - Renforcée */
 .type-folder .tree-children .type-style .t-icon { color: #007AFF !important; }
