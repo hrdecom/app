@@ -141,6 +141,10 @@ pre { white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px
 .type-folder .t-icon { color: #007AFF; }
 .type-style .t-icon { color: #FF9500; }
 
+/* CHEVRON (ACCORDEON SETTINGS) */
+.tree-chevron { font-size: 10px; color: #999; margin-right: 8px; cursor: pointer; transition: transform 0.2s; display: inline-block; width: 15px; text-align: center; }
+.tree-chevron:hover { color: #007AFF; }
+
 /* RÈGLE SPÉCIALE : STYLE DANS UN FOLDER (BLEU) - Renforcée */
 .type-folder .tree-children .type-style .t-icon { color: #007AFF !important; }
 
