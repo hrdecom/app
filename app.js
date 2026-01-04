@@ -495,6 +495,33 @@
   window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
   function switchTab(e) { const m = e.target.closest('.modal-content'); if (!m) return; m.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active")); m.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden")); e.target.classList.add("active"); const target = $(e.target.dataset.tab); if(target) target.classList.remove("hidden"); }
 
+  // --- NOUVELLE FONCTION: COMPRESSION IMAGE POUR SETTINGS ---
+  function compressImage(file, maxWidth = 800, quality = 0.7) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                // Retourne seulement le base64 pur sans le préfixe data:image...
+                resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
+            };
+        };
+    });
+  }
+
   function init() {
     $("loading").classList.add("hidden");
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
@@ -505,9 +532,73 @@
     $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
     $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
     
-    // --- CORRECTION DU BUG : Initialisation sécurisée des boutons du Tree Editor ---
+    // --- CORRECTION DU BUG ---
     const addCatBtn = $("addCategoryBtn"); if(addCatBtn) addCatBtn.onclick = () => { const name = $("newCatName").value; if(!name) return; state.config.imgCategories.push({ id: "cat_" + Date.now(), name: name, order: 999 }); $("newCatName").value = ""; saveConfigToApi(); renderConfigUI(); };
-    const saveNodeBtn = $("saveNodeBtn"); if(saveNodeBtn) saveNodeBtn.onclick = () => { const id = $("editNodeId").value; const type = $("editNodeType").value; const name = $("editNodeName").value; if (!name) return alert("Nom requis"); if (!id) { const newId = (type === 'group' ? 'grp_' : (type === 'folder' ? 'fol_' : 'sty_')) + Date.now(); const newItem = { id: newId, name, order: 9999 }; if (type === 'group') { newItem.categoryId = state.tempParentId; state.config.imgGroups.push(newItem); if(!state.treeExpandedIds.includes(state.tempParentId)) state.treeExpandedIds.push(state.tempParentId); } else { newItem.parentId = state.tempParentId; newItem.parentType = state.tempParentType; if(!state.treeExpandedIds.includes(state.tempParentId)) state.treeExpandedIds.push(state.tempParentId); if (type === 'style') { newItem.prompt = $("editNodePrompt").value; newItem.mode = $("editNodeMode").value; const file = $("editNodeFile").files[0]; if (file) { const r = new FileReader(); r.onload = (e) => { newItem.refImage = e.target.result.split(",")[1]; state.config.imgStyles.push(newItem); saveConfigToApi(); closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; } state.config.imgStyles.push(newItem); } else { state.config.imgFolders.push(newItem); } } } else { let list = (type === 'category') ? state.config.imgCategories : (type === 'group') ? state.config.imgGroups : (type === 'folder') ? state.config.imgFolders : state.config.imgStyles; const item = list.find(x => x.id === id); if (item) { item.name = name; if (type === 'style') { item.prompt = $("editNodePrompt").value; item.mode = $("editNodeMode").value; const file = $("editNodeFile").files[0]; if (file) { const r = new FileReader(); r.onload = (e) => { item.refImage = e.target.result.split(",")[1]; saveConfigToApi(); closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; } } } } saveConfigToApi(); closeNodeEditor(); renderConfigUI(); };
+    
+    const saveNodeBtn = $("saveNodeBtn"); 
+    if(saveNodeBtn) saveNodeBtn.onclick = async () => { 
+        const id = $("editNodeId").value; 
+        const type = $("editNodeType").value; 
+        const name = $("editNodeName").value; 
+        
+        if (!name) return alert("Nom requis"); 
+        
+        if (!id) { 
+            const newId = (type === 'group' ? 'grp_' : (type === 'folder' ? 'fol_' : 'sty_')) + Date.now(); 
+            const newItem = { id: newId, name, order: 9999 }; 
+            
+            if (type === 'group') { 
+                newItem.categoryId = state.tempParentId; 
+                state.config.imgGroups.push(newItem); 
+                if(!state.treeExpandedIds.includes(state.tempParentId)) state.treeExpandedIds.push(state.tempParentId); 
+            } else { 
+                newItem.parentId = state.tempParentId; 
+                newItem.parentType = state.tempParentType; 
+                if(!state.treeExpandedIds.includes(state.tempParentId)) state.treeExpandedIds.push(state.tempParentId); 
+                
+                if (type === 'style') { 
+                    newItem.prompt = $("editNodePrompt").value; 
+                    newItem.mode = $("editNodeMode").value; 
+                    const file = $("editNodeFile").files[0]; 
+                    if (file) { 
+                        // UTILISATION DE LA COMPRESSION
+                        newItem.refImage = await compressImage(file);
+                        state.config.imgStyles.push(newItem); 
+                        saveConfigToApi(); 
+                        closeNodeEditor(); 
+                        renderConfigUI(); 
+                        return;
+                    } 
+                    state.config.imgStyles.push(newItem); 
+                } else { 
+                    state.config.imgFolders.push(newItem); 
+                } 
+            } 
+        } else { 
+            let list = (type === 'category') ? state.config.imgCategories : (type === 'group') ? state.config.imgGroups : (type === 'folder') ? state.config.imgFolders : state.config.imgStyles; 
+            const item = list.find(x => x.id === id); 
+            if (item) { 
+                item.name = name; 
+                if (type === 'style') { 
+                    item.prompt = $("editNodePrompt").value; 
+                    item.mode = $("editNodeMode").value; 
+                    const file = $("editNodeFile").files[0]; 
+                    if (file) { 
+                        // UTILISATION DE LA COMPRESSION
+                        item.refImage = await compressImage(file);
+                        saveConfigToApi(); 
+                        closeNodeEditor(); 
+                        renderConfigUI(); 
+                        return; 
+                    } 
+                } 
+            } 
+        } 
+        saveConfigToApi(); 
+        closeNodeEditor(); 
+        renderConfigUI(); 
+    };
+    
     const delNodeBtn = $("deleteNodeBtn"); if(delNodeBtn) delNodeBtn.onclick = () => { const id = $("editNodeId").value; const type = $("editNodeType").value; window.deleteNodeDirect(type, id); closeNodeEditor(); };
     const cancelNodeBtn = $("cancelNodeBtn"); if(cancelNodeBtn) cancelNodeBtn.onclick = closeNodeEditor;
     // -----------------------------------------------------------------------------
