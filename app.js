@@ -36,13 +36,23 @@
     inputImages: [], sessionGeneratedImages: [], savedGeneratedImages: [], selectedSessionImagesIdx: [],
     currentImgCategory: "", activeFolderId: null, selectedImgStyles: [], manualImgStyles: [], expandedGroups: [], 
     draggedItem: null,
-    treeExpandedIds: [] // NOUVEAU: Etat d'ouverture des dossiers dans l'éditeur
+    treeExpandedIds: [] // Pour les accordéons
   };
 
   const startLoading = () => { let s = 0; $("timer").textContent = "00:00"; if (state.timerInterval) clearInterval(state.timerInterval); state.timerInterval = setInterval(() => { s++; const mm = String(Math.floor(s/60)).padStart(2,"0"); const ss = String(s%60).padStart(2,"0"); $("timer").textContent = `${mm}:${ss}`; }, 1000); $("loading").classList.remove("hidden"); };
   const stopLoading = () => { clearInterval(state.timerInterval); $("loading").classList.add("hidden"); };
 
   const formatLangUrl = (url, sub = "en.") => { if (!url) return ""; let cleanUrl = url.replace(/https:\/\/(en\.|dn\.|du\.|de\.|it\.|pl\.|pt-br\.|pt\.|es\.)/, "https://"); return cleanUrl.replace("https://", `https://${sub}`); };
+
+  // --- SAUVEGARDE AUTOMATIQUE ---
+  async function saveConfigToApi() {
+      try {
+          await fetch("/api/settings", { 
+              method: "POST", 
+              body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) 
+          });
+      } catch(e) { console.error("Erreur save auto", e); }
+  }
 
   async function loadConfig() {
     const res = await fetch("/api/settings");
@@ -89,7 +99,7 @@
   };
 
   /* =========================================
-     TREE EDITOR (MIXTE + ACCORDION)
+     TREE EDITOR (MIXTE + ACCORDEONS GROUPES & FOLDERS)
      ========================================= */
 
   window.toggleTreeFolder = (id) => {
@@ -177,11 +187,11 @@
       if (type === "group") addBtns = `<button class="action-btn-text" onclick="window.addNode('folder', '${data.id}', 'group')">+ Multiple</button> <button class="action-btn-text" onclick="window.addNode('style', '${data.id}', 'group')">+ Bouton</button>`;
       if (type === "folder") addBtns = `<button class="action-btn-text" onclick="window.addNode('style', '${data.id}', 'folder')">+ Bouton</button>`;
 
-      // LOGIQUE ACCORDEON POUR FOLDER
+      // LOGIQUE ACCORDEON POUR FOLDER ET GROUP
       let chevron = "";
       let childrenClass = "tree-children";
       
-      if (type === 'folder') {
+      if (type === 'folder' || type === 'group') {
           const isExpanded = state.treeExpandedIds.includes(data.id);
           chevron = `<span class="tree-chevron" onclick="event.stopPropagation(); window.toggleTreeFolder('${data.id}')">${isExpanded ? '▼' : '▶'}</span>`;
           if(!isExpanded) childrenClass += " hidden";
@@ -320,7 +330,11 @@
       siblings.sort((a,b) => (a.order||0) - (b.order||0));
       siblings = siblings.filter(x => x.id !== srcItem.id);
 
-      if (action === 'nest') { siblings.push(srcItem); } 
+      if (action === 'nest') { 
+          siblings.push(srcItem); 
+          // Auto-expand target if nesting
+          if (!state.treeExpandedIds.includes(dest.id)) state.treeExpandedIds.push(dest.id);
+      } 
       else {
           const destIndex = siblings.findIndex(x => x.id === dest.id);
           if (destIndex !== -1) {
@@ -329,6 +343,7 @@
           } else { siblings.push(srcItem); }
       }
       siblings.forEach((item, index) => item.order = index);
+      saveConfigToApi(); // AUTO SAVE
       renderConfigUI();
   };
 
@@ -347,6 +362,7 @@
           state.config.imgFolders = state.config.imgFolders.filter(x => x.id !== id);
           state.config.imgStyles = state.config.imgStyles.filter(x => !(x.parentType === 'folder' && x.parentId === id));
       } else if (type === 'style') { state.config.imgStyles = state.config.imgStyles.filter(x => x.id !== id); }
+      saveConfigToApi(); // AUTO SAVE
       renderConfigUI();
   };
 
@@ -490,8 +506,8 @@
     $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
     
     // --- CORRECTION DU BUG : Initialisation sécurisée des boutons du Tree Editor ---
-    const addCatBtn = $("addCategoryBtn"); if(addCatBtn) addCatBtn.onclick = () => { const name = $("newCatName").value; if(!name) return; state.config.imgCategories.push({ id: "cat_" + Date.now(), name: name, order: 999 }); $("newCatName").value = ""; renderConfigUI(); };
-    const saveNodeBtn = $("saveNodeBtn"); if(saveNodeBtn) saveNodeBtn.onclick = () => { const id = $("editNodeId").value; const type = $("editNodeType").value; const name = $("editNodeName").value; if (!name) return alert("Nom requis"); if (!id) { const newId = (type === 'group' ? 'grp_' : (type === 'folder' ? 'fol_' : 'sty_')) + Date.now(); const newItem = { id: newId, name, order: 9999 }; if (type === 'group') { newItem.categoryId = state.tempParentId; state.config.imgGroups.push(newItem); } else { newItem.parentId = state.tempParentId; newItem.parentType = state.tempParentType; if (type === 'style') { newItem.prompt = $("editNodePrompt").value; newItem.mode = $("editNodeMode").value; const file = $("editNodeFile").files[0]; if (file) { const r = new FileReader(); r.onload = (e) => { newItem.refImage = e.target.result.split(",")[1]; state.config.imgStyles.push(newItem); closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; } state.config.imgStyles.push(newItem); } else { state.config.imgFolders.push(newItem); } } } else { let list = (type === 'category') ? state.config.imgCategories : (type === 'group') ? state.config.imgGroups : (type === 'folder') ? state.config.imgFolders : state.config.imgStyles; const item = list.find(x => x.id === id); if (item) { item.name = name; if (type === 'style') { item.prompt = $("editNodePrompt").value; item.mode = $("editNodeMode").value; const file = $("editNodeFile").files[0]; if (file) { const r = new FileReader(); r.onload = (e) => { item.refImage = e.target.result.split(",")[1]; closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; } } } } closeNodeEditor(); renderConfigUI(); };
+    const addCatBtn = $("addCategoryBtn"); if(addCatBtn) addCatBtn.onclick = () => { const name = $("newCatName").value; if(!name) return; state.config.imgCategories.push({ id: "cat_" + Date.now(), name: name, order: 999 }); $("newCatName").value = ""; saveConfigToApi(); renderConfigUI(); };
+    const saveNodeBtn = $("saveNodeBtn"); if(saveNodeBtn) saveNodeBtn.onclick = () => { const id = $("editNodeId").value; const type = $("editNodeType").value; const name = $("editNodeName").value; if (!name) return alert("Nom requis"); if (!id) { const newId = (type === 'group' ? 'grp_' : (type === 'folder' ? 'fol_' : 'sty_')) + Date.now(); const newItem = { id: newId, name, order: 9999 }; if (type === 'group') { newItem.categoryId = state.tempParentId; state.config.imgGroups.push(newItem); if(!state.treeExpandedIds.includes(state.tempParentId)) state.treeExpandedIds.push(state.tempParentId); } else { newItem.parentId = state.tempParentId; newItem.parentType = state.tempParentType; if(!state.treeExpandedIds.includes(state.tempParentId)) state.treeExpandedIds.push(state.tempParentId); if (type === 'style') { newItem.prompt = $("editNodePrompt").value; newItem.mode = $("editNodeMode").value; const file = $("editNodeFile").files[0]; if (file) { const r = new FileReader(); r.onload = (e) => { newItem.refImage = e.target.result.split(",")[1]; state.config.imgStyles.push(newItem); saveConfigToApi(); closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; } state.config.imgStyles.push(newItem); } else { state.config.imgFolders.push(newItem); } } } else { let list = (type === 'category') ? state.config.imgCategories : (type === 'group') ? state.config.imgGroups : (type === 'folder') ? state.config.imgFolders : state.config.imgStyles; const item = list.find(x => x.id === id); if (item) { item.name = name; if (type === 'style') { item.prompt = $("editNodePrompt").value; item.mode = $("editNodeMode").value; const file = $("editNodeFile").files[0]; if (file) { const r = new FileReader(); r.onload = (e) => { item.refImage = e.target.result.split(",")[1]; saveConfigToApi(); closeNodeEditor(); renderConfigUI(); }; r.readAsDataURL(file); return; } } } } saveConfigToApi(); closeNodeEditor(); renderConfigUI(); };
     const delNodeBtn = $("deleteNodeBtn"); if(delNodeBtn) delNodeBtn.onclick = () => { const id = $("editNodeId").value; const type = $("editNodeType").value; window.deleteNodeDirect(type, id); closeNodeEditor(); };
     const cancelNodeBtn = $("cancelNodeBtn"); if(cancelNodeBtn) cancelNodeBtn.onclick = closeNodeEditor;
     // -----------------------------------------------------------------------------
