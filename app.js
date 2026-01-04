@@ -35,7 +35,8 @@
     hlPage: 1, adPage: 1,
     inputImages: [], sessionGeneratedImages: [], savedGeneratedImages: [], selectedSessionImagesIdx: [],
     currentImgCategory: "", activeFolderId: null, selectedImgStyles: [], manualImgStyles: [], expandedGroups: [], 
-    draggedItem: null
+    draggedItem: null,
+    treeExpandedIds: [] // NOUVEAU: Etat d'ouverture des dossiers dans l'éditeur
   };
 
   const startLoading = () => { let s = 0; $("timer").textContent = "00:00"; if (state.timerInterval) clearInterval(state.timerInterval); state.timerInterval = setInterval(() => { s++; const mm = String(Math.floor(s/60)).padStart(2,"0"); const ss = String(s%60).padStart(2,"0"); $("timer").textContent = `${mm}:${ss}`; }, 1000); $("loading").classList.remove("hidden"); };
@@ -88,8 +89,15 @@
   };
 
   /* =========================================
-     TREE EDITOR (MIXTE)
+     TREE EDITOR (MIXTE + ACCORDION)
      ========================================= */
+
+  window.toggleTreeFolder = (id) => {
+      const idx = state.treeExpandedIds.indexOf(id);
+      if(idx > -1) state.treeExpandedIds.splice(idx, 1);
+      else state.treeExpandedIds.push(id);
+      renderImgConfigTree();
+  };
 
   function renderImgConfigTree() {
       const container = $("treeEditor");
@@ -164,14 +172,24 @@
       if (type === "folder") icon = ICONS.folder;
       if (type === "style") icon = ICONS.style;
       
-      // BOUTONS TEXTUELS EXPLICITES (CORRECTION)
       let addBtns = "";
       if (type === "category") addBtns = `<button class="action-btn-text" onclick="window.addNode('group', '${data.id}')">+ Groupe</button> <button class="action-btn-text" onclick="window.addNode('folder', '${data.id}', 'category')">+ Multiple</button> <button class="action-btn-text" onclick="window.addNode('style', '${data.id}', 'category')">+ Bouton</button>`;
       if (type === "group") addBtns = `<button class="action-btn-text" onclick="window.addNode('folder', '${data.id}', 'group')">+ Multiple</button> <button class="action-btn-text" onclick="window.addNode('style', '${data.id}', 'group')">+ Bouton</button>`;
       if (type === "folder") addBtns = `<button class="action-btn-text" onclick="window.addNode('style', '${data.id}', 'folder')">+ Bouton</button>`;
 
+      // LOGIQUE ACCORDEON POUR FOLDER
+      let chevron = "";
+      let childrenClass = "tree-children";
+      
+      if (type === 'folder') {
+          const isExpanded = state.treeExpandedIds.includes(data.id);
+          chevron = `<span class="tree-chevron" onclick="event.stopPropagation(); window.toggleTreeFolder('${data.id}')">${isExpanded ? '▼' : '▶'}</span>`;
+          if(!isExpanded) childrenClass += " hidden";
+      }
+
       el.innerHTML = `
         <div class="tree-header">
+            ${chevron}
             ${icon ? `<span class="t-icon">${icon}</span>` : ''}
             <span class="t-label">${data.name}</span>
             <div class="t-actions">
@@ -180,9 +198,10 @@
                 <button class="action-btn-text btn-delete" onclick="window.deleteNodeDirect('${type}', '${data.id}')">Suppr.</button>
             </div>
         </div>
-        <div class="tree-children"></div>
+        <div class="${childrenClass}"></div>
       `;
 
+      // --- DRAG & DROP ---
       const header = el.querySelector('.tree-header');
       el.addEventListener('dragstart', (e) => {
           state.draggedItem = { id: data.id, type: type, parentId: parentId };
