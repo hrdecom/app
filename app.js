@@ -31,10 +31,12 @@
     timerInterval: null, sessionHeadlines: [], sessionAds: [],
     selectedHeadlines: [], selectedAds: [],
     headlinesTrans: {}, adsTrans: {},
+    adsInfo: { title1: "", title2: "", title3: "", title4: "", sub: "" }, // Titres ads multiples
+    adsInfoTrans: {}, // Traductions des infos ads par langue
     selHlStyles: [], selAdStyles: [],
     hlPage: 1, adPage: 1,
     inputImages: [], sessionGeneratedImages: [], savedGeneratedImages: [], selectedSessionImagesIdx: [],
-    currentImgCategory: "", activeFolderId: null, selectedImgStyles: [], manualImgStyles: [], expandedGroups: [], 
+    currentImgCategory: "", activeFolderId: null, selectedImgStyles: [], manualImgStyles: [], expandedGroups: [],
     draggedItem: null,
     treeExpandedIds: [] // Pour les accordéons
   };
@@ -225,12 +227,122 @@
 
     const productUrl = $("productUrlInput").value || "";
     const title = $("titleText").textContent || "";
+    const info = state.adsInfo;
 
-    container.innerHTML = `
-      <div class="ads-info-row"><span class="ads-info-label">TITRE PRODUIT</span><span>${title}</span></div>
-      <div class="ads-info-row"><span class="ads-info-label">URL PRODUIT</span><span style="font-size:11px;">${productUrl || 'Non définie'}</span></div>
-    `;
+    // Construire les lignes d'info
+    let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <span style="font-weight:600; font-size:12px;">Informations Ad Copy</span>
+      <button class="secondary-btn" style="font-size:10px; padding:4px 10px;" onclick="window.generateAdsInfo()">🔄 Générer titres</button>
+    </div>`;
+
+    // Titre 1-4
+    html += `<div class="ads-info-row">
+      <span class="ads-info-label">TITRE 1</span>
+      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(info.title1 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title1', this.value)" placeholder="Titre court accrocheur...">
+      <button class="icon-btn-small" onclick="window.copyToClip('${(info.title1 || '').replace(/'/g, "\\'")}')">📋</button>
+    </div>`;
+    html += `<div class="ads-info-row">
+      <span class="ads-info-label">TITRE 2</span>
+      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(info.title2 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title2', this.value)" placeholder="Bénéfice principal...">
+      <button class="icon-btn-small" onclick="window.copyToClip('${(info.title2 || '').replace(/'/g, "\\'")}')">📋</button>
+    </div>`;
+    html += `<div class="ads-info-row">
+      <span class="ads-info-label">TITRE 3</span>
+      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(info.title3 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title3', this.value)" placeholder="Call to action...">
+      <button class="icon-btn-small" onclick="window.copyToClip('${(info.title3 || '').replace(/'/g, "\\'")}')">📋</button>
+    </div>`;
+    html += `<div class="ads-info-row">
+      <span class="ads-info-label">TITRE 4</span>
+      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(info.title4 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title4', this.value)" placeholder="Urgence/Offre...">
+      <button class="icon-btn-small" onclick="window.copyToClip('${(info.title4 || '').replace(/'/g, "\\'")}')">📋</button>
+    </div>`;
+
+    // Sub description
+    html += `<div class="ads-info-row" style="flex-direction:column; align-items:stretch; gap:5px;">
+      <span class="ads-info-label">SUB DESCRIPTION</span>
+      <div style="display:flex; gap:5px;">
+        <textarea class="ios-input" style="flex:1; font-size:12px; padding:8px; min-height:60px; resize:vertical;" onchange="window.updateAdsInfo('sub', this.value)" placeholder="Description courte pour les ads...">${info.sub || ''}</textarea>
+        <button class="icon-btn-small" style="align-self:flex-start;" onclick="window.copyToClip(\`${(info.sub || '').replace(/`/g, "\\`")}\`)">📋</button>
+      </div>
+    </div>`;
+
+    // Infos produit (lecture seule)
+    html += `<div style="margin-top:15px; padding-top:15px; border-top:1px solid #eee;">`;
+    html += `<div class="ads-info-row"><span class="ads-info-label">TITRE PRODUIT</span><span style="flex:1;">${title}</span><button class="icon-btn-small" onclick="window.copyToClip('${title.replace(/'/g, "\\'")}')">📋</button></div>`;
+    html += `<div class="ads-info-row"><span class="ads-info-label">URL PRODUIT</span><span style="flex:1; font-size:11px;">${productUrl || 'Non définie'}</span><button class="icon-btn-small" onclick="window.copyToClip('${productUrl}')">📋</button></div>`;
+    html += `</div>`;
+
+    // Traductions disponibles
+    const transLangs = Object.keys(state.adsInfoTrans);
+    if (transLangs.length > 0) {
+      html += `<div style="margin-top:15px; padding-top:15px; border-top:1px solid #eee;">
+        <span style="font-weight:600; font-size:11px; color:var(--text-muted);">TRADUCTIONS DISPONIBLES</span>`;
+      transLangs.forEach(lang => {
+        const trans = state.adsInfoTrans[lang];
+        const langName = LANGUAGES.find(l => l.code === lang)?.name || lang;
+        html += `<div style="margin-top:10px; padding:10px; background:#fff; border-radius:8px; border:1px solid #eee;">
+          <div style="font-weight:600; font-size:11px; margin-bottom:8px;">${langName}</div>
+          <div style="font-size:11px; color:#666;">
+            <div><strong>T1:</strong> ${trans.title1 || '-'}</div>
+            <div><strong>T2:</strong> ${trans.title2 || '-'}</div>
+            <div><strong>T3:</strong> ${trans.title3 || '-'}</div>
+            <div><strong>T4:</strong> ${trans.title4 || '-'}</div>
+            <div><strong>Sub:</strong> ${trans.sub || '-'}</div>
+          </div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    container.innerHTML = html;
   }
+
+  window.updateAdsInfo = (field, value) => {
+    state.adsInfo[field] = value;
+  };
+
+  window.generateAdsInfo = async () => {
+    if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
+    if (state.selectedAds.length === 0) return alert("Veuillez d'abord sélectionner des ad copys.");
+
+    startLoading();
+    try {
+      const productUrl = $("productUrlInput").value || "";
+      const title = $("titleText").textContent || "";
+      const adTexts = state.selectedAds.map(a => typeof a === 'object' ? a.text : a);
+
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        body: JSON.stringify({
+          action: 'generate_ads_info',
+          image: state.imageBase64,
+          media_type: state.imageMime,
+          config: state.config,
+          product_url: productUrl,
+          currentTitle: title,
+          adCopys: adTexts
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur génération");
+
+      state.adsInfo = {
+        title1: data.title1 || "",
+        title2: data.title2 || "",
+        title3: data.title3 || "",
+        title4: data.title4 || "",
+        sub: data.sub || ""
+      };
+
+      renderAdsInfoBlock();
+      alert("Titres générés avec succès !");
+    } catch(e) {
+      alert("Erreur: " + e.message);
+    } finally {
+      stopLoading();
+    }
+  };
 
   window.removeSavedHl = (idx) => {
     state.selectedHeadlines.splice(idx, 1);
@@ -255,6 +367,8 @@
       } else {
         payload.ad_copys = JSON.stringify(state.selectedAds.map(a => typeof a === 'object' ? a.text : a));
         payload.ads_trans = JSON.stringify(state.adsTrans);
+        payload.ads_info = JSON.stringify(state.adsInfo);
+        payload.ads_info_trans = JSON.stringify(state.adsInfoTrans);
       }
 
       const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
@@ -307,6 +421,10 @@
     startLoading();
     try {
       const productUrl = $("productUrlInput").value || "";
+
+      // Pour les ads, inclure aussi les infos ads à traduire
+      const infoToTranslate = (type === 'ad' && state.adsInfo.title1) ? state.adsInfo : null;
+
       const res = await fetch("/api/generate", {
         method: "POST",
         body: JSON.stringify({
@@ -316,6 +434,7 @@
           config: state.config,
           product_url: productUrl,
           itemsToTranslate: items,
+          infoToTranslate: infoToTranslate,
           targetLang: langName
         })
       });
@@ -327,6 +446,10 @@
         state.headlinesTrans[langCode] = data.translated_items || [];
       } else {
         state.adsTrans[langCode] = data.translated_items || [];
+        // Sauvegarder aussi les infos ads traduites
+        if (data.translated_info) {
+          state.adsInfoTrans[langCode] = data.translated_info;
+        }
       }
 
       alert(`Traduction en ${langName} terminée !`);
@@ -798,6 +921,8 @@
           state.selectedAds = [];
           state.headlinesTrans = {};
           state.adsTrans = {};
+          state.adsInfo = { title1: "", title2: "", title3: "", title4: "", sub: "" };
+          state.adsInfoTrans = {};
           state.savedGeneratedImages = [];
           state.sessionGeneratedImages = [];
           state.inputImages = [state.imageBase64];
@@ -844,7 +969,41 @@
   async function loadHistory() { try { const r = await fetch("/api/history"); state.historyCache = await r.json(); renderHistoryUI(); } catch(e){} }
   function renderHistoryUI() { const filtered = (state.historyCache || []).filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase())); const start = (state.currentPage - 1) * 5; const pag = filtered.slice(start, start + 5); $("historyList").innerHTML = pag.map(item => `<div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})"><img src="data:image/jpeg;base64,${item.image}" class="history-img"><div style="flex:1"><h4>${item.title || "Sans titre"}</h4></div><button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button></div>`).join(""); renderPagination(Math.ceil(filtered.length / 5)); }
   function renderPagination(total) { const p = $("pagination"); p.innerHTML = ""; if(total <= 1) return; for(let i=1; i<=total; i++) { const b = document.createElement("button"); b.textContent = i; if(i === state.currentPage) b.className = "active"; b.onclick = () => { state.currentPage = i; renderHistoryUI(); }; p.appendChild(b); } }
-  window.restore = async (id) => { state.currentHistoryId = id; localStorage.setItem('lastHistoryId', id); renderHistoryUI(); startLoading(); try { const res = await fetch(`/api/history?id=${id}`); const item = await res.json(); state.sessionHeadlines = []; state.sessionAds = []; state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : []; state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : []; state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {}; state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {}; state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : []; state.sessionGeneratedImages = []; $("titleText").textContent = item.title; $("descText").textContent = item.description; $("productUrlInput").value = item.product_url || ""; $("previewImg").src = `data:image/jpeg;base64,${item.image}`; state.imageBase64 = item.image; $("preview").classList.remove("hidden"); $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; state.inputImages = [item.image]; renderInputImages(); renderGenImages(); } catch(e) { alert("Erreur chargement: " + e.message); } finally { stopLoading(); } };
+  window.restore = async (id) => {
+    state.currentHistoryId = id;
+    localStorage.setItem('lastHistoryId', id);
+    renderHistoryUI();
+    startLoading();
+    try {
+      const res = await fetch(`/api/history?id=${id}`);
+      const item = await res.json();
+      state.sessionHeadlines = [];
+      state.sessionAds = [];
+      state.selectedHeadlines = item.headlines ? JSON.parse(item.headlines) : [];
+      state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
+      state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {};
+      state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
+      state.adsInfo = item.ads_info ? JSON.parse(item.ads_info) : { title1: "", title2: "", title3: "", title4: "", sub: "" };
+      state.adsInfoTrans = item.ads_info_trans ? JSON.parse(item.ads_info_trans) : {};
+      state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
+      state.sessionGeneratedImages = [];
+      $("titleText").textContent = item.title;
+      $("descText").textContent = item.description;
+      $("productUrlInput").value = item.product_url || "";
+      $("previewImg").src = `data:image/jpeg;base64,${item.image}`;
+      state.imageBase64 = item.image;
+      $("preview").classList.remove("hidden");
+      $("dropPlaceholder").style.display = "none";
+      $("generateBtn").disabled = false;
+      state.inputImages = [item.image];
+      renderInputImages();
+      renderGenImages();
+    } catch(e) {
+      alert("Erreur chargement: " + e.message);
+    } finally {
+      stopLoading();
+    }
+  };
   window.deleteItem = async (id) => { if(!confirm("Supprimer ?")) return; await fetch(`/api/history?id=${id}`, { method: "DELETE" }); if(state.currentHistoryId == id) { state.currentHistoryId = null; localStorage.removeItem('lastHistoryId'); } loadHistory(); };
   window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
   function switchTab(e) { const m = e.target.closest('.modal-content'); if (!m) return; m.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active")); m.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden")); e.target.classList.add("active"); const target = $(e.target.dataset.tab); if(target) target.classList.remove("hidden"); }
