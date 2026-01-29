@@ -227,121 +227,76 @@
 
     const productUrl = $("productUrlInput").value || "";
     const title = $("titleText").textContent || "";
-    const info = state.adsInfo;
 
-    // Construire les lignes d'info
-    let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-      <span style="font-weight:600; font-size:12px;">Informations Ad Copy</span>
-      <button class="secondary-btn" style="font-size:10px; padding:4px 10px;" onclick="window.generateAdsInfo()">🔄 Générer titres</button>
+    // Initialiser avec des valeurs par défaut si vide
+    if (!state.adsInfo.title1) {
+      state.adsInfo = {
+        title1: title || "Titre 1",
+        title2: "Découvrez notre collection",
+        title3: "Livraison offerte",
+        title4: "Édition limitée",
+        sub: "Bijou artisanal de qualité premium. Satisfait ou remboursé."
+      };
+    }
+
+    let html = "";
+
+    // Titre Produit
+    html += `<div class="ads-info-row">
+      <span class="ads-info-label">TITRE PRODUIT</span>
+      <span style="flex:1;">${title}</span>
+      <button class="icon-btn-small" onclick="window.copyToClip('${title.replace(/'/g, "\\'")}')">📋</button>
     </div>`;
 
-    // Titre 1-4
+    // Titre 1
     html += `<div class="ads-info-row">
       <span class="ads-info-label">TITRE 1</span>
-      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(info.title1 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title1', this.value)" placeholder="Titre court accrocheur...">
-      <button class="icon-btn-small" onclick="window.copyToClip('${(info.title1 || '').replace(/'/g, "\\'")}')">📋</button>
+      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(state.adsInfo.title1 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title1', this.value)">
+      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value)">📋</button>
     </div>`;
+
+    // Titre 2
     html += `<div class="ads-info-row">
       <span class="ads-info-label">TITRE 2</span>
-      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(info.title2 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title2', this.value)" placeholder="Bénéfice principal...">
-      <button class="icon-btn-small" onclick="window.copyToClip('${(info.title2 || '').replace(/'/g, "\\'")}')">📋</button>
+      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(state.adsInfo.title2 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title2', this.value)">
+      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value)">📋</button>
     </div>`;
+
+    // Titre 3
     html += `<div class="ads-info-row">
       <span class="ads-info-label">TITRE 3</span>
-      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(info.title3 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title3', this.value)" placeholder="Call to action...">
-      <button class="icon-btn-small" onclick="window.copyToClip('${(info.title3 || '').replace(/'/g, "\\'")}')">📋</button>
+      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(state.adsInfo.title3 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title3', this.value)">
+      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value)">📋</button>
     </div>`;
+
+    // Titre 4
     html += `<div class="ads-info-row">
       <span class="ads-info-label">TITRE 4</span>
-      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(info.title4 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title4', this.value)" placeholder="Urgence/Offre...">
-      <button class="icon-btn-small" onclick="window.copyToClip('${(info.title4 || '').replace(/'/g, "\\'")}')">📋</button>
+      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(state.adsInfo.title4 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title4', this.value)">
+      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value)">📋</button>
     </div>`;
 
     // Sub description
     html += `<div class="ads-info-row" style="flex-direction:column; align-items:stretch; gap:5px;">
       <span class="ads-info-label">SUB DESCRIPTION</span>
       <div style="display:flex; gap:5px;">
-        <textarea class="ios-input" style="flex:1; font-size:12px; padding:8px; min-height:60px; resize:vertical;" onchange="window.updateAdsInfo('sub', this.value)" placeholder="Description courte pour les ads...">${info.sub || ''}</textarea>
-        <button class="icon-btn-small" style="align-self:flex-start;" onclick="window.copyToClip(\`${(info.sub || '').replace(/`/g, "\\`")}\`)">📋</button>
+        <textarea class="ios-input" style="flex:1; font-size:12px; padding:8px; min-height:50px; resize:vertical;" onchange="window.updateAdsInfo('sub', this.value)">${state.adsInfo.sub || ''}</textarea>
+        <button class="icon-btn-small" style="align-self:flex-start;" onclick="window.copyToClip(this.previousElementSibling.value)">📋</button>
       </div>
     </div>`;
 
-    // Infos produit (lecture seule)
-    html += `<div style="margin-top:15px; padding-top:15px; border-top:1px solid #eee;">`;
-    html += `<div class="ads-info-row"><span class="ads-info-label">TITRE PRODUIT</span><span style="flex:1;">${title}</span><button class="icon-btn-small" onclick="window.copyToClip('${title.replace(/'/g, "\\'")}')">📋</button></div>`;
-    html += `<div class="ads-info-row"><span class="ads-info-label">URL PRODUIT</span><span style="flex:1; font-size:11px;">${productUrl || 'Non définie'}</span><button class="icon-btn-small" onclick="window.copyToClip('${productUrl}')">📋</button></div>`;
-    html += `</div>`;
-
-    // Traductions disponibles
-    const transLangs = Object.keys(state.adsInfoTrans);
-    if (transLangs.length > 0) {
-      html += `<div style="margin-top:15px; padding-top:15px; border-top:1px solid #eee;">
-        <span style="font-weight:600; font-size:11px; color:var(--text-muted);">TRADUCTIONS DISPONIBLES</span>`;
-      transLangs.forEach(lang => {
-        const trans = state.adsInfoTrans[lang];
-        const langName = LANGUAGES.find(l => l.code === lang)?.name || lang;
-        html += `<div style="margin-top:10px; padding:10px; background:#fff; border-radius:8px; border:1px solid #eee;">
-          <div style="font-weight:600; font-size:11px; margin-bottom:8px;">${langName}</div>
-          <div style="font-size:11px; color:#666;">
-            <div><strong>T1:</strong> ${trans.title1 || '-'}</div>
-            <div><strong>T2:</strong> ${trans.title2 || '-'}</div>
-            <div><strong>T3:</strong> ${trans.title3 || '-'}</div>
-            <div><strong>T4:</strong> ${trans.title4 || '-'}</div>
-            <div><strong>Sub:</strong> ${trans.sub || '-'}</div>
-          </div>
-        </div>`;
-      });
-      html += `</div>`;
-    }
+    // URL Produit
+    html += `<div class="ads-info-row">
+      <span class="ads-info-label">URL PRODUIT</span>
+      <span style="flex:1; font-size:11px;">${productUrl || 'Non définie'}</span>
+      <button class="icon-btn-small" onclick="window.copyToClip('${productUrl}')">📋</button>
+    </div>`;
 
     container.innerHTML = html;
   }
 
   window.updateAdsInfo = (field, value) => {
     state.adsInfo[field] = value;
-  };
-
-  window.generateAdsInfo = async () => {
-    if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
-    if (state.selectedAds.length === 0) return alert("Veuillez d'abord sélectionner des ad copys.");
-
-    startLoading();
-    try {
-      const productUrl = $("productUrlInput").value || "";
-      const title = $("titleText").textContent || "";
-      const adTexts = state.selectedAds.map(a => typeof a === 'object' ? a.text : a);
-
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        body: JSON.stringify({
-          action: 'generate_ads_info',
-          image: state.imageBase64,
-          media_type: state.imageMime,
-          config: state.config,
-          product_url: productUrl,
-          currentTitle: title,
-          adCopys: adTexts
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erreur génération");
-
-      state.adsInfo = {
-        title1: data.title1 || "",
-        title2: data.title2 || "",
-        title3: data.title3 || "",
-        title4: data.title4 || "",
-        sub: data.sub || ""
-      };
-
-      renderAdsInfoBlock();
-      alert("Titres générés avec succès !");
-    } catch(e) {
-      alert("Erreur: " + e.message);
-    } finally {
-      stopLoading();
-    }
   };
 
   window.removeSavedHl = (idx) => {
