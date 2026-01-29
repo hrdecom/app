@@ -99,6 +99,254 @@
   };
 
   /* =========================================
+     HEADLINES & ADS RENDERING FUNCTIONS
+     ========================================= */
+
+  function renderHeadlines() {
+    const container = $("headlinesResults");
+    const PAGE_SIZE = 10;
+    const start = (state.hlPage - 1) * PAGE_SIZE;
+    const paginated = state.sessionHeadlines.slice(start, start + PAGE_SIZE);
+
+    container.innerHTML = paginated.map((h, i) => {
+      const globalIdx = start + i;
+      const isSelected = state.selectedHeadlines.includes(h);
+      const escapedText = h.replace(/'/g, "\\'").replace(/\n/g, "\\n");
+      return `<div class="headline-item ${isSelected ? 'selected' : ''}" onclick="window.toggleHeadline(${globalIdx})">
+        <span class="headline-text">${h}</span>
+        <button class="icon-btn-small" onclick="event.stopPropagation(); window.copyToClip('${escapedText}')">📋</button>
+      </div>`;
+    }).join("");
+
+    // Show/hide similar button
+    const hasSelected = document.querySelectorAll('#headlinesResults .selected').length > 0;
+    $("similarActions").classList.toggle("hidden", !hasSelected);
+
+    // Pagination
+    renderLocalPagination('hl', state.sessionHeadlines.length, PAGE_SIZE);
+  }
+
+  function renderAds() {
+    const container = $("adsResults");
+    const PAGE_SIZE = 5;
+    const start = (state.adPage - 1) * PAGE_SIZE;
+    const paginated = state.sessionAds.slice(start, start + PAGE_SIZE);
+
+    container.innerHTML = paginated.map((ad, i) => {
+      const globalIdx = start + i;
+      const text = typeof ad === 'object' ? ad.text : ad;
+      const label = typeof ad === 'object' ? ad.style : '';
+      const isSelected = state.selectedAds.some(s => (typeof s === 'object' ? s.text : s) === text);
+      const escapedText = text.replace(/`/g, "\\`").replace(/\\/g, "\\\\");
+      return `<div class="headline-item ${isSelected ? 'selected' : ''}" onclick="window.toggleAd(${globalIdx})">
+        ${label ? `<span style="font-size:9px; background:#007AFF; color:#fff; padding:2px 6px; border-radius:10px; margin-right:8px;">${label}</span>` : ''}
+        <span class="headline-text" style="white-space:pre-wrap;">${text}</span>
+        <button class="icon-btn-small" onclick="event.stopPropagation(); window.copyToClip(\`${escapedText}\`)">📋</button>
+      </div>`;
+    }).join("");
+
+    // Show/hide similar button
+    const hasSelected = document.querySelectorAll('#adsResults .selected').length > 0;
+    $("similarAdsActions").classList.toggle("hidden", !hasSelected);
+
+    // Pagination
+    renderLocalPagination('ad', state.sessionAds.length, PAGE_SIZE);
+  }
+
+  function renderLocalPagination(type, total, pageSize) {
+    const container = type === 'hl' ? $("headlinesLocalPagination") : $("adsLocalPagination");
+    const totalPages = Math.ceil(total / pageSize);
+    const currentPage = type === 'hl' ? state.hlPage : state.adPage;
+
+    if (totalPages <= 1) { container.innerHTML = ""; return; }
+
+    let html = "";
+    for (let i = 1; i <= totalPages; i++) {
+      html += `<button class="${i === currentPage ? 'active' : ''}" onclick="window.setLocalPage('${type}', ${i})">${i}</button>`;
+    }
+    container.innerHTML = html;
+  }
+
+  window.setLocalPage = (type, page) => {
+    if (type === 'hl') { state.hlPage = page; renderHeadlines(); }
+    else { state.adPage = page; renderAds(); }
+  };
+
+  window.toggleHeadline = (idx) => {
+    const headline = state.sessionHeadlines[idx];
+    const existingIdx = state.selectedHeadlines.indexOf(headline);
+    if (existingIdx > -1) state.selectedHeadlines.splice(existingIdx, 1);
+    else state.selectedHeadlines.push(headline);
+    renderHeadlines();
+  };
+
+  window.toggleAd = (idx) => {
+    const ad = state.sessionAds[idx];
+    const text = typeof ad === 'object' ? ad.text : ad;
+    const existingIdx = state.selectedAds.findIndex(s => (typeof s === 'object' ? s.text : s) === text);
+    if (existingIdx > -1) state.selectedAds.splice(existingIdx, 1);
+    else state.selectedAds.push(ad);
+    renderAds();
+  };
+
+  function renderSavedHl() {
+    const container = $("headlinesSavedList");
+    container.innerHTML = state.selectedHeadlines.map((h, i) => {
+      const escapedText = h.replace(/'/g, "\\'").replace(/\n/g, "\\n");
+      return `<div class="headline-item no-hover" style="background:#fff; border:1px solid #ddd;">
+        <span class="headline-text">${h}</span>
+        <button class="icon-btn-small" onclick="window.copyToClip('${escapedText}')">📋</button>
+        <button class="icon-btn-small delete-hl" onclick="window.removeSavedHl(${i})">×</button>
+      </div>`;
+    }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucune headline enregistrée</div>';
+  }
+
+  function renderSavedAds() {
+    const container = $("adsSavedList");
+    container.innerHTML = state.selectedAds.map((ad, i) => {
+      const text = typeof ad === 'object' ? ad.text : ad;
+      const label = typeof ad === 'object' ? ad.style : '';
+      const escapedText = text.replace(/`/g, "\\`").replace(/\\/g, "\\\\");
+      return `<div class="headline-item no-hover" style="background:#fff; border:1px solid #ddd;">
+        ${label ? `<span style="font-size:9px; background:#007AFF; color:#fff; padding:2px 6px; border-radius:10px; margin-right:8px;">${label}</span>` : ''}
+        <span class="headline-text" style="white-space:pre-wrap;">${text}</span>
+        <button class="icon-btn-small" onclick="window.copyToClip(\`${escapedText}\`)">📋</button>
+        <button class="icon-btn-small delete-hl" onclick="window.removeSavedAd(${i})">×</button>
+      </div>`;
+    }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucun ad copy enregistré</div>';
+
+    // Render info block for default ad
+    renderAdsInfoBlock();
+  }
+
+  function renderAdsInfoBlock() {
+    const container = $("adsDefaultInfoBlock");
+    if (state.selectedAds.length === 0) { container.innerHTML = ""; return; }
+
+    const productUrl = $("productUrlInput").value || "";
+    const title = $("titleText").textContent || "";
+
+    container.innerHTML = `
+      <div class="ads-info-row"><span class="ads-info-label">TITRE PRODUIT</span><span>${title}</span></div>
+      <div class="ads-info-row"><span class="ads-info-label">URL PRODUIT</span><span style="font-size:11px;">${productUrl || 'Non définie'}</span></div>
+    `;
+  }
+
+  window.removeSavedHl = (idx) => {
+    state.selectedHeadlines.splice(idx, 1);
+    renderSavedHl();
+  };
+
+  window.removeSavedAd = (idx) => {
+    state.selectedAds.splice(idx, 1);
+    renderSavedAds();
+  };
+
+  async function saveSelections(type) {
+    if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
+
+    startLoading();
+    try {
+      const payload = { id: state.currentHistoryId };
+
+      if (type === 'hl') {
+        payload.headlines = JSON.stringify(state.selectedHeadlines);
+        payload.headlines_trans = JSON.stringify(state.headlinesTrans);
+      } else {
+        payload.ad_copys = JSON.stringify(state.selectedAds.map(a => typeof a === 'object' ? a.text : a));
+        payload.ads_trans = JSON.stringify(state.adsTrans);
+      }
+
+      const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error("Erreur serveur");
+
+      alert(type === 'hl' ? "Headlines enregistrées !" : "Ad Copys enregistrés !");
+    } catch(e) {
+      alert("Erreur: " + e.message);
+    } finally {
+      stopLoading();
+    }
+  }
+
+  /* =========================================
+     TRANSLATION TABS
+     ========================================= */
+
+  const LANGUAGES = [
+    { code: 'en', name: 'Anglais', flag: '🇬🇧' },
+    { code: 'fr', name: 'Français', flag: '🇫🇷' },
+    { code: 'de', name: 'Allemand', flag: '🇩🇪' },
+    { code: 'it', name: 'Italien', flag: '🇮🇹' },
+    { code: 'es', name: 'Espagnol', flag: '🇪🇸' },
+    { code: 'pt', name: 'Portugais', flag: '🇵🇹' },
+    { code: 'pl', name: 'Polonais', flag: '🇵🇱' },
+    { code: 'nl', name: 'Néerlandais', flag: '🇳🇱' }
+  ];
+
+  function renderTranslationTabs(type) {
+    const container = type === 'hl' ? $("hlLangList") : $("adLangList");
+    const menuBtn = type === 'hl' ? $("translateHlMenuBtn") : $("translateAdMenuBtn");
+
+    container.innerHTML = LANGUAGES.map(lang =>
+      `<div class="lang-opt" onclick="window.translateTo('${type}', '${lang.code}', '${lang.name}')">${lang.flag} ${lang.name}</div>`
+    ).join("");
+
+    menuBtn.onclick = (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
+      container.classList.toggle('show');
+    };
+  }
+
+  window.translateTo = async (type, langCode, langName) => {
+    document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
+
+    const items = type === 'hl' ? state.selectedHeadlines : state.selectedAds.map(a => typeof a === 'object' ? a.text : a);
+    if (items.length === 0) return alert("Aucun élément à traduire. Enregistrez d'abord vos sélections.");
+
+    startLoading();
+    try {
+      const productUrl = $("productUrlInput").value || "";
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        body: JSON.stringify({
+          action: 'translate',
+          image: state.imageBase64,
+          media_type: state.imageMime,
+          config: state.config,
+          product_url: productUrl,
+          itemsToTranslate: items,
+          targetLang: langName
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur traduction");
+
+      if (type === 'hl') {
+        state.headlinesTrans[langCode] = data.translated_items || [];
+      } else {
+        state.adsTrans[langCode] = data.translated_items || [];
+      }
+
+      alert(`Traduction en ${langName} terminée !`);
+
+      // Switch to saved tab to show translations
+      if (type === 'hl') {
+        document.querySelector('#headlinesTabs [data-tab="tab-saved-headlines"]').click();
+        renderSavedHl();
+      } else {
+        document.querySelector('#adsTabs [data-tab="tab-saved-ads"]').click();
+        renderSavedAds();
+      }
+    } catch(e) {
+      alert("Erreur traduction: " + e.message);
+    } finally {
+      stopLoading();
+    }
+  };
+
+  /* =========================================
      TREE EDITOR (MIXTE + ACCORDEONS GROUPES & FOLDERS)
      ========================================= */
 
@@ -474,7 +722,113 @@
       renderImgStylesButtons();
   };
 
-  async function apiCall(action, extra = {}) { if (!state.imageBase64) return; startLoading(); try { const productUrl = formatLangUrl($("productUrlInput").value, "en."); const common = { image: state.imageBase64, media_type: state.imageMime, collection: $("collectionSelect").value, config: state.config, historyNames: state.historyCache.map(h => h.product_name), currentTitle: $("titleText").textContent, currentDesc: $("descText").textContent, product_url: productUrl }; if (action === 'ad_copys' && state.selAdStyles.length > 0) { const results = await Promise.all(state.selAdStyles.map(sName => { const sPrompt = state.config.adStyles.find(x => x.name === sName)?.prompt; return fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, style: sPrompt + " " + (extra.userText || ""), styleLabel: sName }) }).then(r => r.json().then(d => ({ ...d, label: sName }))); })); results.forEach(res => { state.sessionAds = [...(res.ad_copys || []).map(t => ({ text: t, style: res.label })), ...state.sessionAds]; }); state.adPage = 1; renderAds(); } else { if (action === 'headlines' && state.selHlStyles.length > 0) extra.style = state.selHlStyles.map(n => state.config.headlineStyles.find(s => s.name === n)?.prompt).join(" ") + " " + (extra.userText || ""); const res = await fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, ...extra }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error || "Erreur IA"); if (action === 'generate') { $("titleText").textContent = data.title; $("descText").textContent = data.description; const hRes = await fetch("/api/history", { method: "POST", body: JSON.stringify({ title: data.title, description: data.description, image: state.imageBase64, product_name: data.product_name, product_url: productUrl }) }); const hData = await hRes.json(); state.currentHistoryId = hData.id; localStorage.setItem('lastHistoryId', hData.id); state.sessionHeadlines = []; state.sessionAds = []; state.selectedHeadlines = []; state.selectedAds = []; state.headlinesTrans = {}; state.adsTrans = {}; state.savedGeneratedImages = []; state.sessionGeneratedImages = []; state.inputImages = [state.imageBase64]; renderInputImages(); renderGenImages(); await loadHistory(); } else if (action === 'regen_title' || action === 'regen_desc') { if (action === 'regen_title') $("titleText").textContent = data.title; else $("descText").textContent = data.description; if (state.currentHistoryId) await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, title: $("titleText").textContent, description: $("descText").textContent }) }); await loadHistory(); } else if (action.includes('headlines')) { state.sessionHeadlines = [...(data.headlines || []), ...state.sessionHeadlines]; state.hlPage = 1; renderHeadlines(); } else if (action.includes('ad_copys')) { state.sessionAds = [...(data.ad_copys || []).map(t => ({ text: t, style: action.includes('similar') ? 'Variante' : 'Chat' })), ...state.sessionAds]; state.adPage = 1; renderAds(); } } $("regenTitleBtn").disabled = $("regenDescBtn").disabled = false; } catch(e) { alert("Erreur: " + e.message); } finally { stopLoading(); } }
+  async function apiCall(action, extra = {}) {
+    if (!state.imageBase64) return alert("Veuillez d'abord uploader une image.");
+
+    // Vérification pour headlines et ads - besoin d'un produit chargé
+    if ((action.includes('headlines') || action.includes('ad_copys')) && !state.currentHistoryId) {
+      return alert("Veuillez d'abord générer ou charger un produit.");
+    }
+
+    startLoading();
+    try {
+      const productUrl = formatLangUrl($("productUrlInput").value, "en.");
+      const common = {
+        image: state.imageBase64,
+        media_type: state.imageMime,
+        collection: $("collectionSelect").value,
+        config: state.config,
+        historyNames: state.historyCache.map(h => h.product_name),
+        currentTitle: $("titleText").textContent,
+        currentDesc: $("descText").textContent,
+        product_url: productUrl
+      };
+
+      // AD COPYS avec styles sélectionnés
+      if (action === 'ad_copys' && state.selAdStyles.length > 0) {
+        const results = await Promise.all(state.selAdStyles.map(sName => {
+          const sPrompt = state.config.adStyles.find(x => x.name === sName)?.prompt || "";
+          return fetch("/api/generate", {
+            method: "POST",
+            body: JSON.stringify({ ...common, action, style: sPrompt + " " + (extra.userText || ""), styleLabel: sName })
+          }).then(r => r.json().then(d => ({ ...d, label: sName })));
+        }));
+        results.forEach(res => {
+          state.sessionAds = [...(res.ad_copys || []).map(t => ({ text: t, style: res.label })), ...state.sessionAds];
+        });
+        state.adPage = 1;
+        renderAds();
+      } else {
+        // HEADLINES avec styles sélectionnés
+        if (action === 'headlines' && state.selHlStyles.length > 0) {
+          extra.style = state.selHlStyles.map(n => state.config.headlineStyles.find(s => s.name === n)?.prompt || "").join(" ") + " " + (extra.userText || "");
+        }
+        // HEADLINES sans style sélectionné (chat direct)
+        else if (action === 'headlines' && !extra.style) {
+          extra.style = extra.userText || "Engaging and viral";
+        }
+        // AD COPYS sans style sélectionné (chat direct)
+        else if (action === 'ad_copys' && !extra.style) {
+          extra.style = extra.userText || "Professional and converting";
+        }
+
+        const res = await fetch("/api/generate", { method: "POST", body: JSON.stringify({ ...common, action, ...extra }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erreur IA");
+
+        if (action === 'generate') {
+          $("titleText").textContent = data.title;
+          $("descText").textContent = data.description;
+          const hRes = await fetch("/api/history", {
+            method: "POST",
+            body: JSON.stringify({
+              title: data.title,
+              description: data.description,
+              image: state.imageBase64,
+              product_name: data.product_name,
+              product_url: productUrl
+            })
+          });
+          const hData = await hRes.json();
+          state.currentHistoryId = hData.id;
+          localStorage.setItem('lastHistoryId', hData.id);
+          state.sessionHeadlines = [];
+          state.sessionAds = [];
+          state.selectedHeadlines = [];
+          state.selectedAds = [];
+          state.headlinesTrans = {};
+          state.adsTrans = {};
+          state.savedGeneratedImages = [];
+          state.sessionGeneratedImages = [];
+          state.inputImages = [state.imageBase64];
+          renderInputImages();
+          renderGenImages();
+          await loadHistory();
+        } else if (action === 'regen_title' || action === 'regen_desc') {
+          if (action === 'regen_title') $("titleText").textContent = data.title;
+          else $("descText").textContent = data.description;
+          if (state.currentHistoryId) await fetch("/api/history", {
+            method: "PATCH",
+            body: JSON.stringify({ id: state.currentHistoryId, title: $("titleText").textContent, description: $("descText").textContent })
+          });
+          await loadHistory();
+        } else if (action.includes('headlines')) {
+          state.sessionHeadlines = [...(data.headlines || []), ...state.sessionHeadlines];
+          state.hlPage = 1;
+          renderHeadlines();
+        } else if (action.includes('ad_copys')) {
+          state.sessionAds = [...(data.ad_copys || []).map(t => ({ text: t, style: action.includes('similar') ? 'Variante' : 'Chat' })), ...state.sessionAds];
+          state.adPage = 1;
+          renderAds();
+        }
+      }
+      $("regenTitleBtn").disabled = $("regenDescBtn").disabled = false;
+    } catch(e) {
+      alert("Erreur: " + e.message);
+    } finally {
+      stopLoading();
+    }
+  }
   function renderInputImages() { const container = $("inputImagesPreview"); if (state.inputImages.length === 0) { container.classList.add("hidden"); return; } container.classList.remove("hidden"); container.innerHTML = state.inputImages.map((img, i) => `<div class="input-img-wrapper"><img src="data:image/jpeg;base64,${img}" class="input-img-thumb"><div class="remove-input-img" onclick="window.removeInputImg(${i})">×</div></div>`).join(""); }
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   async function callGeminiImageGen() { const userPrompt = $("imgGenPrompt").value; if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style."); const count = parseInt($("imgCount").value) || 1; const aspectRatio = $("imgAspectRatio").value; const resolution = $("imgResolution").value; if (state.inputImages.length === 0 && state.imageBase64) { state.inputImages = [state.imageBase64]; renderInputImages(); } const batches = []; const inputsToProcess = state.inputImages.length > 0 ? state.inputImages : [null]; inputsToProcess.forEach(inputImg => { let tasks = []; if (state.selectedImgStyles.length > 0) { tasks = state.selectedImgStyles.map(s => ({ type: 'style', styleObj: s, prompt: userPrompt ? (userPrompt + " " + s.prompt) : s.prompt, refImage: s.refImage, label: s.name })); } else { tasks = [{ type: 'manual', prompt: userPrompt, refImage: null, label: userPrompt }]; } tasks.forEach(task => { let contextImages = []; if (inputImg) contextImages.push(inputImg); if (task.refImage) contextImages.push(task.refImage); for (let i = 0; i < count; i++) { batches.push({ prompt: task.prompt, images: contextImages, aspectRatio: aspectRatio, resolution: resolution, label: task.label }); } }); }); const newItems = batches.map(b => ({ id: Date.now() + Math.random(), loading: true, prompt: b.label, aspectRatio: b.aspectRatio })); state.sessionGeneratedImages.unshift(...newItems); renderGenImages(); state.selectedImgStyles = []; state.manualImgStyles = []; $("imgGenPrompt").value = ""; renderImgStylesButtons(); newItems.forEach(async (item, index) => { const batchData = batches[index]; try { const res = await fetch("/api/gemini", { method: "POST", body: JSON.stringify({ prompt: batchData.prompt, images: batchData.images, aspectRatio: batchData.aspectRatio, resolution: batchData.resolution }) }); const data = await res.json(); const targetItem = state.sessionGeneratedImages.find(x => x.id === item.id); if (targetItem) { if (data.error) { targetItem.loading = false; targetItem.error = data.error; } else { targetItem.loading = false; targetItem.image = data.image; } renderGenImages(); } } catch(e) { const targetItem = state.sessionGeneratedImages.find(x => x.id === item.id); if (targetItem) { targetItem.loading = false; targetItem.error = e.message; renderGenImages(); } } }); }
@@ -527,12 +881,48 @@
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => { $("settingsModal").classList.add("hidden"); if(window.cancelImgStyleEdit) window.cancelImgStyleEdit(); };
     $("saveConfig").onclick = async () => { ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => state.config[id] = $(id).value); state.config.blacklist = $("configBlacklist").value; state.config.collections = Array.from(document.querySelectorAll('.collections-item')).map(r => ({ name: r.querySelector('.col-name').value, meaning: r.querySelector('.col-meaning').value })); state.config.headlineStyles = Array.from(document.querySelectorAll('.headline-style-item')).map(r => ({ name: r.querySelector('.style-name').value, prompt: r.querySelector('.style-prompt').value })); state.config.adStyles = Array.from(document.querySelectorAll('.ad-style-item')).map(r => ({ name: r.querySelector('.ad-style-name').value, prompt: r.querySelector('.ad-style-prompt').value })); await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) }); alert("Enregistré"); $("settingsModal").classList.add("hidden"); renderConfigUI(); };
-    $("openHeadlinesBtn").onclick = () => { if(!state.currentHistoryId) return; $("headlinesModal").classList.remove("hidden"); renderSavedHl(); renderTranslationTabs('hl'); };
-    $("openAdsBtn").onclick = () => { if(!state.currentHistoryId) return; $("adsModal").classList.remove("hidden"); renderSavedAds(); renderTranslationTabs('ad'); };
+    $("openHeadlinesBtn").onclick = () => {
+      if(!state.currentHistoryId) return alert("Veuillez d'abord générer ou charger un produit.");
+      $("headlinesModal").classList.remove("hidden");
+      renderHeadlines();
+      renderSavedHl();
+      renderTranslationTabs('hl');
+    };
+    $("openAdsBtn").onclick = () => {
+      if(!state.currentHistoryId) return alert("Veuillez d'abord générer ou charger un produit.");
+      $("adsModal").classList.remove("hidden");
+      renderAds();
+      renderSavedAds();
+      renderTranslationTabs('ad');
+    };
     $("closeHeadlines").onclick = () => $("headlinesModal").classList.add("hidden");
     $("closeAds").onclick = () => $("adsModal").classList.add("hidden");
     
-    // --- CORRECTION DU BUG ---
+    // --- CORRECTION DU BUG: Bouton Ajouter Collection ---
+    const addCollectionBtn = $("addCollection");
+    if(addCollectionBtn) addCollectionBtn.onclick = () => {
+      const newCollection = { name: "Nouvelle Collection", meaning: "Description de la collection..." };
+      state.config.collections.push(newCollection);
+      renderConfigUI();
+    };
+
+    // --- Bouton Ajouter Style Headlines ---
+    const addStyleBtn = $("addStyleBtn");
+    if(addStyleBtn) addStyleBtn.onclick = () => {
+      const newStyle = { name: "Nouveau Style", prompt: "Description du style..." };
+      state.config.headlineStyles.push(newStyle);
+      renderConfigUI();
+    };
+
+    // --- Bouton Ajouter Style Ads ---
+    const addAdStyleBtn = $("addAdStyleBtn");
+    if(addAdStyleBtn) addAdStyleBtn.onclick = () => {
+      const newStyle = { name: "Nouveau Style", prompt: "Description du style..." };
+      state.config.adStyles.push(newStyle);
+      renderConfigUI();
+    };
+
+    // --- Bouton Ajouter Catégorie Images ---
     const addCatBtn = $("addCategoryBtn"); if(addCatBtn) addCatBtn.onclick = () => { const name = $("newCatName").value; if(!name) return; state.config.imgCategories.push({ id: "cat_" + Date.now(), name: name, order: 999 }); $("newCatName").value = ""; saveConfigToApi(); renderConfigUI(); };
     
     const saveNodeBtn = $("saveNodeBtn"); 
