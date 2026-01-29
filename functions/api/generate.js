@@ -22,6 +22,22 @@ export async function onRequestPost({ request, env }) {
       prompt = `${config.promptAdCopys}\n${jsonSafeRule}\nPRODUCT URL TO USE: ${product_url}\nPRODUCT: ${currentTitle}\nSTYLE: ${style}\nTASK: Generate variations. You MUST use the exact URL provided: ${product_url}. Replace any placeholder like [Product URL] by this real URL. JSON: { "ad_copys": ["...", "..."] }`;
     } else if (action === "headlines_similar") {
       prompt = `Viral Copywriting Expert. Based on: ${JSON.stringify(selectedForSimilar)}. Task: 5 improved varied versions. English. JSON: { "headlines": ["...", "..."] }`;
+    } else if (action === "generate_ads_info") {
+      const { adCopys } = body;
+      prompt = `Expert Facebook & Google Ads copywriter for luxury jewelry.
+${jsonSafeRule}
+PRODUCT: ${currentTitle}
+PRODUCT URL: ${product_url}
+EXISTING AD COPYS: ${JSON.stringify(adCopys)}
+
+TASK: Based on the product and ad copys, generate optimized ad titles and description.
+- title1: Short catchy headline (max 30 chars) - Hook/Attention grabber
+- title2: Main benefit headline (max 30 chars) - Value proposition
+- title3: Call to action headline (max 30 chars) - Action oriented
+- title4: Urgency/Offer headline (max 30 chars) - FOMO/Special offer
+- sub: Short description for ads (max 90 chars) - Compelling summary
+
+Output JSON: { "title1": "...", "title2": "...", "title3": "...", "title4": "...", "sub": "..." }`;
     } else if (action === "translate") {
       // UTILISATION DU PROMPT DYNAMIQUE DEPUIS LES PARAMÈTRES
       let userPrompt = config.promptTranslate || "Translate into {targetLang}";

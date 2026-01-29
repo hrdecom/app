@@ -66,7 +66,7 @@ export async function onRequest(context) {
         if (!id) return new Response(JSON.stringify({ error: "ID manquant" }), { status: 400 });
 
         // 1. Mise à jour textes (Table History)
-        const fields = ['title', 'description', 'headlines', 'product_url', 'ad_copys', 'headlines_trans', 'ads_trans'];
+        const fields = ['title', 'description', 'headlines', 'product_url', 'ad_copys', 'headlines_trans', 'ads_trans', 'ads_info', 'ads_info_trans'];
         const updates = [];
         const values = [];
         for (const field of fields) {
