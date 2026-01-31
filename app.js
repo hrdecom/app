@@ -31,14 +31,17 @@
     timerInterval: null, sessionHeadlines: [], sessionAds: [],
     selectedHeadlines: [], selectedAds: [],
     headlinesTrans: {}, adsTrans: {},
-    adsInfo: { title1: "", title2: "", title3: "", title4: "", sub: "" }, // Titres ads multiples
-    adsInfoTrans: {}, // Traductions des infos ads par langue
+    adsInfo: { title1: "", title2: "", title3: "", title4: "", sub: "" },
+    adsInfoTrans: {},
     selHlStyles: [], selAdStyles: [],
     hlPage: 1, adPage: 1,
     inputImages: [], sessionGeneratedImages: [], savedGeneratedImages: [], selectedSessionImagesIdx: [],
     currentImgCategory: "", activeFolderId: null, selectedImgStyles: [], manualImgStyles: [], expandedGroups: [],
     draggedItem: null,
-    treeExpandedIds: [] // Pour les accordéons
+    treeExpandedIds: [],
+    // Historique des titres pour éviter les doublons
+    globalTitleHistory: [], // Tous les titres générés (global)
+    productTitleHistory: [] // Titres générés pour le produit actuel
   };
 
   const startLoading = () => { let s = 0; $("timer").textContent = "00:00"; if (state.timerInterval) clearInterval(state.timerInterval); state.timerInterval = setInterval(() => { s++; const mm = String(Math.floor(s/60)).padStart(2,"0"); const ss = String(s%60).padStart(2,"0"); $("timer").textContent = `${mm}:${ss}`; }, 1000); $("loading").classList.remove("hidden"); };
@@ -82,13 +85,46 @@
   function renderConfigUI() {
     ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => { if($(id)) $(id).value = state.config[id] || DEFAULTS[id]; });
     if($("configBlacklist")) $("configBlacklist").value = state.config.blacklist || "";
-    $("collectionsList").innerHTML = (state.config.collections || []).map((c, i) => `<div class="config-row collections-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${c.name}" class="col-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="col-meaning" style="flex:2; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${c.meaning}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
-    $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `<div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
-    $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `<div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:8px;"><textarea class="ad-style-prompt" style="flex:3; height:45px; border-radius:8px; border:1px solid #ddd; padding:8px; font-size:12px;">${s.prompt}</textarea><button onclick="this.parentElement.remove()" style="color:red; border:none; background:none;">×</button></div>`).join("");
-    $("collectionSelect").innerHTML = (state.config.collections || []).map(c => `<option value="${c.name}">${c.name}</option>`).join("");
-    
+
+    // Headlines styles avec bouton dupliquer
+    $("styleButtonsEditor").innerHTML = (state.config.headlineStyles || []).map((s, i) => `
+      <div class="config-row headline-style-item" style="display:flex; gap:10px; margin-bottom:10px; align-items:flex-start;">
+        <input type="text" value="${s.name}" class="style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:10px;">
+        <textarea class="style-prompt" style="flex:3; height:50px; border-radius:8px; border:1px solid #ddd; padding:10px; font-size:12px; resize:vertical;">${s.prompt}</textarea>
+        <button onclick="window.duplicateHeadlineStyle(${i})" style="color:#007AFF; border:1px solid #007AFF; background:#f0f7ff; border-radius:6px; padding:8px 10px; font-size:11px;" title="Dupliquer">⧉</button>
+        <button onclick="this.parentElement.remove()" style="color:#FF3B30; border:1px solid #FF3B30; background:#fff5f5; border-radius:6px; padding:8px 10px; font-size:11px;" title="Supprimer">×</button>
+      </div>
+    `).join("");
+
+    // Ad styles avec bouton dupliquer
+    $("adStyleButtonsEditor").innerHTML = (state.config.adStyles || []).map((s, i) => `
+      <div class="config-row ad-style-item" style="display:flex; gap:10px; margin-bottom:10px; align-items:flex-start;">
+        <input type="text" value="${s.name}" class="ad-style-name" style="flex:1; border-radius:8px; border:1px solid #ddd; padding:10px;">
+        <textarea class="ad-style-prompt" style="flex:3; height:50px; border-radius:8px; border:1px solid #ddd; padding:10px; font-size:12px; resize:vertical;">${s.prompt}</textarea>
+        <button onclick="window.duplicateAdStyle(${i})" style="color:#007AFF; border:1px solid #007AFF; background:#f0f7ff; border-radius:6px; padding:8px 10px; font-size:11px;" title="Dupliquer">⧉</button>
+        <button onclick="this.parentElement.remove()" style="color:#FF3B30; border:1px solid #FF3B30; background:#fff5f5; border-radius:6px; padding:8px 10px; font-size:11px;" title="Supprimer">×</button>
+      </div>
+    `).join("");
+
     renderStyleSelectors(); renderImgConfigTree(); renderStudioCategories(); renderImgStylesButtons();
   }
+
+  // Fonctions de duplication
+  window.duplicateHeadlineStyle = (index) => {
+    const original = state.config.headlineStyles[index];
+    if (!original) return;
+    const copy = { name: original.name + " (copie)", prompt: original.prompt };
+    state.config.headlineStyles.splice(index + 1, 0, copy);
+    renderConfigUI();
+  };
+
+  window.duplicateAdStyle = (index) => {
+    const original = state.config.adStyles[index];
+    if (!original) return;
+    const copy = { name: original.name + " (copie)", prompt: original.prompt };
+    state.config.adStyles.splice(index + 1, 0, copy);
+    renderConfigUI();
+  };
 
   function renderStyleSelectors() {
     $("styleSelectorContainer").innerHTML = (state.config.headlineStyles || []).map(s => `<div class="style-tag ${state.selHlStyles.includes(s.name) ? 'selected' : ''}" onclick="toggleStyle('hl', '${s.name}', this)">${s.name}</div>`).join("");
@@ -513,6 +549,9 @@
       if (type === "group") addBtns = `<button class="action-btn-text" onclick="window.addNode('folder', '${data.id}', 'group')">+ Multiple</button> <button class="action-btn-text" onclick="window.addNode('style', '${data.id}', 'group')">+ Bouton</button>`;
       if (type === "folder") addBtns = `<button class="action-btn-text" onclick="window.addNode('style', '${data.id}', 'folder')">+ Bouton</button>`;
 
+      // Bouton dupliquer
+      const duplicateBtn = `<button class="action-btn-text btn-duplicate" onclick="window.duplicateNode('${type}', '${data.id}')">Dupliquer</button>`;
+
       // LOGIQUE ACCORDEON POUR FOLDER ET GROUP
       let chevron = "";
       let childrenClass = "tree-children";
@@ -530,6 +569,7 @@
             <span class="t-label">${data.name}</span>
             <div class="t-actions">
                 ${addBtns}
+                ${duplicateBtn}
                 <button class="action-btn-text" onclick="window.editNode('${type}', '${data.id}')">Modifier</button>
                 <button class="action-btn-text btn-delete" onclick="window.deleteNodeDirect('${type}', '${data.id}')">Suppr.</button>
             </div>
@@ -695,6 +735,74 @@
   window.addNode = (newType, parentId, parentTypeContext) => openNodeEditor(null, newType, parentId, parentTypeContext);
   window.editNode = (type, id) => openNodeEditor(id, type, null, null);
 
+  // Fonction de duplication pour le tree editor
+  window.duplicateNode = (type, id) => {
+    const newId = (type === 'category' ? 'cat_' : type === 'group' ? 'grp_' : type === 'folder' ? 'fol_' : 'sty_') + Date.now();
+
+    if (type === 'category') {
+      const original = state.config.imgCategories.find(x => x.id === id);
+      if (!original) return;
+      const copy = { ...original, id: newId, name: original.name + " (copie)", order: original.order + 0.5 };
+      state.config.imgCategories.push(copy);
+      // Dupliquer aussi les enfants
+      duplicateChildren(id, newId, 'category');
+    } else if (type === 'group') {
+      const original = state.config.imgGroups.find(x => x.id === id);
+      if (!original) return;
+      const copy = { ...original, id: newId, name: original.name + " (copie)", order: original.order + 0.5 };
+      state.config.imgGroups.push(copy);
+      duplicateChildren(id, newId, 'group');
+    } else if (type === 'folder') {
+      const original = state.config.imgFolders.find(x => x.id === id);
+      if (!original) return;
+      const copy = { ...original, id: newId, name: original.name + " (copie)", order: original.order + 0.5 };
+      state.config.imgFolders.push(copy);
+      duplicateChildren(id, newId, 'folder');
+    } else if (type === 'style') {
+      const original = state.config.imgStyles.find(x => x.id === id);
+      if (!original) return;
+      const copy = { ...original, id: newId, name: original.name + " (copie)", order: original.order + 0.5 };
+      state.config.imgStyles.push(copy);
+    }
+
+    // Réordonner
+    const reorder = (list) => list.sort((a,b) => (a.order||0) - (b.order||0)).forEach((x, i) => x.order = i);
+    reorder(state.config.imgCategories);
+    reorder(state.config.imgGroups);
+    reorder(state.config.imgFolders);
+    reorder(state.config.imgStyles);
+
+    saveConfigToApi();
+    renderConfigUI();
+  };
+
+  function duplicateChildren(oldParentId, newParentId, parentType) {
+    // Dupliquer les groupes si c'est une catégorie
+    if (parentType === 'category') {
+      const groups = state.config.imgGroups.filter(g => g.categoryId === oldParentId);
+      groups.forEach(g => {
+        const newGrpId = 'grp_' + Date.now() + Math.random();
+        state.config.imgGroups.push({ ...g, id: newGrpId, categoryId: newParentId, name: g.name });
+        duplicateChildren(g.id, newGrpId, 'group');
+      });
+    }
+
+    // Dupliquer les folders
+    const folders = state.config.imgFolders.filter(f => f.parentId === oldParentId && f.parentType === parentType);
+    folders.forEach(f => {
+      const newFolderId = 'fol_' + Date.now() + Math.random();
+      state.config.imgFolders.push({ ...f, id: newFolderId, parentId: newParentId });
+      duplicateChildren(f.id, newFolderId, 'folder');
+    });
+
+    // Dupliquer les styles
+    const styles = state.config.imgStyles.filter(s => s.parentId === oldParentId && s.parentType === parentType);
+    styles.forEach(s => {
+      const newStyleId = 'sty_' + Date.now() + Math.random();
+      state.config.imgStyles.push({ ...s, id: newStyleId, parentId: newParentId });
+    });
+  }
+
   function openNodeEditor(id, type, parentId, parentTypeContext) {
       $("nodeEditorOverlay").classList.remove("hidden");
       $("editNodeId").value = id || ""; $("editNodeType").value = type;
@@ -811,15 +919,25 @@
     startLoading();
     try {
       const productUrl = formatLangUrl($("productUrlInput").value, "en.");
+      const suggestion = $("suggestionInput")?.value || "";
+
+      // Construire l'historique des titres à éviter
+      const titlesToAvoid = [
+        ...state.globalTitleHistory,
+        ...state.productTitleHistory,
+        $("titleText").textContent
+      ].filter(t => t && t.trim());
+
       const common = {
         image: state.imageBase64,
         media_type: state.imageMime,
-        collection: $("collectionSelect").value,
+        suggestion: suggestion, // Remplace collection
         config: state.config,
         historyNames: state.historyCache.map(h => h.product_name),
         currentTitle: $("titleText").textContent,
         currentDesc: $("descText").textContent,
-        product_url: productUrl
+        product_url: productUrl,
+        titlesToAvoid: titlesToAvoid // Pour éviter les doublons
       };
 
       // AD COPYS avec styles sélectionnés
@@ -857,6 +975,14 @@
         if (action === 'generate') {
           $("titleText").textContent = data.title;
           $("descText").textContent = data.description;
+
+          // Ajouter le titre à l'historique global
+          if (data.title && !state.globalTitleHistory.includes(data.title)) {
+            state.globalTitleHistory.push(data.title);
+          }
+          // Réinitialiser l'historique par produit
+          state.productTitleHistory = [data.title];
+
           const hRes = await fetch("/api/history", {
             method: "POST",
             body: JSON.stringify({
@@ -885,8 +1011,18 @@
           renderGenImages();
           await loadHistory();
         } else if (action === 'regen_title' || action === 'regen_desc') {
-          if (action === 'regen_title') $("titleText").textContent = data.title;
-          else $("descText").textContent = data.description;
+          if (action === 'regen_title') {
+            $("titleText").textContent = data.title;
+            // Ajouter le nouveau titre aux historiques pour éviter les doublons
+            if (data.title && !state.globalTitleHistory.includes(data.title)) {
+              state.globalTitleHistory.push(data.title);
+            }
+            if (data.title && !state.productTitleHistory.includes(data.title)) {
+              state.productTitleHistory.push(data.title);
+            }
+          } else {
+            $("descText").textContent = data.description;
+          }
           if (state.currentHistoryId) await fetch("/api/history", {
             method: "PATCH",
             body: JSON.stringify({ id: state.currentHistoryId, title: $("titleText").textContent, description: $("descText").textContent })
@@ -1125,6 +1261,51 @@
     $("generateBtn").onclick = () => apiCall('generate');
     $("regenTitleBtn").onclick = () => apiCall('regen_title');
     $("regenDescBtn").onclick = () => apiCall('regen_desc');
+
+    // --- Boutons Copier ---
+    $("copyTitle").onclick = () => {
+      // Copier le titre brut (texte simple)
+      const title = $("titleText").textContent;
+      navigator.clipboard.writeText(title);
+      alert("Titre copié !");
+    };
+
+    $("copyDesc").onclick = () => {
+      // Copier la description avec le format/style (innerHTML préservé en texte)
+      const desc = $("descText").innerHTML;
+      // Convertir le HTML en texte formaté (préserver les sauts de ligne)
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = desc.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<p>/gi, '');
+      const formattedText = tempDiv.textContent || tempDiv.innerText;
+      navigator.clipboard.writeText(formattedText.trim());
+      alert("Description copiée !");
+    };
+
+    // --- Édition du titre et description ---
+    $("titleText").addEventListener('blur', async () => {
+      if (state.currentHistoryId) {
+        const newTitle = $("titleText").textContent;
+        // Ajouter à l'historique des titres
+        if (newTitle && !state.productTitleHistory.includes(newTitle)) {
+          state.productTitleHistory.push(newTitle);
+        }
+        await fetch("/api/history", {
+          method: "PATCH",
+          body: JSON.stringify({ id: state.currentHistoryId, title: newTitle })
+        });
+        loadHistory(); // Refresh sidebar
+      }
+    });
+
+    $("descText").addEventListener('blur', async () => {
+      if (state.currentHistoryId) {
+        const newDesc = $("descText").textContent;
+        await fetch("/api/history", {
+          method: "PATCH",
+          body: JSON.stringify({ id: state.currentHistoryId, description: newDesc })
+        });
+      }
+    });
     $("drop").onclick = () => $("imageInput").click();
     $("imageInput").onchange = (e) => { const f = e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = (ev) => { state.imageMime = ev.target.result.split(";")[0].split(":")[1]; state.imageBase64 = ev.target.result.split(",")[1]; $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden"); $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; state.currentHistoryId = null; state.inputImages = [state.imageBase64]; renderInputImages(); }; r.readAsDataURL(f); };
     $("removeImage").onclick = (e) => { e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null; $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block"; $("generateBtn").disabled = true; };
