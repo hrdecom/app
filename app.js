@@ -1745,7 +1745,6 @@
 
     // Sauvegarder l'ancien main
     const oldMain = state.imageBase64;
-    const oldMainPrompt = img.prompt || 'Image';
 
     // Définir la nouvelle image comme main
     state.imageBase64 = img.image;
@@ -1754,11 +1753,12 @@
     state.inputImages[0] = state.imageBase64;
     state.tempMainImage = null;
 
-    // Échanger: remplacer l'image sélectionnée par l'ancien main
+    // Échanger: l'ancienne image main prend la place de l'image sélectionnée
+    // L'ancienne main garde un label neutre (pas le prompt de l'image échangée)
     if (oldMain) {
       state.savedGeneratedImages[index] = {
         image: oldMain,
-        prompt: oldMainPrompt,
+        prompt: '',
         aspectRatio: '1:1'
       };
     } else {
