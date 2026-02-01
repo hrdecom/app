@@ -13,9 +13,8 @@ export async function onRequest(context) {
         if (!item) return new Response("Not found", { status: 404 });
 
         // 2. Récupérer les images (Méta-données)
-        // On ne récupère pas encore le blob 'image' ici car il est vide dans la table principale
         const imagesMeta = await db.prepare("SELECT id, prompt, aspect_ratio as aspectRatio FROM history_images WHERE history_id = ?").bind(id).all();
-        
+
         const reconstructedImages = [];
 
         // 3. Réassembler les morceaux (Chunks) pour chaque image
@@ -23,15 +22,20 @@ export async function onRequest(context) {
             for (const img of imagesMeta.results) {
                 // On récupère les morceaux dans l'ordre
                 const chunks = await db.prepare("SELECT chunk_data FROM history_image_chunks WHERE history_image_id = ? ORDER BY chunk_index ASC").bind(img.id).all();
-                
+
                 // On recolle les morceaux
                 const fullBase64 = chunks.results.map(c => c.chunk_data).join('');
-                
-                reconstructedImages.push({
-                    image: fullBase64,
-                    prompt: img.prompt,
-                    aspectRatio: img.aspectRatio
-                });
+
+                // Vérifier si c'est l'image MAIN (marquée avec prompt spécial)
+                if (img.prompt === "__MAIN__") {
+                    item.image = fullBase64;
+                } else {
+                    reconstructedImages.push({
+                        image: fullBase64,
+                        prompt: img.prompt,
+                        aspectRatio: img.aspectRatio
+                    });
+                }
             }
         }
 
@@ -68,53 +72,73 @@ export async function onRequest(context) {
 
         if (!id) return new Response(JSON.stringify({ error: "ID manquant" }), { status: 400 });
 
+        const CHUNK_SIZE = 100 * 1024; // 100 KB par morceau
+
         // 1. Mise à jour textes (Table History)
-        // Note: ads_info et ads_info_trans ne sont pas des colonnes existantes, on les ignore
-        const fields = ['title', 'description', 'image', 'headlines', 'product_url', 'ad_copys', 'headlines_trans', 'ads_trans'];
+        // Note: 'image' est géré séparément via chunking pour éviter les limites D1
+        const fields = ['title', 'description', 'headlines', 'product_url', 'ad_copys', 'headlines_trans', 'ads_trans'];
         const updates = [];
         const values = [];
-
-        // Debug: log si image est présent
-        console.log("PATCH request - id:", id, "has image:", !!body.image, "image length:", body.image?.length || 0);
 
         for (const field of fields) {
             if (body[field] !== undefined) {
                 updates.push(`${field} = ?`);
                 values.push(body[field]);
-                console.log("Adding field to update:", field, "length:", typeof body[field] === 'string' ? body[field].length : 'N/A');
             }
         }
 
         if (updates.length > 0) {
             values.push(id);
-            console.log("Running UPDATE with", updates.length, "fields for id:", id);
-            const result = await db.prepare(`UPDATE history SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
-            console.log("UPDATE result:", JSON.stringify(result));
+            await db.prepare(`UPDATE history SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
+        }
 
-            // Vérification post-sauvegarde pour l'image
-            if (body.image) {
-                const check = await db.prepare("SELECT LENGTH(image) as img_len FROM history WHERE id = ?").bind(id).first();
-                console.log("Post-save image length in DB:", check?.img_len, "- sent length:", body.image.length);
+        // 2. Gestion de l'image MAIN (Chunking pour éviter les limites D1)
+        if (body.image !== undefined) {
+            console.log("Saving MAIN image with chunking - length:", body.image?.length || 0);
+
+            // A. Supprimer l'ancien chunk MAIN s'il existe
+            const oldMainImage = await db.prepare("SELECT id FROM history_images WHERE history_id = ? AND prompt = '__MAIN__'").bind(id).first();
+            if (oldMainImage) {
+                await db.prepare("DELETE FROM history_image_chunks WHERE history_image_id = ?").bind(oldMainImage.id).run();
+                await db.prepare("DELETE FROM history_images WHERE id = ?").bind(oldMainImage.id).run();
+            }
+
+            // B. Insérer le nouveau MAIN image avec chunking
+            if (body.image && body.image.length > 0) {
+                const res = await db.prepare("INSERT INTO history_images (history_id, prompt, aspect_ratio, image) VALUES (?, '__MAIN__', '', '')").bind(id).run();
+                const mainImgId = res.meta.last_row_id;
+
+                // Découper le base64
+                const b64 = body.image;
+                const chunks = [];
+                for (let i = 0; i < b64.length; i += CHUNK_SIZE) {
+                    chunks.push(b64.slice(i, i + CHUNK_SIZE));
+                }
+
+                // Insérer les morceaux
+                if (chunks.length > 0) {
+                    const stmt = db.prepare("INSERT INTO history_image_chunks (history_image_id, chunk_index, chunk_data) VALUES (?, ?, ?)");
+                    const batch = chunks.map((c, idx) => stmt.bind(mainImgId, idx, c));
+                    await db.batch(batch);
+                }
+                console.log("MAIN image saved in", chunks.length, "chunks");
             }
         }
 
-        // 2. Gestion des Images (Découpage)
+        // 3. Gestion des Images générées (Découpage)
         if (generated_images) {
             const imagesArray = JSON.parse(generated_images);
-            
-            // A. Nettoyage complet des anciennes images et chunks pour cet ID
-            // On récupère d'abord les IDs des images à supprimer pour nettoyer les chunks
-            const oldImages = await db.prepare("SELECT id FROM history_images WHERE history_id = ?").bind(id).all();
+
+            // A. Nettoyage des anciennes images (sauf MAIN) et leurs chunks
+            const oldImages = await db.prepare("SELECT id FROM history_images WHERE history_id = ? AND prompt != '__MAIN__'").bind(id).all();
             if (oldImages.results.length > 0) {
                 const idsToDelete = oldImages.results.map(r => r.id).join(',');
                 await db.prepare(`DELETE FROM history_image_chunks WHERE history_image_id IN (${idsToDelete})`).run();
             }
-            await db.prepare("DELETE FROM history_images WHERE history_id = ?").bind(id).run();
+            await db.prepare("DELETE FROM history_images WHERE history_id = ? AND prompt != '__MAIN__'").bind(id).run();
 
             // B. Insertion des nouvelles images avec découpage
             if (imagesArray.length > 0) {
-                const CHUNK_SIZE = 100 * 1024; // 100 KB par morceau (sécurité)
-
                 for (const img of imagesArray) {
                     // 1. Créer l'entrée image (Méta)
                     const res = await db.prepare("INSERT INTO history_images (history_id, prompt, aspect_ratio, image) VALUES (?, ?, ?, ?)").bind(id, img.prompt || "", img.aspectRatio || "", "").run();
