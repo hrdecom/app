@@ -257,15 +257,12 @@
     const container = $("headlinesSavedList");
     let html = '';
 
-    // Onglets de langue avec boutons de suppression
+    // Onglets de langue (sans bouton de suppression visible)
     const langs = Object.keys(state.headlinesTrans);
     if (langs.length > 0 || state.selectedHeadlines.length > 0) {
       html += `<div class="lang-tabs" style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap; align-items:center;">
         <button class="lang-tab active" data-lang="original" onclick="window.showHlLang('original')">Original</button>
-        ${langs.map(l => `<div class="lang-tab-wrapper" style="display:inline-flex; align-items:center; gap:2px;">
-          <button class="lang-tab" data-lang="${l}" onclick="window.showHlLang('${l}')">${LANGUAGES.find(x => x.code === l)?.flag || ''} ${l.toUpperCase()}</button>
-          <button class="lang-tab-delete" onclick="event.stopPropagation(); window.deleteTransLang('hl', '${l}')" title="Supprimer">×</button>
-        </div>`).join('')}
+        ${langs.map(l => `<button class="lang-tab" data-lang="${l}" onclick="window.showHlLang('${l}')">${LANGUAGES.find(x => x.code === l)?.flag || ''} ${l.toUpperCase()}</button>`).join('')}
       </div>`;
     }
 
@@ -279,6 +276,7 @@
       </div>`;
     }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucune headline enregistrée</div>';
     html += `</div>`;
+    html += `<div id="hlDeleteTransBtn" class="hidden" style="margin-top:15px; padding-top:15px; border-top:1px solid #eee;"></div>`;
 
     container.innerHTML = html;
   }
@@ -289,6 +287,8 @@
     if (clickedTab) clickedTab.classList.add('active');
 
     const contentDiv = $("hlLangContent");
+    const deleteBtn = $("hlDeleteTransBtn");
+
     if (lang === 'original') {
       contentDiv.innerHTML = state.selectedHeadlines.map((h, i) => {
         const escapedText = h.replace(/'/g, "\\'").replace(/\n/g, "\\n");
@@ -298,6 +298,7 @@
           <button class="icon-btn-small delete-hl" onclick="window.removeSavedHl(${i})">×</button>
         </div>`;
       }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucune headline enregistrée</div>';
+      if (deleteBtn) deleteBtn.classList.add('hidden');
     } else {
       const translated = state.headlinesTrans[lang] || [];
       contentDiv.innerHTML = translated.map((h, i) => {
@@ -307,6 +308,10 @@
           <button class="icon-btn-small" onclick="window.copyToClip('${escapedText}', this)">📋</button>
         </div>`;
       }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucune traduction</div>';
+      if (deleteBtn) {
+        deleteBtn.classList.remove('hidden');
+        deleteBtn.innerHTML = `<button class="secondary-btn" style="width:100%; color:#FF3B30; border-color:#FF3B30;" onclick="window.deleteTransLang('hl', '${lang}')">Supprimer cette traduction</button>`;
+      }
     }
   };
 
@@ -314,15 +319,12 @@
     const container = $("adsSavedList");
     let html = '';
 
-    // Onglets de langue avec boutons de suppression
+    // Onglets de langue (sans bouton de suppression visible)
     const langs = Object.keys(state.adsTrans);
     if (langs.length > 0 || state.selectedAds.length > 0) {
       html += `<div class="lang-tabs" style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap; align-items:center;">
         <button class="lang-tab active" data-lang="original" onclick="window.showAdLang('original')">Original</button>
-        ${langs.map(l => `<div class="lang-tab-wrapper" style="display:inline-flex; align-items:center; gap:2px;">
-          <button class="lang-tab" data-lang="${l}" onclick="window.showAdLang('${l}')">${LANGUAGES.find(x => x.code === l)?.flag || ''} ${l.toUpperCase()}</button>
-          <button class="lang-tab-delete" onclick="event.stopPropagation(); window.deleteTransLang('ad', '${l}')" title="Supprimer">×</button>
-        </div>`).join('')}
+        ${langs.map(l => `<button class="lang-tab" data-lang="${l}" onclick="window.showAdLang('${l}')">${LANGUAGES.find(x => x.code === l)?.flag || ''} ${l.toUpperCase()}</button>`).join('')}
       </div>`;
     }
 
@@ -339,6 +341,7 @@
       </div>`;
     }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucun ad copy enregistré</div>';
     html += `</div>`;
+    html += `<div id="adDeleteTransBtn" class="hidden" style="margin-top:15px; padding-top:15px; border-top:1px solid #eee;"></div>`;
 
     container.innerHTML = html;
 
@@ -352,6 +355,8 @@
     if (clickedTab) clickedTab.classList.add('active');
 
     const contentDiv = $("adLangContent");
+    const deleteBtn = $("adDeleteTransBtn");
+
     if (lang === 'original') {
       contentDiv.innerHTML = state.selectedAds.map((ad, i) => {
         const text = typeof ad === 'object' ? ad.text : ad;
@@ -364,6 +369,7 @@
           <button class="icon-btn-small delete-hl" onclick="window.removeSavedAd(${i})">×</button>
         </div>`;
       }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucun ad copy enregistré</div>';
+      if (deleteBtn) deleteBtn.classList.add('hidden');
     } else {
       const translated = state.adsTrans[lang] || [];
       contentDiv.innerHTML = translated.map((t, i) => {
@@ -373,6 +379,10 @@
           <button class="icon-btn-small" onclick="window.copyToClip(\`${escapedText}\`, this)">📋</button>
         </div>`;
       }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucune traduction</div>';
+      if (deleteBtn) {
+        deleteBtn.classList.remove('hidden');
+        deleteBtn.innerHTML = `<button class="secondary-btn" style="width:100%; color:#FF3B30; border-color:#FF3B30;" onclick="window.deleteTransLang('ad', '${lang}')">Supprimer cette traduction</button>`;
+      }
     }
 
     // Always render info block
@@ -578,13 +588,22 @@
 
     if (selectedLangs.length === 0) return alert("Veuillez sélectionner au moins une langue.");
 
-    document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
+    // Fermer la popup et désélectionner les cases
+    container.classList.remove('show');
+    checkboxes.forEach(cb => cb.checked = false);
 
     // Lancer une requête par langue sélectionnée
     for (const lang of selectedLangs) {
       await window.translateTo(type, lang.code, lang.name);
     }
   };
+
+  // Empêcher la fermeture de la popup lors du clic sur les checkboxes
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('lang-checkbox') || e.target.closest('.lang-opt-check')) {
+      e.stopPropagation();
+    }
+  });
 
   window.translateTo = async (type, langCode, langName) => {
     document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
@@ -1324,39 +1343,124 @@
   function renderInputImages() { const container = $("inputImagesPreview"); if (state.inputImages.length === 0) { container.classList.add("hidden"); return; } container.classList.remove("hidden"); container.innerHTML = state.inputImages.map((img, i) => `<div class="input-img-wrapper"><img src="data:image/jpeg;base64,${img}" class="input-img-thumb"><div class="remove-input-img" onclick="window.removeInputImg(${i})">×</div></div>`).join(""); }
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   async function callGeminiImageGen() { const userPrompt = $("imgGenPrompt").value; if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style."); const count = parseInt($("imgCount").value) || 1; const aspectRatio = $("imgAspectRatio").value; const resolution = $("imgResolution").value; if (state.inputImages.length === 0 && state.imageBase64) { state.inputImages = [state.imageBase64]; renderInputImages(); } const batches = []; const inputsToProcess = state.inputImages.length > 0 ? state.inputImages : [null]; inputsToProcess.forEach(inputImg => { let tasks = []; if (state.selectedImgStyles.length > 0) { tasks = state.selectedImgStyles.map(s => ({ type: 'style', styleObj: s, prompt: userPrompt ? (userPrompt + " " + s.prompt) : s.prompt, refImage: s.refImage, label: s.name })); } else { tasks = [{ type: 'manual', prompt: userPrompt, refImage: null, label: userPrompt }]; } tasks.forEach(task => { let contextImages = []; if (inputImg) contextImages.push(inputImg); if (task.refImage) contextImages.push(task.refImage); for (let i = 0; i < count; i++) { batches.push({ prompt: task.prompt, images: contextImages, aspectRatio: aspectRatio, resolution: resolution, label: task.label }); } }); }); const newItems = batches.map(b => ({ id: Date.now() + Math.random(), loading: true, prompt: b.label, aspectRatio: b.aspectRatio })); state.sessionGeneratedImages.unshift(...newItems); renderGenImages(); state.selectedImgStyles = []; state.manualImgStyles = []; $("imgGenPrompt").value = ""; renderImgStylesButtons(); newItems.forEach(async (item, index) => { const batchData = batches[index]; try { const res = await fetch("/api/gemini", { method: "POST", body: JSON.stringify({ prompt: batchData.prompt, images: batchData.images, aspectRatio: batchData.aspectRatio, resolution: batchData.resolution }) }); const data = await res.json(); const targetItem = state.sessionGeneratedImages.find(x => x.id === item.id); if (targetItem) { if (data.error) { targetItem.loading = false; targetItem.error = data.error; } else { targetItem.loading = false; targetItem.image = data.image; } renderGenImages(); } } catch(e) { const targetItem = state.sessionGeneratedImages.find(x => x.id === item.id); if (targetItem) { targetItem.loading = false; targetItem.error = e.message; renderGenImages(); } } }); }
-  function renderGenImages() { const sessionContainer = $("imgGenSessionResults"); sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => { if (item.loading) { return `<div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#eee; height:150px; flex-direction:column; gap:10px;"><div class="spinner" style="width:20px; height:20px; border-width:2px;"></div><span style="font-size:10px; color:#666;">Génération...</span><div class="gen-image-overlay">${item.prompt}</div></div>`; } if (item.error) { return `<div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#ffebeb; height:150px; flex-direction:column; gap:5px; padding:10px; text-align:center;"><span style="font-size:20px;">⚠️</span><span style="font-size:10px; color:red;">Erreur</span><div class="gen-image-overlay" style="color:red;">${item.error}</div></div>`; } return `<div class="gen-image-card ${state.selectedSessionImagesIdx.includes(item) ? 'selected' : ''}" onclick="window.toggleSessionImg('${item.id}')"><img src="data:image/jpeg;base64,${item.image}"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button></div>`; }).join(""); let savedHtml = ""; if(state.imageBase64) { savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default; position:relative;"><img src="data:image/jpeg;base64,${state.imageBase64}"><div class="main-badge">MAIN</div><button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInputOrig()" title="Utiliser">＋</button><button class="icon-btn-small change-main-btn" onclick="event.stopPropagation(); window.changeMainImage()" title="Changer">✎</button></div>`; } savedHtml += state.savedGeneratedImages.map((item, i) => { const isSelected = state.inputImages.includes(item.image); const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : ''; return `<div class="gen-image-card" style="${borderStyle}" draggable="true" ondragstart="dragStart(event, ${i})" ondrop="drop(event, ${i})" ondragenter="dragEnter(event, ${i})" ondragover="allowDrop(event)" onclick="window.toggleSavedImg(${i})"><div class="reorder-handle"><span></span><span></span><span></span></div><img src="data:image/jpeg;base64,${item.image}" style="pointer-events:none;"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:red; border:1px solid #ccc;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button></div>`; }).join(""); $("imgGenSavedResults").innerHTML = savedHtml; }
+  function renderGenImages() { const sessionContainer = $("imgGenSessionResults"); sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => { if (item.loading) { return `<div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#eee; height:150px; flex-direction:column; gap:10px;"><div class="spinner" style="width:20px; height:20px; border-width:2px;"></div><span style="font-size:10px; color:#666;">Génération...</span><div class="gen-image-overlay">${item.prompt}</div></div>`; } if (item.error) { return `<div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#ffebeb; height:150px; flex-direction:column; gap:5px; padding:10px; text-align:center;"><span style="font-size:20px;">⚠️</span><span style="font-size:10px; color:red;">Erreur</span><div class="gen-image-overlay" style="color:red;">${item.error}</div></div>`; } return `<div class="gen-image-card ${state.selectedSessionImagesIdx.includes(item) ? 'selected' : ''}" onclick="window.toggleSessionImg('${item.id}')"><img src="data:image/jpeg;base64,${item.image}"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button></div>`; }).join(""); let savedHtml = ""; if(state.imageBase64) { savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default; position:relative;"><img src="data:image/jpeg;base64,${state.imageBase64}"><div class="main-badge">MAIN</div><button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInputOrig()" title="Utiliser">＋</button><button class="icon-btn-small change-main-btn" onclick="event.stopPropagation(); window.changeMainImage(event)" title="Changer">✎</button></div>`; } savedHtml += state.savedGeneratedImages.map((item, i) => { const isSelected = state.inputImages.includes(item.image); const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : ''; return `<div class="gen-image-card" style="${borderStyle}" draggable="true" ondragstart="dragStart(event, ${i})" ondrop="drop(event, ${i})" ondragenter="dragEnter(event, ${i})" ondragover="allowDrop(event)" onclick="window.toggleSavedImg(${i})"><div class="reorder-handle"><span></span><span></span><span></span></div><img src="data:image/jpeg;base64,${item.image}" style="pointer-events:none;"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:red; border:1px solid #ccc;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button></div>`; }).join(""); $("imgGenSavedResults").innerHTML = savedHtml; }
   window.toggleSavedImg = (index) => { const item = state.savedGeneratedImages[index]; if(!item) return; const idx = state.inputImages.indexOf(item.image); if(idx > -1) state.inputImages.splice(idx, 1); else state.inputImages.push(item.image); renderInputImages(); renderGenImages(); };
   let dragSrcIndex = null; window.dragStart = (e, i) => { dragSrcIndex = i; e.dataTransfer.effectAllowed = 'move'; e.target.style.opacity = '0.4'; }; window.allowDrop = (e) => { e.preventDefault(); }; window.dragEnter = (e, targetIndex) => { if (dragSrcIndex === null || dragSrcIndex === targetIndex) return; const item = state.savedGeneratedImages.splice(dragSrcIndex, 1)[0]; state.savedGeneratedImages.splice(targetIndex, 0, item); dragSrcIndex = targetIndex; renderGenImages(); const cards = document.querySelectorAll('#imgGenSavedResults .gen-image-card'); if(cards[dragSrcIndex]) cards[dragSrcIndex].style.opacity = '0.4'; }; window.drop = async (e, i) => { e.preventDefault(); document.querySelectorAll('.gen-image-card').forEach(c => c.style.opacity = '1'); dragSrcIndex = null; if (state.currentHistoryId) { try { await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) }); } catch(err) {} } };
   window.addSavedToInput = (index) => { const item = state.savedGeneratedImages[index]; if(item && !state.inputImages.includes(item.image)) { state.inputImages.push(item.image); renderInputImages(); document.querySelector('button[data-tab="tab-img-chat"]').click(); } };
   window.addSavedToInputOrig = () => { if(state.imageBase64 && !state.inputImages.includes(state.imageBase64)) { state.inputImages.push(state.imageBase64); renderInputImages(); document.querySelector('button[data-tab="tab-img-chat"]').click(); } };
 
   // Carousel des images enregistrées (interface principale)
+  // Track carousel scroll position and temp main image
+  state.carouselScrollIndex = 0;
+  state.tempMainImage = null;  // Si non-null, affiche cette image temporairement
+
   function renderSavedImagesCarousel() {
     const carousel = $("savedImagesCarousel");
+    const container = $("carouselContainer");
     const downloadBtn = $("downloadAllImagesBtn");
-    if (!carousel) return;
+    if (!carousel || !container) return;
 
-    if (state.savedGeneratedImages.length === 0) {
-      carousel.classList.add("hidden");
+    // Créer le tableau d'images avec MAIN en premier
+    const allCarouselImages = [];
+    if (state.imageBase64) {
+      allCarouselImages.push({ image: state.imageBase64, prompt: 'Image principale', isMain: true });
+    }
+    state.savedGeneratedImages.forEach(img => {
+      allCarouselImages.push({ ...img, isMain: false });
+    });
+
+    if (allCarouselImages.length <= 1) {
+      container.classList.add("hidden");
       if (downloadBtn) downloadBtn.classList.add("hidden");
       return;
     }
 
-    carousel.classList.remove("hidden");
-    if (downloadBtn) downloadBtn.classList.remove("hidden");
+    container.classList.remove("hidden");
+    if (downloadBtn && state.savedGeneratedImages.length > 0) downloadBtn.classList.remove("hidden");
 
-    // Afficher les 4 premières images
-    const displayImages = state.savedGeneratedImages.slice(0, 4);
-    carousel.innerHTML = displayImages.map((img, i) =>
-      `<div class="carousel-item" onclick="window.viewImage('${img.image}')" title="${img.prompt || 'Image ' + (i+1)}">
+    // Nombre d'images visibles à la fois
+    const visibleCount = 4;
+    const maxScroll = Math.max(0, allCarouselImages.length - visibleCount);
+    state.carouselScrollIndex = Math.min(state.carouselScrollIndex, maxScroll);
+
+    // Afficher les images à partir de l'index de scroll
+    const displayImages = allCarouselImages.slice(state.carouselScrollIndex, state.carouselScrollIndex + visibleCount);
+
+    carousel.innerHTML = displayImages.map((img, i) => {
+      const globalIndex = state.carouselScrollIndex + i;
+      const isCurrentMain = state.tempMainImage === null ? img.isMain : (state.tempMainImage === img.image);
+      const activeClass = isCurrentMain ? 'carousel-item-active' : '';
+      const mainLabel = img.isMain ? '<span class="carousel-main-label">MAIN</span>' : '';
+      return `<div class="carousel-item ${activeClass}" onclick="window.setTempMainImage(${globalIndex})" title="${img.prompt || 'Image ' + (i+1)}">
         <img src="data:image/jpeg;base64,${img.image}">
-      </div>`
-    ).join("");
+        ${mainLabel}
+      </div>`;
+    }).join("");
 
-    if (state.savedGeneratedImages.length > 4) {
-      carousel.innerHTML += `<div class="carousel-item" style="display:flex; align-items:center; justify-content:center; background:#f5f5f7; font-size:12px; color:#666;">+${state.savedGeneratedImages.length - 4}</div>`;
-    }
+    // Gérer l'affichage des flèches
+    const prevBtn = container.querySelector('.carousel-prev');
+    const nextBtn = container.querySelector('.carousel-next');
+    if (prevBtn) prevBtn.style.visibility = state.carouselScrollIndex > 0 ? 'visible' : 'hidden';
+    if (nextBtn) nextBtn.style.visibility = state.carouselScrollIndex < maxScroll ? 'visible' : 'hidden';
   }
+
+  // Scroll le carousel
+  window.scrollCarousel = (direction) => {
+    const allCount = 1 + state.savedGeneratedImages.length; // MAIN + saved
+    const visibleCount = 4;
+    const maxScroll = Math.max(0, allCount - visibleCount);
+
+    state.carouselScrollIndex += direction;
+    state.carouselScrollIndex = Math.max(0, Math.min(state.carouselScrollIndex, maxScroll));
+    renderSavedImagesCarousel();
+  };
+
+  // Afficher une image temporairement comme principale
+  window.setTempMainImage = (carouselIndex) => {
+    const allCarouselImages = [];
+    if (state.imageBase64) {
+      allCarouselImages.push({ image: state.imageBase64, isMain: true });
+    }
+    state.savedGeneratedImages.forEach(img => {
+      allCarouselImages.push({ image: img.image, isMain: false });
+    });
+
+    const selectedImg = allCarouselImages[carouselIndex];
+    if (!selectedImg) return;
+
+    // Si on clique sur MAIN quand pas de temp, ne rien faire
+    if (selectedImg.isMain && state.tempMainImage === null) {
+      return;
+    }
+
+    // Si on clique sur l'image déjà affichée, ouvrir en grand
+    if (state.tempMainImage === selectedImg.image) {
+      window.viewImage(selectedImg.image);
+      return;
+    }
+
+    // Définir cette image comme main temporaire (ou reset si MAIN)
+    state.tempMainImage = selectedImg.isMain ? null : selectedImg.image;
+
+    // Mettre à jour l'affichage de l'image principale
+    const previewImg = $("previewImg");
+    if (previewImg) {
+      previewImg.src = `data:image/jpeg;base64,${selectedImg.image}`;
+    }
+
+    renderSavedImagesCarousel();
+  };
+
+  // Reset temp main image (revenir à l'image principale)
+  window.resetTempMainImage = () => {
+    if (state.tempMainImage === null) return;
+    state.tempMainImage = null;
+    const previewImg = $("previewImg");
+    if (previewImg && state.imageBase64) {
+      previewImg.src = `data:image/jpeg;base64,${state.imageBase64}`;
+    }
+    renderSavedImagesCarousel();
+  };
 
   // Télécharger toutes les images en ZIP
   window.downloadAllImages = async () => {
@@ -1398,8 +1502,51 @@
     }
   };
 
-  // Changer l'image principale
-  window.changeMainImage = () => {
+  // Changer l'image principale - avec menu pour choisir source
+  window.changeMainImage = (event) => {
+    // Créer un menu contextuel
+    const existingMenu = document.querySelector('.change-main-menu');
+    if (existingMenu) existingMenu.remove();
+
+    const menu = document.createElement('div');
+    menu.className = 'change-main-menu';
+    menu.innerHTML = `
+      <div class="change-main-option" onclick="window.changeMainFromImport()">📁 Importer une image</div>
+      ${state.savedGeneratedImages.length > 0 ? `<div class="change-main-option" onclick="window.showSavedImagesSelector()">🖼️ Choisir parmi les enregistrées</div>` : ''}
+    `;
+
+    // Positionner le menu près du bouton
+    const btn = event ? event.target.closest('button') : null;
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      menu.style.position = 'fixed';
+      menu.style.top = (rect.bottom + 5) + 'px';
+      menu.style.left = rect.left + 'px';
+    } else {
+      menu.style.position = 'fixed';
+      menu.style.top = '50%';
+      menu.style.left = '50%';
+      menu.style.transform = 'translate(-50%, -50%)';
+    }
+
+    document.body.appendChild(menu);
+
+    // Fermer le menu au clic ailleurs
+    setTimeout(() => {
+      document.addEventListener('click', function closeMenu(e) {
+        if (!menu.contains(e.target)) {
+          menu.remove();
+          document.removeEventListener('click', closeMenu);
+        }
+      });
+    }, 10);
+  };
+
+  // Importer une image depuis le système de fichiers
+  window.changeMainFromImport = () => {
+    const existingMenu = document.querySelector('.change-main-menu');
+    if (existingMenu) existingMenu.remove();
+
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
@@ -1412,6 +1559,7 @@
         state.imageBase64 = ev.target.result.split(",")[1];
         $("previewImg").src = ev.target.result;
         state.inputImages[0] = state.imageBase64;
+        state.tempMainImage = null;
         renderInputImages();
         renderGenImages();
         renderSavedImagesCarousel();
@@ -1419,6 +1567,50 @@
       reader.readAsDataURL(file);
     };
     input.click();
+  };
+
+  // Afficher un sélecteur pour choisir parmi les images enregistrées
+  window.showSavedImagesSelector = () => {
+    const existingMenu = document.querySelector('.change-main-menu');
+    if (existingMenu) existingMenu.remove();
+
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.id = 'savedImagesSelectorModal';
+    modal.innerHTML = `
+      <div class="modal-content" style="max-width: 600px;">
+        <h2>Choisir une image comme principale</h2>
+        <div class="saved-images-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; max-height: 400px; overflow-y: auto; padding: 10px;">
+          ${state.savedGeneratedImages.map((img, i) => `
+            <div class="saved-img-option" style="cursor:pointer; border-radius:10px; overflow:hidden; border:2px solid #e5e5e5; transition:all 0.2s;" onclick="window.setMainFromSaved(${i})">
+              <img src="data:image/jpeg;base64,${img.image}" style="width:100%; aspect-ratio:1; object-fit:cover;">
+            </div>
+          `).join('')}
+        </div>
+        <button class="secondary-btn" style="margin-top:15px; width:100%;" onclick="document.getElementById('savedImagesSelectorModal').remove()">Annuler</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  };
+
+  // Définir une image enregistrée comme image principale
+  window.setMainFromSaved = (index) => {
+    const img = state.savedGeneratedImages[index];
+    if (!img) return;
+
+    state.imageBase64 = img.image;
+    state.imageMime = 'image/jpeg';
+    $("previewImg").src = `data:image/jpeg;base64,${img.image}`;
+    state.inputImages[0] = state.imageBase64;
+    state.tempMainImage = null;
+
+    // Fermer le modal
+    const modal = document.getElementById('savedImagesSelectorModal');
+    if (modal) modal.remove();
+
+    renderInputImages();
+    renderGenImages();
+    renderSavedImagesCarousel();
   };
   window.toggleSessionImg = (id) => { const item = state.sessionGeneratedImages.find(x => x.id == id); if(!item) return; const idx = state.selectedSessionImagesIdx.indexOf(item); if (idx > -1) { state.selectedSessionImagesIdx.splice(idx, 1); const imgToRemove = item.image; const inputIdx = state.inputImages.indexOf(imgToRemove); if (inputIdx > -1) state.inputImages.splice(inputIdx, 1); } else { state.selectedSessionImagesIdx.push(item); if (!state.inputImages.includes(item.image)) state.inputImages.push(item.image); } renderInputImages(); renderGenImages(); };
   window.viewImage = (b64) => { const byteCharacters = atob(b64); const byteNumbers = new Array(byteCharacters.length); for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i); const byteArray = new Uint8Array(byteNumbers); const blob = new Blob([byteArray], {type: 'image/jpeg'}); const blobUrl = URL.createObjectURL(blob); window.open(blobUrl, '_blank'); };
@@ -1442,7 +1634,7 @@
       stopLoading();
     }
   };
-  window.deleteSavedImage = async (index) => { if(!confirm("Supprimer cette image ?")) return; state.savedGeneratedImages.splice(index, 1); startLoading(); try { await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) }); renderGenImages(); } catch(e) { alert(e.message); } finally { stopLoading(); } };
+  window.deleteSavedImage = async (index) => { if(!confirm("Supprimer cette image ?")) return; const deletedImg = state.savedGeneratedImages[index]; state.savedGeneratedImages.splice(index, 1); if (state.tempMainImage === deletedImg?.image) { state.tempMainImage = null; $("previewImg").src = `data:image/jpeg;base64,${state.imageBase64}`; } startLoading(); try { await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) }); renderGenImages(); renderSavedImagesCarousel(); } catch(e) { alert(e.message); } finally { stopLoading(); } };
   async function loadHistory() { try { const r = await fetch("/api/history"); state.historyCache = await r.json(); renderHistoryUI(); } catch(e){} }
   function renderHistoryUI() { const filtered = (state.historyCache || []).filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase())); const start = (state.currentPage - 1) * 5; const pag = filtered.slice(start, start + 5); $("historyList").innerHTML = pag.map(item => `<div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})"><img src="data:image/jpeg;base64,${item.image}" class="history-img"><div style="flex:1"><h4>${item.title || "Sans titre"}</h4></div><button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button></div>`).join(""); renderPagination(Math.ceil(filtered.length / 5)); }
   function renderPagination(total) { const p = $("pagination"); p.innerHTML = ""; if(total <= 1) return; for(let i=1; i<=total; i++) { const b = document.createElement("button"); b.textContent = i; if(i === state.currentPage) b.className = "active"; b.onclick = () => { state.currentPage = i; renderHistoryUI(); }; p.appendChild(b); } }
@@ -1464,6 +1656,8 @@
       state.adsInfoTrans = item.ads_info_trans ? JSON.parse(item.ads_info_trans) : {};
       state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
       state.sessionGeneratedImages = [];
+      state.tempMainImage = null;
+      state.carouselScrollIndex = 0;
       $("titleText").textContent = item.title;
       $("descText").textContent = item.description;
       $("productUrlInput").value = item.product_url || "";

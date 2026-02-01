@@ -203,17 +203,15 @@
            </div>
         </div>
 
-        <div class="chat-container">
-           <div id="imgGenCategoriesBar" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #f0f0f0;"></div>
-           
-           <div id="imgGenStylesContainer" style="display:flex; flex-direction:column; gap:15px; margin-bottom:10px; border-bottom:1px solid #f0f0f0; min-height: 50px;"></div>
-
+        <div class="chat-container studio-chat">
+           <div id="imgGenCategoriesBar" class="studio-categories"></div>
+           <div id="imgGenStylesContainer" class="studio-styles"></div>
            <div id="inputImagesPreview" class="input-images-bar hidden"></div>
-           
-           <div class="chat-bar" style="align-items:flex-end;">
-             <button id="addInputImgBtn" style="background:none; color:#555; border:1px solid #ddd; margin-right:5px; flex-shrink:0;" title="Ajouter une image référence">+</button>
-             <textarea id="imgGenPrompt" placeholder="Décrivez l'image à générer..." rows="1" style="resize:none; overflow:hidden; min-height:32px; max-height:150px;"></textarea>
-             <button id="sendImgGen" style="flex-shrink:0;">✨</button>
+
+           <div class="studio-chat-bar">
+             <button id="addInputImgBtn" class="studio-add-btn" title="Ajouter une image référence">+</button>
+             <textarea id="imgGenPrompt" class="studio-textarea" placeholder="Décrivez l'image à générer..." rows="1"></textarea>
+             <button id="sendImgGen" class="studio-send-btn">✨</button>
            </div>
            <input type="file" id="extraImgInput" accept="image/*" multiple style="display:none;"/>
         </div>
@@ -274,9 +272,13 @@
           <div id="preview" class="preview hidden"><button id="removeImage" class="modern-remove-btn">×</button><img id="previewImg"/></div>
           <p id="dropPlaceholder">Cliquez ou déposez une image</p>
         </div>
-        <div id="savedImagesCarousel" class="saved-carousel hidden"></div>
+        <div id="carouselContainer" class="carousel-container hidden">
+          <button class="carousel-arrow carousel-prev" onclick="window.scrollCarousel(-1)">‹</button>
+          <div id="savedImagesCarousel" class="saved-carousel"></div>
+          <button class="carousel-arrow carousel-next" onclick="window.scrollCarousel(1)">›</button>
+        </div>
         <button id="openImgGenBtn" class="secondary-btn" style="width: 100%; margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-           <span>🎨</span> Generate Images
+           <span>🎨</span> Studio Images
         </button>
         <button id="downloadAllImagesBtn" class="secondary-btn hidden" style="width: 100%; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px;">
            <span>📥</span> Download All Images
