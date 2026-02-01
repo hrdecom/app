@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>HRD MAGIC</title>
   <link rel="stylesheet" href="app.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -209,10 +210,10 @@
 
            <div id="inputImagesPreview" class="input-images-bar hidden"></div>
            
-           <div class="chat-bar">
-             <button id="addInputImgBtn" style="background:none; color:#555; border:1px solid #ddd; margin-right:5px;" title="Ajouter une image référence">+</button>
-             <input type="text" id="imgGenPrompt" placeholder="Décrivez l'image à générer..." />
-             <button id="sendImgGen">✨</button>
+           <div class="chat-bar" style="align-items:flex-end;">
+             <button id="addInputImgBtn" style="background:none; color:#555; border:1px solid #ddd; margin-right:5px; flex-shrink:0;" title="Ajouter une image référence">+</button>
+             <textarea id="imgGenPrompt" placeholder="Décrivez l'image à générer..." rows="1" style="resize:none; overflow:hidden; min-height:32px; max-height:150px;"></textarea>
+             <button id="sendImgGen" style="flex-shrink:0;">✨</button>
            </div>
            <input type="file" id="extraImgInput" accept="image/*" multiple style="display:none;"/>
         </div>
@@ -273,8 +274,12 @@
           <div id="preview" class="preview hidden"><button id="removeImage" class="modern-remove-btn">×</button><img id="previewImg"/></div>
           <p id="dropPlaceholder">Cliquez ou déposez une image</p>
         </div>
+        <div id="savedImagesCarousel" class="saved-carousel hidden"></div>
         <button id="openImgGenBtn" class="secondary-btn" style="width: 100%; margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
            <span>🎨</span> Generate Images
+        </button>
+        <button id="downloadAllImagesBtn" class="secondary-btn hidden" style="width: 100%; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+           <span>📥</span> Download All Images
         </button>
     </div>
     <div class="right">

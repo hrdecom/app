@@ -348,6 +348,147 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
   color: #fff;
   border-color: var(--apple-blue);
 }
+.lang-tab-wrapper {
+  position: relative;
+}
+.lang-tab-delete {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: #ff3b30;
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+.lang-tab-delete:hover {
+  opacity: 1;
+}
+
+/* Fix for saved items - no blue border */
+.saved-item {
+  border: 1px solid #ddd !important;
+  cursor: default !important;
+}
+.translated-item {
+  background: #f8f9fa !important;
+  border-left: 3px solid var(--apple-blue) !important;
+}
+
+/* SAVED IMAGES CAROUSEL */
+.saved-carousel {
+  display: flex;
+  gap: 8px;
+  padding: 12px 0;
+  overflow-x: auto;
+  margin-top: 12px;
+}
+.saved-carousel::-webkit-scrollbar {
+  height: 4px;
+}
+.saved-carousel::-webkit-scrollbar-thumb {
+  background: #ddd;
+  border-radius: 2px;
+}
+.carousel-item {
+  flex-shrink: 0;
+  width: 70px;
+  height: 70px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.carousel-item:hover {
+  border-color: var(--apple-blue);
+  transform: scale(1.05);
+}
+.carousel-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* INPUT IMAGES LARGER */
+.input-img-thumb {
+  width: 50px !important;
+  height: 50px !important;
+  border-radius: 8px;
+}
+
+/* REORDER VISUAL IMPROVEMENTS */
+.gen-image-card.dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+.gen-image-card.drag-target {
+  border: 2px dashed var(--apple-blue) !important;
+  background: #f0f7ff;
+}
+.reorder-handle {
+  position: absolute;
+  top: 50%;
+  left: 5px;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 30px;
+  background: rgba(255,255,255,0.9);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.gen-image-card:hover .reorder-handle {
+  opacity: 1;
+}
+.reorder-handle span {
+  width: 10px;
+  height: 2px;
+  background: #999;
+  border-radius: 1px;
+}
+
+/* MAIN IMAGE BADGE */
+.main-badge {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+  color: #fff;
+  padding: 20px 10px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+.change-main-btn {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  background: rgba(255,255,255,0.9);
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.gen-image-card:hover .change-main-btn {
+  opacity: 1;
+}
 
 /* IMPROVED STUDIO PRESET BUTTONS */
 .studio-preset-btn {
