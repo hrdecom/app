@@ -92,10 +92,10 @@
     if (saved) {
       const parsed = JSON.parse(saved.value);
       state.config = { ...DEFAULTS, ...parsed }; 
-      if (Array.isArray(state.config.imgCategories) && typeof state.config.imgCategories[0] === 'string') {
+      if (Array.isArray(state.config.imgCategories) && state.config.imgCategories.length > 0 && typeof state.config.imgCategories[0] === 'string') {
           state.config.imgCategories = state.config.imgCategories.map((c, i) => ({ id: "cat_" + i, name: c, order: i }));
-          if (Array.isArray(state.config.imgGroups) && typeof state.config.imgGroups[0] === 'string') {
-               const defaultCatId = state.config.imgCategories[0].id;
+          if (Array.isArray(state.config.imgGroups) && state.config.imgGroups.length > 0 && typeof state.config.imgGroups[0] === 'string') {
+               const defaultCatId = state.config.imgCategories[0]?.id || "cat_0";
                state.config.imgGroups = state.config.imgGroups.map((g, i) => ({ id: "grp_" + i, name: g, categoryId: defaultCatId, order: i }));
           }
           if (!state.config.imgFolders) state.config.imgFolders = [];
@@ -1353,6 +1353,7 @@
             })
           });
           const hData = await hRes.json();
+          if (!hRes.ok || !hData.id) throw new Error(hData.error || "Erreur création historique");
           state.currentHistoryId = hData.id;
           localStorage.setItem('lastHistoryId', hData.id);
           state.sessionHeadlines = [];
@@ -1924,6 +1925,10 @@
       $("productUrlInput").value = item.product_url || "";
       $("previewImg").src = `data:image/jpeg;base64,${item.image}`;
       state.imageBase64 = item.image;
+      // Mettre à jour le cache pour que la sidebar affiche la bonne miniature
+      const cachedItem = state.historyCache?.find(h => h.id == id);
+      if (cachedItem) cachedItem.image = item.image;
+      renderHistoryUI();
       $("preview").classList.remove("hidden");
       $("dropPlaceholder").style.display = "none";
       $("generateBtn").disabled = false;
