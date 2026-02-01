@@ -121,7 +121,8 @@ export async function onRequest(context) {
 
         return new Response(JSON.stringify({ success: true }), { headers: { "content-type": "application/json" } });
     } catch (e) {
-        return new Response(JSON.stringify({ error: "D1 Error: " + e.message }), { status: 500 });
+        console.error("D1 PATCH Error:", e);
+        return new Response(JSON.stringify({ error: "D1 Error: " + e.message, details: e.stack }), { status: 500, headers: { "content-type": "application/json" } });
     }
   }
 

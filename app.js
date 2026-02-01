@@ -257,19 +257,22 @@
     const container = $("headlinesSavedList");
     let html = '';
 
-    // Onglets de langue
+    // Onglets de langue avec boutons de suppression
     const langs = Object.keys(state.headlinesTrans);
     if (langs.length > 0 || state.selectedHeadlines.length > 0) {
-      html += `<div class="lang-tabs" style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap;">
-        <button class="lang-tab active" onclick="window.showHlLang('original')">Original</button>
-        ${langs.map(l => `<button class="lang-tab" onclick="window.showHlLang('${l}')">${LANGUAGES.find(x => x.code === l)?.flag || ''} ${l.toUpperCase()}</button>`).join('')}
+      html += `<div class="lang-tabs" style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap; align-items:center;">
+        <button class="lang-tab active" data-lang="original" onclick="window.showHlLang('original')">Original</button>
+        ${langs.map(l => `<div class="lang-tab-wrapper" style="display:inline-flex; align-items:center; gap:2px;">
+          <button class="lang-tab" data-lang="${l}" onclick="window.showHlLang('${l}')">${LANGUAGES.find(x => x.code === l)?.flag || ''} ${l.toUpperCase()}</button>
+          <button class="lang-tab-delete" onclick="event.stopPropagation(); window.deleteTransLang('hl', '${l}')" title="Supprimer">×</button>
+        </div>`).join('')}
       </div>`;
     }
 
     html += `<div id="hlLangContent">`;
     html += state.selectedHeadlines.map((h, i) => {
       const escapedText = h.replace(/'/g, "\\'").replace(/\n/g, "\\n");
-      return `<div class="headline-item no-hover" style="background:#fff; border:1px solid #ddd;">
+      return `<div class="headline-item no-hover saved-item" style="background:#fff; border:1px solid #ddd;">
         <span class="headline-text">${h}</span>
         <button class="icon-btn-small" onclick="window.copyToClip('${escapedText}', this)">📋</button>
         <button class="icon-btn-small delete-hl" onclick="window.removeSavedHl(${i})">×</button>
@@ -282,13 +285,14 @@
 
   window.showHlLang = (lang) => {
     document.querySelectorAll('#headlinesSavedList .lang-tab').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
+    const clickedTab = document.querySelector(`#headlinesSavedList .lang-tab[data-lang="${lang}"]`);
+    if (clickedTab) clickedTab.classList.add('active');
 
     const contentDiv = $("hlLangContent");
     if (lang === 'original') {
       contentDiv.innerHTML = state.selectedHeadlines.map((h, i) => {
         const escapedText = h.replace(/'/g, "\\'").replace(/\n/g, "\\n");
-        return `<div class="headline-item no-hover" style="background:#fff; border:1px solid #ddd;">
+        return `<div class="headline-item no-hover saved-item" style="background:#fff; border:1px solid #ddd;">
           <span class="headline-text">${h}</span>
           <button class="icon-btn-small" onclick="window.copyToClip('${escapedText}', this)">📋</button>
           <button class="icon-btn-small delete-hl" onclick="window.removeSavedHl(${i})">×</button>
@@ -298,7 +302,7 @@
       const translated = state.headlinesTrans[lang] || [];
       contentDiv.innerHTML = translated.map((h, i) => {
         const escapedText = h.replace(/'/g, "\\'").replace(/\n/g, "\\n");
-        return `<div class="headline-item no-hover" style="background:#f0f7ff; border:1px solid #007AFF;">
+        return `<div class="headline-item no-hover saved-item translated-item" style="background:#f8f9fa; border:1px solid #e0e0e0;">
           <span class="headline-text">${h}</span>
           <button class="icon-btn-small" onclick="window.copyToClip('${escapedText}', this)">📋</button>
         </div>`;
@@ -310,12 +314,15 @@
     const container = $("adsSavedList");
     let html = '';
 
-    // Onglets de langue
+    // Onglets de langue avec boutons de suppression
     const langs = Object.keys(state.adsTrans);
     if (langs.length > 0 || state.selectedAds.length > 0) {
-      html += `<div class="lang-tabs" style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap;">
-        <button class="lang-tab active" onclick="window.showAdLang('original')">Original</button>
-        ${langs.map(l => `<button class="lang-tab" onclick="window.showAdLang('${l}')">${LANGUAGES.find(x => x.code === l)?.flag || ''} ${l.toUpperCase()}</button>`).join('')}
+      html += `<div class="lang-tabs" style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap; align-items:center;">
+        <button class="lang-tab active" data-lang="original" onclick="window.showAdLang('original')">Original</button>
+        ${langs.map(l => `<div class="lang-tab-wrapper" style="display:inline-flex; align-items:center; gap:2px;">
+          <button class="lang-tab" data-lang="${l}" onclick="window.showAdLang('${l}')">${LANGUAGES.find(x => x.code === l)?.flag || ''} ${l.toUpperCase()}</button>
+          <button class="lang-tab-delete" onclick="event.stopPropagation(); window.deleteTransLang('ad', '${l}')" title="Supprimer">×</button>
+        </div>`).join('')}
       </div>`;
     }
 
@@ -324,7 +331,7 @@
       const text = typeof ad === 'object' ? ad.text : ad;
       const label = typeof ad === 'object' ? ad.style : '';
       const escapedText = text.replace(/`/g, "\\`").replace(/\\/g, "\\\\");
-      return `<div class="headline-item no-hover" style="background:#fff; border:1px solid #ddd;">
+      return `<div class="headline-item no-hover saved-item" style="background:#fff; border:1px solid #ddd;">
         ${label ? `<span style="font-size:9px; background:#007AFF; color:#fff; padding:2px 6px; border-radius:10px; margin-right:8px;">${label}</span>` : ''}
         <span class="headline-text" style="white-space:pre-wrap;">${text}</span>
         <button class="icon-btn-small" onclick="window.copyToClip(\`${escapedText}\`, this)">📋</button>
@@ -341,7 +348,8 @@
 
   window.showAdLang = (lang) => {
     document.querySelectorAll('#adsSavedList .lang-tab').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
+    const clickedTab = document.querySelector(`#adsSavedList .lang-tab[data-lang="${lang}"]`);
+    if (clickedTab) clickedTab.classList.add('active');
 
     const contentDiv = $("adLangContent");
     if (lang === 'original') {
@@ -349,7 +357,7 @@
         const text = typeof ad === 'object' ? ad.text : ad;
         const label = typeof ad === 'object' ? ad.style : '';
         const escapedText = text.replace(/`/g, "\\`").replace(/\\/g, "\\\\");
-        return `<div class="headline-item no-hover" style="background:#fff; border:1px solid #ddd;">
+        return `<div class="headline-item no-hover saved-item" style="background:#fff; border:1px solid #ddd;">
           ${label ? `<span style="font-size:9px; background:#007AFF; color:#fff; padding:2px 6px; border-radius:10px; margin-right:8px;">${label}</span>` : ''}
           <span class="headline-text" style="white-space:pre-wrap;">${text}</span>
           <button class="icon-btn-small" onclick="window.copyToClip(\`${escapedText}\`, this)">📋</button>
@@ -360,7 +368,7 @@
       const translated = state.adsTrans[lang] || [];
       contentDiv.innerHTML = translated.map((t, i) => {
         const escapedText = t.replace(/`/g, "\\`").replace(/\\/g, "\\\\");
-        return `<div class="headline-item no-hover" style="background:#f0f7ff; border:1px solid #007AFF;">
+        return `<div class="headline-item no-hover saved-item translated-item" style="background:#f8f9fa; border:1px solid #e0e0e0;">
           <span class="headline-text" style="white-space:pre-wrap;">${t}</span>
           <button class="icon-btn-small" onclick="window.copyToClip(\`${escapedText}\`, this)">📋</button>
         </div>`;
@@ -451,12 +459,36 @@
 
   window.removeSavedHl = (idx) => {
     state.selectedHeadlines.splice(idx, 1);
+    // Supprimer aussi la traduction correspondante dans toutes les langues
+    Object.keys(state.headlinesTrans).forEach(lang => {
+      if (state.headlinesTrans[lang] && state.headlinesTrans[lang][idx] !== undefined) {
+        state.headlinesTrans[lang].splice(idx, 1);
+      }
+    });
     renderSavedHl();
   };
 
   window.removeSavedAd = (idx) => {
     state.selectedAds.splice(idx, 1);
+    // Supprimer aussi la traduction correspondante dans toutes les langues
+    Object.keys(state.adsTrans).forEach(lang => {
+      if (state.adsTrans[lang] && state.adsTrans[lang][idx] !== undefined) {
+        state.adsTrans[lang].splice(idx, 1);
+      }
+    });
     renderSavedAds();
+  };
+
+  // Supprimer un onglet de traduction
+  window.deleteTransLang = (type, lang) => {
+    if (type === 'hl') {
+      delete state.headlinesTrans[lang];
+      renderSavedHl();
+    } else {
+      delete state.adsTrans[lang];
+      if (state.adsInfoTrans[lang]) delete state.adsInfoTrans[lang];
+      renderSavedAds();
+    }
   };
 
   async function saveSelections(type) {
@@ -478,7 +510,10 @@
       }
 
       const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error("Erreur serveur");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Erreur serveur");
+      }
 
       // Feedback visuel + switch to saved tab
       showSuccess(saveBtn, type === 'hl' ? 'Enregistrer sélections' : 'Enregistrer sélections');
@@ -515,9 +550,18 @@
     const container = type === 'hl' ? $("hlLangList") : $("adLangList");
     const menuBtn = type === 'hl' ? $("translateHlMenuBtn") : $("translateAdMenuBtn");
 
-    container.innerHTML = LANGUAGES.map(lang =>
-      `<div class="lang-opt" onclick="window.translateTo('${type}', '${lang.code}', '${lang.name}')">${lang.flag} ${lang.name}</div>`
-    ).join("");
+    container.innerHTML = `
+      <div class="lang-select-header" style="padding:10px; border-bottom:1px solid #eee; font-size:11px; color:#666;">Sélectionnez les langues</div>
+      ${LANGUAGES.map(lang => `
+        <label class="lang-opt-check" style="display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer;">
+          <input type="checkbox" class="lang-checkbox" data-code="${lang.code}" data-name="${lang.name}">
+          <span>${lang.flag} ${lang.name}</span>
+        </label>
+      `).join("")}
+      <div style="padding:10px; border-top:1px solid #eee;">
+        <button class="primary-btn" style="width:100%; padding:8px;" onclick="window.translateSelected('${type}')">Traduire</button>
+      </div>
+    `;
 
     menuBtn.onclick = (e) => {
       e.stopPropagation();
@@ -525,6 +569,22 @@
       container.classList.toggle('show');
     };
   }
+
+  // Traduire les langues sélectionnées
+  window.translateSelected = async (type) => {
+    const container = type === 'hl' ? $("hlLangList") : $("adLangList");
+    const checkboxes = container.querySelectorAll('.lang-checkbox:checked');
+    const selectedLangs = Array.from(checkboxes).map(cb => ({ code: cb.dataset.code, name: cb.dataset.name }));
+
+    if (selectedLangs.length === 0) return alert("Veuillez sélectionner au moins une langue.");
+
+    document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
+
+    // Lancer une requête par langue sélectionnée
+    for (const lang of selectedLangs) {
+      await window.translateTo(type, lang.code, lang.name);
+    }
+  };
 
   window.translateTo = async (type, langCode, langName) => {
     document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
@@ -742,13 +802,19 @@
       });
       header.addEventListener('dragover', (e) => {
           e.preventDefault(); e.stopPropagation();
-          if(!state.draggedItem || state.draggedItem.id === data.id) return;
+          // Check if dragging itself or one of multi-selected items
+          if (!state.draggedItem) return;
+          if (state.draggedItem.multi) {
+            if (state.draggedItem.items.some(item => item.id === data.id)) return;
+          } else if (state.draggedItem.id === data.id) return;
+
           const rect = header.getBoundingClientRect();
           const y = e.clientY - rect.top;
           const height = rect.height;
-          
+
           header.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
-          const src = state.draggedItem.type; const dest = type;
+          const src = state.draggedItem.multi ? state.draggedItem.items[0].type : state.draggedItem.type;
+          const dest = type;
 
           let canNest = false;
           if (dest === 'category') canNest = true;
@@ -782,13 +848,18 @@
           header.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
           if (state.draggedItem) {
             if (state.draggedItem.multi) {
-              // Multi-drag
-              state.draggedItem.items.forEach(item => {
+              // Multi-drag - move all selected items
+              const itemsToMove = [...state.draggedItem.items];
+              itemsToMove.forEach(item => {
                 if (item.id !== data.id) {
                   window.moveNode(item, { id: data.id, type: type, parentId: parentId }, action);
                 }
               });
-              state.selectedTreeNodes = []; // Clear selection after drag
+              // Clear selection after drag
+              state.selectedTreeNodes = [];
+              // Re-render to clear visual selection
+              saveConfigToApi();
+              renderConfigUI();
             } else if (state.draggedItem.id !== data.id) {
               window.moveNode(state.draggedItem, { id: data.id, type: type, parentId: parentId }, action);
             }
@@ -1066,7 +1137,7 @@
       </button>`;
   }
 
-  // Shift+click pour coller le prompt dans le chat et désélectionner
+  // Shift+click pour coller le prompt dans le chat (REMPLACE le texte existant)
   document.addEventListener('click', function(e) {
     const btn = e.target.closest('.style-btn-click');
     if (btn) {
@@ -1074,11 +1145,12 @@
       const prompt = btn.getAttribute('data-prompt');
 
       if (e.shiftKey && prompt) {
-        // Shift+click: coller dans le chat et ne pas sélectionner
+        // Shift+click: REMPLACER le texte du chat
         const chatInput = $("imgGenPrompt");
-        const currentText = chatInput.value.trim();
-        chatInput.value = currentText ? currentText + " " + prompt : prompt;
+        chatInput.value = prompt;
         chatInput.focus();
+        // Trigger auto-expand
+        chatInput.dispatchEvent(new Event('input'));
         // Animation visuelle
         btn.style.transform = 'scale(0.95)';
         setTimeout(() => btn.style.transform = '', 150);
@@ -1252,11 +1324,102 @@
   function renderInputImages() { const container = $("inputImagesPreview"); if (state.inputImages.length === 0) { container.classList.add("hidden"); return; } container.classList.remove("hidden"); container.innerHTML = state.inputImages.map((img, i) => `<div class="input-img-wrapper"><img src="data:image/jpeg;base64,${img}" class="input-img-thumb"><div class="remove-input-img" onclick="window.removeInputImg(${i})">×</div></div>`).join(""); }
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   async function callGeminiImageGen() { const userPrompt = $("imgGenPrompt").value; if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style."); const count = parseInt($("imgCount").value) || 1; const aspectRatio = $("imgAspectRatio").value; const resolution = $("imgResolution").value; if (state.inputImages.length === 0 && state.imageBase64) { state.inputImages = [state.imageBase64]; renderInputImages(); } const batches = []; const inputsToProcess = state.inputImages.length > 0 ? state.inputImages : [null]; inputsToProcess.forEach(inputImg => { let tasks = []; if (state.selectedImgStyles.length > 0) { tasks = state.selectedImgStyles.map(s => ({ type: 'style', styleObj: s, prompt: userPrompt ? (userPrompt + " " + s.prompt) : s.prompt, refImage: s.refImage, label: s.name })); } else { tasks = [{ type: 'manual', prompt: userPrompt, refImage: null, label: userPrompt }]; } tasks.forEach(task => { let contextImages = []; if (inputImg) contextImages.push(inputImg); if (task.refImage) contextImages.push(task.refImage); for (let i = 0; i < count; i++) { batches.push({ prompt: task.prompt, images: contextImages, aspectRatio: aspectRatio, resolution: resolution, label: task.label }); } }); }); const newItems = batches.map(b => ({ id: Date.now() + Math.random(), loading: true, prompt: b.label, aspectRatio: b.aspectRatio })); state.sessionGeneratedImages.unshift(...newItems); renderGenImages(); state.selectedImgStyles = []; state.manualImgStyles = []; $("imgGenPrompt").value = ""; renderImgStylesButtons(); newItems.forEach(async (item, index) => { const batchData = batches[index]; try { const res = await fetch("/api/gemini", { method: "POST", body: JSON.stringify({ prompt: batchData.prompt, images: batchData.images, aspectRatio: batchData.aspectRatio, resolution: batchData.resolution }) }); const data = await res.json(); const targetItem = state.sessionGeneratedImages.find(x => x.id === item.id); if (targetItem) { if (data.error) { targetItem.loading = false; targetItem.error = data.error; } else { targetItem.loading = false; targetItem.image = data.image; } renderGenImages(); } } catch(e) { const targetItem = state.sessionGeneratedImages.find(x => x.id === item.id); if (targetItem) { targetItem.loading = false; targetItem.error = e.message; renderGenImages(); } } }); }
-  function renderGenImages() { const sessionContainer = $("imgGenSessionResults"); sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => { if (item.loading) { return `<div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#eee; height:150px; flex-direction:column; gap:10px;"><div class="spinner" style="width:20px; height:20px; border-width:2px;"></div><span style="font-size:10px; color:#666;">Génération...</span><div class="gen-image-overlay">${item.prompt}</div></div>`; } if (item.error) { return `<div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#ffebeb; height:150px; flex-direction:column; gap:5px; padding:10px; text-align:center;"><span style="font-size:20px;">⚠️</span><span style="font-size:10px; color:red;">Erreur</span><div class="gen-image-overlay" style="color:red;">${item.error}</div></div>`; } return `<div class="gen-image-card ${state.selectedSessionImagesIdx.includes(item) ? 'selected' : ''}" onclick="window.toggleSessionImg('${item.id}')"><img src="data:image/jpeg;base64,${item.image}"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button></div>`; }).join(""); let savedHtml = ""; if(state.imageBase64) { savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default;"><img src="data:image/jpeg;base64,${state.imageBase64}"><div class="gen-image-overlay" style="background:var(--text-main); color:white; font-weight:bold;">ORIGINAL</div><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInputOrig()" title="Utiliser">＋</button></div>`; } savedHtml += state.savedGeneratedImages.map((item, i) => { const isSelected = state.inputImages.includes(item.image); const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : ''; return `<div class="gen-image-card" style="${borderStyle}" draggable="true" ondragstart="dragStart(event, ${i})" ondrop="drop(event, ${i})" ondragenter="dragEnter(event, ${i})" ondragover="allowDrop(event)" onclick="window.toggleSavedImg(${i})"><img src="data:image/jpeg;base64,${item.image}" style="pointer-events:none;"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:red; border:1px solid #ccc;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button></div>`; }).join(""); $("imgGenSavedResults").innerHTML = savedHtml; }
+  function renderGenImages() { const sessionContainer = $("imgGenSessionResults"); sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => { if (item.loading) { return `<div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#eee; height:150px; flex-direction:column; gap:10px;"><div class="spinner" style="width:20px; height:20px; border-width:2px;"></div><span style="font-size:10px; color:#666;">Génération...</span><div class="gen-image-overlay">${item.prompt}</div></div>`; } if (item.error) { return `<div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#ffebeb; height:150px; flex-direction:column; gap:5px; padding:10px; text-align:center;"><span style="font-size:20px;">⚠️</span><span style="font-size:10px; color:red;">Erreur</span><div class="gen-image-overlay" style="color:red;">${item.error}</div></div>`; } return `<div class="gen-image-card ${state.selectedSessionImagesIdx.includes(item) ? 'selected' : ''}" onclick="window.toggleSessionImg('${item.id}')"><img src="data:image/jpeg;base64,${item.image}"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button></div>`; }).join(""); let savedHtml = ""; if(state.imageBase64) { savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default; position:relative;"><img src="data:image/jpeg;base64,${state.imageBase64}"><div class="main-badge">MAIN</div><button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInputOrig()" title="Utiliser">＋</button><button class="icon-btn-small change-main-btn" onclick="event.stopPropagation(); window.changeMainImage()" title="Changer">✎</button></div>`; } savedHtml += state.savedGeneratedImages.map((item, i) => { const isSelected = state.inputImages.includes(item.image); const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : ''; return `<div class="gen-image-card" style="${borderStyle}" draggable="true" ondragstart="dragStart(event, ${i})" ondrop="drop(event, ${i})" ondragenter="dragEnter(event, ${i})" ondragover="allowDrop(event)" onclick="window.toggleSavedImg(${i})"><div class="reorder-handle"><span></span><span></span><span></span></div><img src="data:image/jpeg;base64,${item.image}" style="pointer-events:none;"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:red; border:1px solid #ccc;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button></div>`; }).join(""); $("imgGenSavedResults").innerHTML = savedHtml; }
   window.toggleSavedImg = (index) => { const item = state.savedGeneratedImages[index]; if(!item) return; const idx = state.inputImages.indexOf(item.image); if(idx > -1) state.inputImages.splice(idx, 1); else state.inputImages.push(item.image); renderInputImages(); renderGenImages(); };
   let dragSrcIndex = null; window.dragStart = (e, i) => { dragSrcIndex = i; e.dataTransfer.effectAllowed = 'move'; e.target.style.opacity = '0.4'; }; window.allowDrop = (e) => { e.preventDefault(); }; window.dragEnter = (e, targetIndex) => { if (dragSrcIndex === null || dragSrcIndex === targetIndex) return; const item = state.savedGeneratedImages.splice(dragSrcIndex, 1)[0]; state.savedGeneratedImages.splice(targetIndex, 0, item); dragSrcIndex = targetIndex; renderGenImages(); const cards = document.querySelectorAll('#imgGenSavedResults .gen-image-card'); if(cards[dragSrcIndex]) cards[dragSrcIndex].style.opacity = '0.4'; }; window.drop = async (e, i) => { e.preventDefault(); document.querySelectorAll('.gen-image-card').forEach(c => c.style.opacity = '1'); dragSrcIndex = null; if (state.currentHistoryId) { try { await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) }); } catch(err) {} } };
   window.addSavedToInput = (index) => { const item = state.savedGeneratedImages[index]; if(item && !state.inputImages.includes(item.image)) { state.inputImages.push(item.image); renderInputImages(); document.querySelector('button[data-tab="tab-img-chat"]').click(); } };
   window.addSavedToInputOrig = () => { if(state.imageBase64 && !state.inputImages.includes(state.imageBase64)) { state.inputImages.push(state.imageBase64); renderInputImages(); document.querySelector('button[data-tab="tab-img-chat"]').click(); } };
+
+  // Carousel des images enregistrées (interface principale)
+  function renderSavedImagesCarousel() {
+    const carousel = $("savedImagesCarousel");
+    const downloadBtn = $("downloadAllImagesBtn");
+    if (!carousel) return;
+
+    if (state.savedGeneratedImages.length === 0) {
+      carousel.classList.add("hidden");
+      if (downloadBtn) downloadBtn.classList.add("hidden");
+      return;
+    }
+
+    carousel.classList.remove("hidden");
+    if (downloadBtn) downloadBtn.classList.remove("hidden");
+
+    // Afficher les 4 premières images
+    const displayImages = state.savedGeneratedImages.slice(0, 4);
+    carousel.innerHTML = displayImages.map((img, i) =>
+      `<div class="carousel-item" onclick="window.viewImage('${img.image}')" title="${img.prompt || 'Image ' + (i+1)}">
+        <img src="data:image/jpeg;base64,${img.image}">
+      </div>`
+    ).join("");
+
+    if (state.savedGeneratedImages.length > 4) {
+      carousel.innerHTML += `<div class="carousel-item" style="display:flex; align-items:center; justify-content:center; background:#f5f5f7; font-size:12px; color:#666;">+${state.savedGeneratedImages.length - 4}</div>`;
+    }
+  }
+
+  // Télécharger toutes les images en ZIP
+  window.downloadAllImages = async () => {
+    if (state.savedGeneratedImages.length === 0) return alert("Aucune image à télécharger.");
+
+    const productTitle = $("titleText").textContent || "images";
+    const zipFilename = productTitle.replace(/[^a-z0-9]/gi, '_') + ".zip";
+
+    // Utiliser JSZip si disponible, sinon télécharger individuellement
+    if (typeof JSZip !== 'undefined') {
+      const zip = new JSZip();
+      state.savedGeneratedImages.forEach((img, i) => {
+        const imgData = img.image;
+        const filename = `image_${i + 1}.jpg`;
+        zip.file(filename, imgData, { base64: true });
+      });
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = zipFilename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      // Fallback: télécharger chaque image individuellement
+      state.savedGeneratedImages.forEach((img, i) => {
+        const byteCharacters = atob(img.image);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let j = 0; j < byteCharacters.length; j++) byteNumbers[j] = byteCharacters.charCodeAt(j);
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'image/jpeg' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${productTitle.replace(/[^a-z0-9]/gi, '_')}_${i + 1}.jpg`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    }
+  };
+
+  // Changer l'image principale
+  window.changeMainImage = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        state.imageMime = ev.target.result.split(";")[0].split(":")[1];
+        state.imageBase64 = ev.target.result.split(",")[1];
+        $("previewImg").src = ev.target.result;
+        state.inputImages[0] = state.imageBase64;
+        renderInputImages();
+        renderGenImages();
+        renderSavedImagesCarousel();
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
   window.toggleSessionImg = (id) => { const item = state.sessionGeneratedImages.find(x => x.id == id); if(!item) return; const idx = state.selectedSessionImagesIdx.indexOf(item); if (idx > -1) { state.selectedSessionImagesIdx.splice(idx, 1); const imgToRemove = item.image; const inputIdx = state.inputImages.indexOf(imgToRemove); if (inputIdx > -1) state.inputImages.splice(inputIdx, 1); } else { state.selectedSessionImagesIdx.push(item); if (!state.inputImages.includes(item.image)) state.inputImages.push(item.image); } renderInputImages(); renderGenImages(); };
   window.viewImage = (b64) => { const byteCharacters = atob(b64); const byteNumbers = new Array(byteCharacters.length); for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i); const byteArray = new Uint8Array(byteNumbers); const blob = new Blob([byteArray], {type: 'image/jpeg'}); const blobUrl = URL.createObjectURL(blob); window.open(blobUrl, '_blank'); };
   window.saveImgSelection = async () => {
@@ -1271,6 +1434,7 @@
       if (!res.ok) throw new Error("Erreur serveur");
       showSuccess($("saveImgSelectionBtn"), 'Enregistrer');
       renderGenImages();
+      renderSavedImagesCarousel();
       document.querySelector('button[data-tab="tab-img-saved"]').click();
     } catch(e) {
       alert("Erreur sauvegarde: " + e.message);
@@ -1311,6 +1475,9 @@
       state.inputImages = [item.image];
       renderInputImages();
       renderGenImages();
+      renderSavedImagesCarousel();
+      // Réinitialiser l'historique de titres pour ce produit
+      state.productTitleHistory = [item.title];
     } catch(e) {
       alert("Erreur chargement: " + e.message);
     } finally {
@@ -1478,12 +1645,29 @@
     const cancelNodeBtn = $("cancelNodeBtn"); if(cancelNodeBtn) cancelNodeBtn.onclick = closeNodeEditor;
     // -----------------------------------------------------------------------------
 
-    $("openImgGenBtn").onclick = () => { if (!state.imageBase64) return alert("Veuillez d'abord uploader une image principale."); if (state.inputImages.length === 0) state.inputImages = [state.imageBase64]; renderInputImages(); $("imgGenModal").classList.remove("hidden"); renderStudioCategories(); renderImgStylesButtons(); renderGenImages(); };
+    $("openImgGenBtn").onclick = () => {
+      if (!state.imageBase64) return alert("Veuillez d'abord uploader une image principale.");
+      if (state.inputImages.length === 0) state.inputImages = [state.imageBase64];
+      renderInputImages();
+      $("imgGenModal").classList.remove("hidden");
+      renderStudioCategories();
+      renderImgStylesButtons();
+      renderGenImages();
+      renderSavedImagesCarousel();
+    };
     $("closeImgGen").onclick = () => $("imgGenModal").classList.add("hidden");
     $("sendImgGen").onclick = callGeminiImageGen;
     $("addInputImgBtn").onclick = () => $("extraImgInput").click();
     $("extraImgInput").onchange = (e) => { const files = Array.from(e.target.files); files.forEach(f => { const r = new FileReader(); r.onload = (ev) => { const b64 = ev.target.result.split(",")[1]; state.inputImages.push(b64); renderInputImages(); }; r.readAsDataURL(f); }); };
+
+    // Auto-expand textarea
+    const imgGenPrompt = $("imgGenPrompt");
+    imgGenPrompt.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+    });
     $("saveImgSelectionBtn").onclick = window.saveImgSelection;
+    $("downloadAllImagesBtn").onclick = window.downloadAllImages;
     window.onclick = (e) => { if (e.target.classList.contains('modal')) e.target.classList.add("hidden"); document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show')); };
     document.querySelectorAll(".tab-link").forEach(btn => btn.onclick = (e) => switchTab(e));
     $("sendHeadlineChat").onclick = () => apiCall('headlines', { userText: $("headlineStyleInput").value });
