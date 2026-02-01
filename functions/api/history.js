@@ -67,7 +67,7 @@ export async function onRequest(context) {
 
         // 1. Mise à jour textes (Table History)
         // Note: ads_info et ads_info_trans ne sont pas des colonnes existantes, on les ignore
-        const fields = ['title', 'description', 'headlines', 'product_url', 'ad_copys', 'headlines_trans', 'ads_trans'];
+        const fields = ['title', 'description', 'image', 'headlines', 'product_url', 'ad_copys', 'headlines_trans', 'ads_trans'];
         const updates = [];
         const values = [];
         for (const field of fields) {
