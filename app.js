@@ -1924,6 +1924,10 @@
       $("productUrlInput").value = item.product_url || "";
       $("previewImg").src = `data:image/jpeg;base64,${item.image}`;
       state.imageBase64 = item.image;
+      // Mettre à jour le cache pour que la sidebar affiche la bonne miniature
+      const cachedItem = state.historyCache?.find(h => h.id == id);
+      if (cachedItem) cachedItem.image = item.image;
+      renderHistoryUI();
       $("preview").classList.remove("hidden");
       $("dropPlaceholder").style.display = "none";
       $("generateBtn").disabled = false;
