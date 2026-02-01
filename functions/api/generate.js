@@ -65,6 +65,18 @@ Output JSON: { "title1": "...", "title2": "...", "title3": "...", "sub": "..." }
     });
 
     const data = await anthropicRes.json();
+
+    // Vérifier si l'API a retourné une erreur
+    if (!anthropicRes.ok || data.error) {
+      const errorMsg = data.error?.message || data.error || "Erreur API Anthropic";
+      return new Response(JSON.stringify({ error: errorMsg }), { status: 500, headers: { "Content-Type": "application/json" } });
+    }
+
+    // Vérifier que la réponse contient du contenu
+    if (!data.content || !data.content[0] || !data.content[0].text) {
+      return new Response(JSON.stringify({ error: "Réponse API vide ou invalide" }), { status: 500, headers: { "Content-Type": "application/json" } });
+    }
+
     const text = data.content[0].text;
     return new Response(text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1), { headers: { "Content-Type": "application/json" } });
   } catch (e) {
