@@ -1681,18 +1681,26 @@
 
         // Sauvegarder en base de données en arrière-plan
         if (state.currentHistoryId) {
+          const payload = {
+            id: parseInt(state.currentHistoryId, 10),
+            image: state.imageBase64,
+            generated_images: JSON.stringify(state.savedGeneratedImages)
+          };
+          console.log("Saving imported MAIN image - id:", payload.id, "image length:", payload.image?.length);
+
           fetch("/api/history", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id: state.currentHistoryId,
-              image: state.imageBase64,
-              generated_images: JSON.stringify(state.savedGeneratedImages)
-            })
+            body: JSON.stringify(payload)
           })
-          .then(res => {
+          .then(async res => {
+            const data = await res.json().catch(() => ({}));
             if (!res.ok) {
-              console.error("Erreur sauvegarde image: HTTP", res.status);
+              console.error("Erreur sauvegarde image: HTTP", res.status, data);
+            } else {
+              console.log("Imported MAIN image saved successfully:", data);
+              // Recharger l'historique pour confirmer la sauvegarde
+              loadHistory();
             }
           })
           .catch(e => console.error("Erreur sauvegarde image:", e));
@@ -1774,18 +1782,26 @@
 
     // Sauvegarder en base de données en arrière-plan
     if (state.currentHistoryId) {
+      const payload = {
+        id: parseInt(state.currentHistoryId, 10),
+        image: state.imageBase64,
+        generated_images: JSON.stringify(state.savedGeneratedImages)
+      };
+      console.log("Saving MAIN image change - id:", payload.id, "image length:", payload.image?.length);
+
       fetch("/api/history", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: state.currentHistoryId,
-          image: state.imageBase64,
-          generated_images: JSON.stringify(state.savedGeneratedImages)
-        })
+        body: JSON.stringify(payload)
       })
-      .then(res => {
+      .then(async res => {
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          console.error("Erreur sauvegarde image: HTTP", res.status);
+          console.error("Erreur sauvegarde image: HTTP", res.status, data);
+        } else {
+          console.log("MAIN image saved successfully:", data);
+          // Recharger l'historique pour confirmer la sauvegarde
+          loadHistory();
         }
       })
       .catch(e => console.error("Erreur sauvegarde image:", e));

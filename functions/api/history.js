@@ -70,15 +70,23 @@ export async function onRequest(context) {
         const fields = ['title', 'description', 'image', 'headlines', 'product_url', 'ad_copys', 'headlines_trans', 'ads_trans'];
         const updates = [];
         const values = [];
+
+        // Debug: log si image est présent
+        console.log("PATCH request - id:", id, "has image:", !!body.image, "image length:", body.image?.length || 0);
+
         for (const field of fields) {
             if (body[field] !== undefined) {
                 updates.push(`${field} = ?`);
                 values.push(body[field]);
+                console.log("Adding field to update:", field, "length:", typeof body[field] === 'string' ? body[field].length : 'N/A');
             }
         }
+
         if (updates.length > 0) {
             values.push(id);
-            await db.prepare(`UPDATE history SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
+            console.log("Running UPDATE with", updates.length, "fields for id:", id);
+            const result = await db.prepare(`UPDATE history SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
+            console.log("UPDATE result:", JSON.stringify(result));
         }
 
         // 2. Gestion des Images (Découpage)
