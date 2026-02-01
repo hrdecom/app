@@ -122,6 +122,14 @@ export async function onRequest(context) {
                     await db.batch(batch);
                 }
                 console.log("MAIN image saved in", chunks.length, "chunks");
+
+                // C. Mettre à jour la miniature sidebar (best effort - peut échouer pour très grandes images)
+                try {
+                    await db.prepare("UPDATE history SET image = ? WHERE id = ?").bind(body.image, id).run();
+                    console.log("Sidebar thumbnail updated");
+                } catch (thumbErr) {
+                    console.log("Sidebar thumbnail update skipped (image too large for direct storage)");
+                }
             }
         }
 
