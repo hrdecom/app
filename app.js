@@ -1409,7 +1409,49 @@
   function renderInputImages() { const container = $("inputImagesPreview"); if (state.inputImages.length === 0) { container.classList.add("hidden"); return; } container.classList.remove("hidden"); container.innerHTML = state.inputImages.map((img, i) => `<div class="input-img-wrapper"><img src="data:image/jpeg;base64,${img}" class="input-img-thumb"><div class="remove-input-img" onclick="window.removeInputImg(${i})">×</div></div>`).join(""); }
   window.removeInputImg = (i) => { state.inputImages.splice(i, 1); renderInputImages(); };
   async function callGeminiImageGen() { const userPrompt = $("imgGenPrompt").value; if (!userPrompt && state.selectedImgStyles.length === 0) return alert("Veuillez entrer une description ou sélectionner un style."); const count = parseInt($("imgCount").value) || 1; const aspectRatio = $("imgAspectRatio").value; const resolution = $("imgResolution").value; if (state.inputImages.length === 0 && state.imageBase64) { state.inputImages = [state.imageBase64]; renderInputImages(); } const batches = []; const inputsToProcess = state.inputImages.length > 0 ? state.inputImages : [null]; inputsToProcess.forEach(inputImg => { let tasks = []; if (state.selectedImgStyles.length > 0) { tasks = state.selectedImgStyles.map(s => ({ type: 'style', styleObj: s, prompt: userPrompt ? (userPrompt + " " + s.prompt) : s.prompt, refImage: s.refImage, label: s.name })); } else { tasks = [{ type: 'manual', prompt: userPrompt, refImage: null, label: userPrompt }]; } tasks.forEach(task => { let contextImages = []; if (inputImg) contextImages.push(inputImg); if (task.refImage) contextImages.push(task.refImage); for (let i = 0; i < count; i++) { batches.push({ prompt: task.prompt, images: contextImages, aspectRatio: aspectRatio, resolution: resolution, label: task.label }); } }); }); const newItems = batches.map(b => ({ id: Date.now() + Math.random(), loading: true, prompt: b.label, aspectRatio: b.aspectRatio })); state.sessionGeneratedImages.unshift(...newItems); renderGenImages(); state.selectedImgStyles = []; state.manualImgStyles = []; $("imgGenPrompt").value = ""; renderImgStylesButtons(); newItems.forEach(async (item, index) => { const batchData = batches[index]; try { const res = await fetch("/api/gemini", { method: "POST", body: JSON.stringify({ prompt: batchData.prompt, images: batchData.images, aspectRatio: batchData.aspectRatio, resolution: batchData.resolution }) }); const data = await res.json(); const targetItem = state.sessionGeneratedImages.find(x => x.id === item.id); if (targetItem) { if (data.error) { targetItem.loading = false; targetItem.error = data.error; } else { targetItem.loading = false; targetItem.image = data.image; } renderGenImages(); } } catch(e) { const targetItem = state.sessionGeneratedImages.find(x => x.id === item.id); if (targetItem) { targetItem.loading = false; targetItem.error = e.message; renderGenImages(); } } }); }
-  function renderGenImages() { const sessionContainer = $("imgGenSessionResults"); sessionContainer.innerHTML = state.sessionGeneratedImages.map((item, i) => { if (item.loading) { return `<div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#eee; height:150px; flex-direction:column; gap:10px;"><div class="spinner" style="width:20px; height:20px; border-width:2px;"></div><span style="font-size:10px; color:#666;">Génération...</span><div class="gen-image-overlay">${item.prompt}</div></div>`; } if (item.error) { return `<div class="gen-image-card" style="display:flex; align-items:center; justify-content:center; background:#ffebeb; height:150px; flex-direction:column; gap:5px; padding:10px; text-align:center;"><span style="font-size:20px;">⚠️</span><span style="font-size:10px; color:red;">Erreur</span><div class="gen-image-overlay" style="color:red;">${item.error}</div></div>`; } return `<div class="gen-image-card ${state.selectedSessionImagesIdx.includes(item) ? 'selected' : ''}" onclick="window.toggleSessionImg('${item.id}')"><img src="data:image/jpeg;base64,${item.image}"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button></div>`; }).join(""); let savedHtml = ""; if(state.imageBase64) { savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default; position:relative;"><img src="data:image/jpeg;base64,${state.imageBase64}"><div class="main-badge">MAIN</div><button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInputOrig()" title="Utiliser">＋</button><button class="icon-btn-small change-main-btn" onclick="event.stopPropagation(); window.changeMainImage(event)" title="Changer">✎</button></div>`; } savedHtml += state.savedGeneratedImages.map((item, i) => { const isSelected = state.selectedSavedIndices.has(i); const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : ''; return `<div class="gen-image-card" style="${borderStyle}" draggable="true" ondragstart="dragStart(event, ${i})" ondrop="drop(event, ${i})" ondragenter="dragEnter(event, ${i})" ondragover="allowDrop(event)" onclick="window.toggleSavedImg(${i})"><div class="reorder-handle"><span></span><span></span><span></span></div><img src="data:image/jpeg;base64,${item.image}" style="pointer-events:none;"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:red; border:1px solid #ccc;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button></div>`; }).join(""); $("imgGenSavedResults").innerHTML = savedHtml; }
+  // Rendu optimisé des images de session (avec data-id pour sélection CSS)
+  function renderSessionImages() {
+    const sessionContainer = $("imgGenSessionResults");
+    const MAX_DISPLAY = 50; // Limite pour performance
+    const toDisplay = state.sessionGeneratedImages.slice(0, MAX_DISPLAY);
+
+    sessionContainer.innerHTML = toDisplay.map((item) => {
+      if (item.loading) {
+        return `<div class="gen-image-card" data-id="${item.id}" style="display:flex; align-items:center; justify-content:center; background:#eee; height:150px; flex-direction:column; gap:10px;"><div class="spinner" style="width:20px; height:20px; border-width:2px;"></div><span style="font-size:10px; color:#666;">Génération...</span><div class="gen-image-overlay">${item.prompt}</div></div>`;
+      }
+      if (item.error) {
+        return `<div class="gen-image-card" data-id="${item.id}" style="display:flex; align-items:center; justify-content:center; background:#ffebeb; height:150px; flex-direction:column; gap:5px; padding:10px; text-align:center;"><span style="font-size:20px;">⚠️</span><span style="font-size:10px; color:red;">Erreur</span><div class="gen-image-overlay" style="color:red;">${item.error}</div></div>`;
+      }
+      const isSelected = state.selectedSessionImagesIdx.includes(item);
+      const selStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : '';
+      return `<div class="gen-image-card ${isSelected ? 'selected' : ''}" data-id="${item.id}" style="${selStyle}" onclick="window.toggleSessionImg('${item.id}')"><img src="data:image/jpeg;base64,${item.image}" loading="lazy"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button></div>`;
+    }).join("");
+
+    // Afficher compteur si plus d'images non affichées
+    if (state.sessionGeneratedImages.length > MAX_DISPLAY) {
+      sessionContainer.innerHTML += `<div style="grid-column:1/-1; text-align:center; padding:10px; color:#666; font-size:12px;">${state.sessionGeneratedImages.length - MAX_DISPLAY} images supplémentaires non affichées</div>`;
+    }
+  }
+
+  // Rendu des images sauvegardées dans la grille (séparé pour performance)
+  function renderSavedImagesGrid() {
+    let savedHtml = "";
+    if(state.imageBase64) {
+      savedHtml += `<div class="gen-image-card no-drag" style="border:2px solid var(--text-main); cursor:default; position:relative;"><img src="data:image/jpeg;base64,${state.imageBase64}"><div class="main-badge">MAIN</div><button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:12px; display:flex; justify-content:center; align-items:center; background:var(--apple-blue); color:white; border:none;" onclick="event.stopPropagation(); window.addSavedToInputOrig()" title="Utiliser">＋</button><button class="icon-btn-small change-main-btn" onclick="event.stopPropagation(); window.changeMainImage(event)" title="Changer">✎</button></div>`;
+    }
+    savedHtml += state.savedGeneratedImages.map((item, i) => {
+      const isSelected = state.selectedSavedIndices.has(i);
+      const borderStyle = isSelected ? 'border:3px solid var(--apple-blue); box-shadow:0 0 10px rgba(0,122,255,0.3);' : '';
+      return `<div class="gen-image-card" style="${borderStyle}" draggable="true" ondragstart="dragStart(event, ${i})" ondrop="drop(event, ${i})" ondragenter="dragEnter(event, ${i})" ondragover="allowDrop(event)" onclick="window.toggleSavedImg(${i})"><div class="reorder-handle"><span></span><span></span><span></span></div><img src="data:image/jpeg;base64,${item.image}" style="pointer-events:none;" loading="lazy"><div class="gen-image-overlay">${item.prompt}</div><button class="icon-btn-small" style="position:absolute; top:5px; right:30px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:#333; border:1px solid #ccc;" onclick="event.stopPropagation(); window.viewImage('${item.image}')">🔍</button><button class="icon-btn-small" style="position:absolute; top:5px; right:5px; width:20px; height:20px; font-size:10px; display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.9); color:red; border:1px solid #ccc;" onclick="event.stopPropagation(); window.deleteSavedImage(${i})">×</button></div>`;
+    }).join("");
+    $("imgGenSavedResults").innerHTML = savedHtml;
+  }
+
+  // Fonction legacy pour compatibilité (appelle les deux)
+  function renderGenImages() {
+    renderSessionImages();
+    renderSavedImagesGrid();
+  }
   window.toggleSavedImg = (index) => {
     const item = state.savedGeneratedImages[index];
     if(!item) return;
@@ -1824,7 +1866,31 @@
       .catch(e => console.error("Erreur sauvegarde generated_images:", e));
     }
   };
-  window.toggleSessionImg = (id) => { const item = state.sessionGeneratedImages.find(x => x.id == id); if(!item) return; const idx = state.selectedSessionImagesIdx.indexOf(item); if (idx > -1) { state.selectedSessionImagesIdx.splice(idx, 1); const imgToRemove = item.image; const inputIdx = state.inputImages.indexOf(imgToRemove); if (inputIdx > -1) state.inputImages.splice(inputIdx, 1); } else { state.selectedSessionImagesIdx.push(item); if (!state.inputImages.includes(item.image)) state.inputImages.push(item.image); } renderInputImages(); renderGenImages(); };
+  window.toggleSessionImg = (id) => {
+    const item = state.sessionGeneratedImages.find(x => x.id == id);
+    if(!item) return;
+
+    const idx = state.selectedSessionImagesIdx.indexOf(item);
+    if (idx > -1) {
+      state.selectedSessionImagesIdx.splice(idx, 1);
+      const imgToRemove = item.image;
+      const inputIdx = state.inputImages.indexOf(imgToRemove);
+      if (inputIdx > -1) state.inputImages.splice(inputIdx, 1);
+    } else {
+      state.selectedSessionImagesIdx.push(item);
+      if (!state.inputImages.includes(item.image)) state.inputImages.push(item.image);
+    }
+
+    // Mise à jour CSS directe sans re-render complet
+    const card = document.querySelector(`#imgGenSessionResults .gen-image-card[data-id="${id}"]`);
+    if (card) {
+      const isSelected = state.selectedSessionImagesIdx.includes(item);
+      card.classList.toggle('selected', isSelected);
+      card.style.border = isSelected ? '3px solid var(--apple-blue)' : '';
+      card.style.boxShadow = isSelected ? '0 0 10px rgba(0,122,255,0.3)' : '';
+    }
+    renderInputImages();
+  };
   window.viewImage = (b64) => { const byteCharacters = atob(b64); const byteNumbers = new Array(byteCharacters.length); for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i); const byteArray = new Uint8Array(byteNumbers); const blob = new Blob([byteArray], {type: 'image/jpeg'}); const blobUrl = URL.createObjectURL(blob); window.open(blobUrl, '_blank'); };
   window.saveImgSelection = async () => {
     if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
