@@ -31,7 +31,7 @@
     timerInterval: null, sessionHeadlines: [], sessionAds: [],
     selectedHeadlines: [], selectedAds: [],
     headlinesTrans: {}, adsTrans: {},
-    adsInfo: { title1: "", title2: "", title3: "", title4: "", sub: "" },
+    adsInfo: { title1: "", title2: "", title3: "", sub: "" },
     adsInfoTrans: {},
     selHlStyles: [], selAdStyles: [],
     hlPage: 1, adPage: 1,
@@ -349,7 +349,11 @@
     renderAdsInfoBlock();
   }
 
+  // Track current ad language for info block
+  state.currentAdLang = 'original';
+
   window.showAdLang = (lang) => {
+    state.currentAdLang = lang;
     document.querySelectorAll('#adsSavedList .lang-tab').forEach(t => t.classList.remove('active'));
     const clickedTab = document.querySelector(`#adsSavedList .lang-tab[data-lang="${lang}"]`);
     if (clickedTab) clickedTab.classList.add('active');
@@ -385,11 +389,11 @@
       }
     }
 
-    // Always render info block
-    renderAdsInfoBlock();
+    // Always render info block with current language
+    renderAdsInfoBlock(lang);
   };
 
-  function renderAdsInfoBlock() {
+  function renderAdsInfoBlock(lang = 'original') {
     const container = $("adsDefaultInfoBlock");
     if (state.selectedAds.length === 0) { container.innerHTML = ""; return; }
 
@@ -399,65 +403,99 @@
     // Initialiser avec des valeurs par défaut si vide
     if (!state.adsInfo.title1) {
       state.adsInfo = {
-        title1: title || "Titre 1",
-        title2: "Découvrez notre collection",
-        title3: "Livraison offerte",
-        title4: "Édition limitée",
-        sub: "Bijou artisanal de qualité premium. Satisfait ou remboursé."
+        title1: title || "Product Name",
+        title2: title ? `${title} - Special Offer` : "Product Name - Special Offer",
+        title3: title ? `Gift Idea - ${title}` : "Gift Idea - Product Name",
+        sub: "The special offer is ending soon"
       };
+    }
+
+    // Déterminer quelles données afficher (original ou traduit)
+    const isTranslated = lang !== 'original';
+    const langData = LANGUAGES.find(l => l.code === lang);
+    const translatedInfo = isTranslated ? state.adsInfoTrans[lang] : null;
+
+    // Données à afficher
+    const displayInfo = translatedInfo || state.adsInfo;
+
+    // URL avec subdomain pour traduction
+    let displayUrl = productUrl;
+    if (isTranslated && productUrl && langData?.subdomain) {
+      // Remplacer le subdomain existant ou ajouter le nouveau
+      try {
+        const urlObj = new URL(productUrl);
+        const hostParts = urlObj.hostname.split('.');
+        // Vérifier si le premier segment est un code langue
+        const langCodes = LANGUAGES.map(l => l.code.split('-')[0]);
+        if (langCodes.includes(hostParts[0]) || hostParts[0].match(/^(en|fr|de|it|es|pt|pl|nl)$/)) {
+          hostParts[0] = langData.subdomain.replace('.', '');
+        } else {
+          hostParts.unshift(langData.subdomain.replace('.', ''));
+        }
+        urlObj.hostname = hostParts.join('.');
+        displayUrl = urlObj.toString();
+      } catch(e) {
+        // Si l'URL n'est pas valide, ajouter simplement le subdomain au début
+        displayUrl = productUrl.replace(/^(https?:\/\/)/, `$1${langData.subdomain}`);
+      }
     }
 
     let html = "";
 
-    // Titre Produit
+    // Badge langue si traduction
+    if (isTranslated) {
+      html += `<div style="margin-bottom:10px; padding:8px; background:#f0f7ff; border-radius:8px; font-size:11px; color:#007AFF;">
+        ${langData?.flag || ''} Version ${langData?.name || lang.toUpperCase()}
+      </div>`;
+    }
+
+    // Title 1 (Product title)
     html += `<div class="ads-info-row">
-      <span class="ads-info-label">TITRE PRODUIT</span>
-      <span style="flex:1;">${title}</span>
-      <button class="icon-btn-small" onclick="window.copyToClip('${title.replace(/'/g, "\\'")}', this)">📋</button>
+      <span class="ads-info-label">TITLE 1</span>
+      ${isTranslated
+        ? `<span style="flex:1; font-size:12px;">${displayInfo.title1 || ''}</span>`
+        : `<input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(displayInfo.title1 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title1', this.value)">`
+      }
+      <button class="icon-btn-small" onclick="window.copyToClip('${(displayInfo.title1 || '').replace(/'/g, "\\'")}', this)">📋</button>
     </div>`;
 
-    // Titre 1
+    // Title 2
     html += `<div class="ads-info-row">
-      <span class="ads-info-label">TITRE 1</span>
-      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(state.adsInfo.title1 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title1', this.value)">
-      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value, this)">📋</button>
+      <span class="ads-info-label">TITLE 2</span>
+      ${isTranslated
+        ? `<span style="flex:1; font-size:12px;">${displayInfo.title2 || ''}</span>`
+        : `<input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(displayInfo.title2 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title2', this.value)">`
+      }
+      <button class="icon-btn-small" onclick="window.copyToClip('${(displayInfo.title2 || '').replace(/'/g, "\\'")}', this)">📋</button>
     </div>`;
 
-    // Titre 2
+    // Title 3
     html += `<div class="ads-info-row">
-      <span class="ads-info-label">TITRE 2</span>
-      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(state.adsInfo.title2 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title2', this.value)">
-      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value, this)">📋</button>
-    </div>`;
-
-    // Titre 3
-    html += `<div class="ads-info-row">
-      <span class="ads-info-label">TITRE 3</span>
-      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(state.adsInfo.title3 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title3', this.value)">
-      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value, this)">📋</button>
-    </div>`;
-
-    // Titre 4
-    html += `<div class="ads-info-row">
-      <span class="ads-info-label">TITRE 4</span>
-      <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(state.adsInfo.title4 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title4', this.value)">
-      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value, this)">📋</button>
+      <span class="ads-info-label">TITLE 3</span>
+      ${isTranslated
+        ? `<span style="flex:1; font-size:12px;">${displayInfo.title3 || ''}</span>`
+        : `<input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(displayInfo.title3 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title3', this.value)">`
+      }
+      <button class="icon-btn-small" onclick="window.copyToClip('${(displayInfo.title3 || '').replace(/'/g, "\\'")}', this)">📋</button>
     </div>`;
 
     // Sub description
     html += `<div class="ads-info-row" style="flex-direction:column; align-items:stretch; gap:5px;">
       <span class="ads-info-label">SUB DESCRIPTION</span>
       <div style="display:flex; gap:5px;">
-        <textarea class="ios-input" style="flex:1; font-size:12px; padding:8px; min-height:50px; resize:vertical;" onchange="window.updateAdsInfo('sub', this.value)">${state.adsInfo.sub || ''}</textarea>
-        <button class="icon-btn-small" style="align-self:flex-start;" onclick="window.copyToClip(this.previousElementSibling.value, this)">📋</button>
+        ${isTranslated
+          ? `<span style="flex:1; font-size:12px; padding:8px; background:#f8f9fa; border-radius:8px;">${displayInfo.sub || ''}</span>`
+          : `<textarea class="ios-input" style="flex:1; font-size:12px; padding:8px; min-height:50px; resize:vertical;" onchange="window.updateAdsInfo('sub', this.value)">${displayInfo.sub || ''}</textarea>`
+        }
+        <button class="icon-btn-small" style="align-self:flex-start;" onclick="window.copyToClip('${(displayInfo.sub || '').replace(/'/g, "\\'")}', this)">📋</button>
       </div>
     </div>`;
 
     // URL Produit
     html += `<div class="ads-info-row">
       <span class="ads-info-label">URL PRODUIT</span>
-      <span style="flex:1; font-size:11px;">${productUrl || 'Non définie'}</span>
-      <button class="icon-btn-small" onclick="window.copyToClip('${productUrl}', this)">📋</button>
+      <span style="flex:1; font-size:11px; word-break:break-all;">${displayUrl || 'Non définie'}</span>
+      <button class="icon-btn-small" onclick="window.copyToClip('${displayUrl}', this)">📋</button>
     </div>`;
 
     container.innerHTML = html;
@@ -546,14 +584,15 @@
      ========================================= */
 
   const LANGUAGES = [
-    { code: 'en', name: 'Anglais', flag: '🇬🇧' },
-    { code: 'fr', name: 'Français', flag: '🇫🇷' },
-    { code: 'de', name: 'Allemand', flag: '🇩🇪' },
-    { code: 'it', name: 'Italien', flag: '🇮🇹' },
-    { code: 'es', name: 'Espagnol', flag: '🇪🇸' },
-    { code: 'pt', name: 'Portugais', flag: '🇵🇹' },
-    { code: 'pl', name: 'Polonais', flag: '🇵🇱' },
-    { code: 'nl', name: 'Néerlandais', flag: '🇳🇱' }
+    { code: 'en', name: 'Anglais', flag: '🇬🇧', subdomain: 'en.' },
+    { code: 'fr', name: 'Français', flag: '🇫🇷', subdomain: 'fr.' },
+    { code: 'de', name: 'Allemand', flag: '🇩🇪', subdomain: 'de.' },
+    { code: 'it', name: 'Italien', flag: '🇮🇹', subdomain: 'it.' },
+    { code: 'es', name: 'Espagnol', flag: '🇪🇸', subdomain: 'es.' },
+    { code: 'pt', name: 'Portugais (Portugal)', flag: '🇵🇹', subdomain: 'pt.' },
+    { code: 'pt-br', name: 'Portugais (Brésil)', flag: '🇧🇷', subdomain: 'pt-br.' },
+    { code: 'pl', name: 'Polonais', flag: '🇵🇱', subdomain: 'pl.' },
+    { code: 'nl', name: 'Néerlandais', flag: '🇳🇱', subdomain: 'nl.' }
   ];
 
   function renderTranslationTabs(type) {
@@ -1297,7 +1336,7 @@
           state.selectedAds = [];
           state.headlinesTrans = {};
           state.adsTrans = {};
-          state.adsInfo = { title1: "", title2: "", title3: "", title4: "", sub: "" };
+          state.adsInfo = { title1: "", title2: "", title3: "", sub: "" };
           state.adsInfoTrans = {};
           state.savedGeneratedImages = [];
           state.sessionGeneratedImages = [];
@@ -1550,16 +1589,47 @@
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = (e) => {
+    input.onchange = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (ev) => {
+      reader.onload = async (ev) => {
+        // Sauvegarder l'ancien main dans les images enregistrées
+        if (state.imageBase64) {
+          state.savedGeneratedImages.unshift({
+            image: state.imageBase64,
+            prompt: 'Ancien image principale',
+            aspectRatio: '1:1'
+          });
+        }
+
+        // Définir la nouvelle image comme main
         state.imageMime = ev.target.result.split(";")[0].split(":")[1];
         state.imageBase64 = ev.target.result.split(",")[1];
         $("previewImg").src = ev.target.result;
         state.inputImages[0] = state.imageBase64;
         state.tempMainImage = null;
+
+        // Sauvegarder en base de données
+        if (state.currentHistoryId) {
+          try {
+            await fetch("/api/history", {
+              method: "PATCH",
+              body: JSON.stringify({
+                id: state.currentHistoryId,
+                image: state.imageBase64,
+                generated_images: JSON.stringify(state.savedGeneratedImages)
+              })
+            });
+            // Mettre à jour le cache pour que la sidebar affiche la nouvelle image
+            const cached = state.historyCache?.find(h => h.id === state.currentHistoryId);
+            if (cached) cached.image = state.imageBase64;
+            renderHistoryUI();
+          } catch(e) {
+            console.error("Erreur sauvegarde image:", e);
+          }
+        }
+
         renderInputImages();
         renderGenImages();
         renderSavedImagesCarousel();
@@ -1593,20 +1663,56 @@
     document.body.appendChild(modal);
   };
 
-  // Définir une image enregistrée comme image principale
-  window.setMainFromSaved = (index) => {
+  // Définir une image enregistrée comme image principale (avec échange)
+  window.setMainFromSaved = async (index) => {
     const img = state.savedGeneratedImages[index];
     if (!img) return;
 
+    // Sauvegarder l'ancien main
+    const oldMain = state.imageBase64;
+
+    // Définir la nouvelle image comme main
     state.imageBase64 = img.image;
     state.imageMime = 'image/jpeg';
     $("previewImg").src = `data:image/jpeg;base64,${img.image}`;
     state.inputImages[0] = state.imageBase64;
     state.tempMainImage = null;
 
+    // Échanger: remplacer l'image sélectionnée par l'ancien main
+    if (oldMain) {
+      state.savedGeneratedImages[index] = {
+        image: oldMain,
+        prompt: 'Ancien image principale',
+        aspectRatio: '1:1'
+      };
+    } else {
+      // Si pas d'ancien main, simplement retirer l'image
+      state.savedGeneratedImages.splice(index, 1);
+    }
+
     // Fermer le modal
     const modal = document.getElementById('savedImagesSelectorModal');
     if (modal) modal.remove();
+
+    // Sauvegarder en base de données
+    if (state.currentHistoryId) {
+      try {
+        await fetch("/api/history", {
+          method: "PATCH",
+          body: JSON.stringify({
+            id: state.currentHistoryId,
+            image: state.imageBase64,
+            generated_images: JSON.stringify(state.savedGeneratedImages)
+          })
+        });
+        // Mettre à jour le cache pour que la sidebar affiche la nouvelle image
+        const cached = state.historyCache?.find(h => h.id === state.currentHistoryId);
+        if (cached) cached.image = state.imageBase64;
+        renderHistoryUI();
+      } catch(e) {
+        console.error("Erreur sauvegarde image:", e);
+      }
+    }
 
     renderInputImages();
     renderGenImages();
@@ -1620,21 +1726,28 @@
     const newImages = state.selectedSessionImagesIdx.map(item => ({ image: item.image, prompt: item.prompt, aspectRatio: item.aspectRatio }));
     state.savedGeneratedImages = [...newImages, ...state.savedGeneratedImages];
     state.selectedSessionImagesIdx = [];
-    startLoading();
-    try {
-      const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) });
-      if (!res.ok) throw new Error("Erreur serveur");
-      showSuccess($("saveImgSelectionBtn"), 'Enregistrer');
-      renderGenImages();
-      renderSavedImagesCarousel();
-      document.querySelector('button[data-tab="tab-img-saved"]').click();
-    } catch(e) {
-      alert("Erreur sauvegarde: " + e.message);
-    } finally {
-      stopLoading();
-    }
+    // Mise à jour immédiate de l'UI
+    showSuccess($("saveImgSelectionBtn"), 'Enregistrer');
+    renderGenImages();
+    renderSavedImagesCarousel();
+    document.querySelector('button[data-tab="tab-img-saved"]').click();
+    // Sauvegarde en arrière-plan
+    fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) }).catch(e => console.error("Erreur sauvegarde:", e));
   };
-  window.deleteSavedImage = async (index) => { if(!confirm("Supprimer cette image ?")) return; const deletedImg = state.savedGeneratedImages[index]; state.savedGeneratedImages.splice(index, 1); if (state.tempMainImage === deletedImg?.image) { state.tempMainImage = null; $("previewImg").src = `data:image/jpeg;base64,${state.imageBase64}`; } startLoading(); try { await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) }); renderGenImages(); renderSavedImagesCarousel(); } catch(e) { alert(e.message); } finally { stopLoading(); } };
+  window.deleteSavedImage = async (index) => {
+    if(!confirm("Supprimer cette image ?")) return;
+    const deletedImg = state.savedGeneratedImages[index];
+    state.savedGeneratedImages.splice(index, 1);
+    if (state.tempMainImage === deletedImg?.image) {
+      state.tempMainImage = null;
+      $("previewImg").src = `data:image/jpeg;base64,${state.imageBase64}`;
+    }
+    // Mise à jour immédiate de l'UI
+    renderGenImages();
+    renderSavedImagesCarousel();
+    // Sauvegarde en arrière-plan (sans bloquer l'UI)
+    fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) }).catch(e => console.error("Erreur sauvegarde:", e));
+  };
   async function loadHistory() { try { const r = await fetch("/api/history"); state.historyCache = await r.json(); renderHistoryUI(); } catch(e){} }
   function renderHistoryUI() { const filtered = (state.historyCache || []).filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase())); const start = (state.currentPage - 1) * 5; const pag = filtered.slice(start, start + 5); $("historyList").innerHTML = pag.map(item => `<div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})"><img src="data:image/jpeg;base64,${item.image}" class="history-img"><div style="flex:1"><h4>${item.title || "Sans titre"}</h4></div><button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button></div>`).join(""); renderPagination(Math.ceil(filtered.length / 5)); }
   function renderPagination(total) { const p = $("pagination"); p.innerHTML = ""; if(total <= 1) return; for(let i=1; i<=total; i++) { const b = document.createElement("button"); b.textContent = i; if(i === state.currentPage) b.className = "active"; b.onclick = () => { state.currentPage = i; renderHistoryUI(); }; p.appendChild(b); } }
@@ -1652,7 +1765,7 @@
       state.selectedAds = item.ad_copys ? JSON.parse(item.ad_copys) : [];
       state.headlinesTrans = item.headlines_trans ? JSON.parse(item.headlines_trans) : {};
       state.adsTrans = item.ads_trans ? JSON.parse(item.ads_trans) : {};
-      state.adsInfo = item.ads_info ? JSON.parse(item.ads_info) : { title1: "", title2: "", title3: "", title4: "", sub: "" };
+      state.adsInfo = item.ads_info ? JSON.parse(item.ads_info) : { title1: "", title2: "", title3: "", sub: "" };
       state.adsInfoTrans = item.ads_info_trans ? JSON.parse(item.ads_info_trans) : {};
       state.savedGeneratedImages = item.generated_images ? JSON.parse(item.generated_images) : [];
       state.sessionGeneratedImages = [];

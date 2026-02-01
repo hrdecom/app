@@ -37,19 +37,18 @@ PRODUCT URL: ${product_url}
 EXISTING AD COPYS: ${JSON.stringify(adCopys)}
 
 TASK: Based on the product and ad copys, generate optimized ad titles and description.
-- title1: Short catchy headline (max 30 chars) - Hook/Attention grabber
-- title2: Main benefit headline (max 30 chars) - Value proposition
-- title3: Call to action headline (max 30 chars) - Action oriented
-- title4: Urgency/Offer headline (max 30 chars) - FOMO/Special offer
+- title1: Product name/title (max 30 chars)
+- title2: Product name + "Special Offer" (max 30 chars)
+- title3: "Gift Idea" + Product name (max 30 chars)
 - sub: Short description for ads (max 90 chars) - Compelling summary
 
-Output JSON: { "title1": "...", "title2": "...", "title3": "...", "title4": "...", "sub": "..." }`;
+Output JSON: { "title1": "...", "title2": "...", "title3": "...", "sub": "..." }`;
     } else if (action === "translate") {
       // UTILISATION DU PROMPT DYNAMIQUE DEPUIS LES PARAMÈTRES
       let userPrompt = config.promptTranslate || "Translate into {targetLang}";
       userPrompt = userPrompt.replace(/{targetLang}/g, targetLang).replace(/{product_url}/g, product_url);
       
-      prompt = `${userPrompt}\n${jsonSafeRule}\nITEMS TO TRANSLATE: ${JSON.stringify(itemsToTranslate)}\n${infoToTranslate ? `INFO: ${JSON.stringify(infoToTranslate)}` : ''}\nOutput JSON: { "translated_items": [...], "translated_info": { "title1": "...", "title2": "...", "title3": "...", "title4": "...", "sub": "..." } }`;
+      prompt = `${userPrompt}\n${jsonSafeRule}\nITEMS TO TRANSLATE: ${JSON.stringify(itemsToTranslate)}\n${infoToTranslate ? `INFO TO TRANSLATE (titles and sub description): ${JSON.stringify(infoToTranslate)}` : ''}\nOutput JSON: { "translated_items": [...], "translated_info": { "title1": "...", "title2": "...", "title3": "...", "sub": "..." } }`;
     }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
