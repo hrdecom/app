@@ -1679,23 +1679,34 @@
         renderGenImages();
         renderSavedImagesCarousel();
 
-        // Sauvegarder en base de données en arrière-plan
+        // Sauvegarder en base de données en arrière-plan (2 requêtes séparées)
         if (state.currentHistoryId) {
+          const id = parseInt(state.currentHistoryId, 10);
+
+          // 1. Sauvegarder l'image MAIN seule
+          console.log("Saving imported MAIN image - id:", id, "image length:", state.imageBase64?.length);
           fetch("/api/history", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id: state.currentHistoryId,
-              image: state.imageBase64,
-              generated_images: JSON.stringify(state.savedGeneratedImages)
-            })
+            body: JSON.stringify({ id, image: state.imageBase64 })
           })
-          .then(res => {
+          .then(async res => {
+            const data = await res.json().catch(() => ({}));
             if (!res.ok) {
-              console.error("Erreur sauvegarde image: HTTP", res.status);
+              console.error("Erreur sauvegarde MAIN image: HTTP", res.status, data);
+            } else {
+              console.log("Imported MAIN image saved successfully:", data);
+              loadHistory();
             }
           })
-          .catch(e => console.error("Erreur sauvegarde image:", e));
+          .catch(e => console.error("Erreur sauvegarde MAIN image:", e));
+
+          // 2. Sauvegarder les generated_images séparément
+          fetch("/api/history", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, generated_images: JSON.stringify(state.savedGeneratedImages) })
+          }).catch(e => console.error("Erreur sauvegarde generated_images:", e));
         }
       };
       reader.readAsDataURL(file);
@@ -1772,23 +1783,44 @@
     renderGenImages();
     renderSavedImagesCarousel();
 
-    // Sauvegarder en base de données en arrière-plan
+    // Sauvegarder en base de données en arrière-plan (2 requêtes séparées pour éviter les limites de taille)
     if (state.currentHistoryId) {
+      const id = parseInt(state.currentHistoryId, 10);
+
+      // 1. Sauvegarder l'image MAIN seule
+      console.log("Saving MAIN image - id:", id, "image length:", state.imageBase64?.length);
       fetch("/api/history", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: state.currentHistoryId,
-          image: state.imageBase64,
-          generated_images: JSON.stringify(state.savedGeneratedImages)
-        })
+        body: JSON.stringify({ id, image: state.imageBase64 })
       })
-      .then(res => {
+      .then(async res => {
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          console.error("Erreur sauvegarde image: HTTP", res.status);
+          console.error("Erreur sauvegarde MAIN image: HTTP", res.status, data);
+        } else {
+          console.log("MAIN image saved successfully:", data);
+          loadHistory();
         }
       })
-      .catch(e => console.error("Erreur sauvegarde image:", e));
+      .catch(e => console.error("Erreur sauvegarde MAIN image:", e));
+
+      // 2. Sauvegarder les generated_images séparément
+      console.log("Saving generated_images - count:", state.savedGeneratedImages.length);
+      fetch("/api/history", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, generated_images: JSON.stringify(state.savedGeneratedImages) })
+      })
+      .then(async res => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error("Erreur sauvegarde generated_images: HTTP", res.status, data);
+        } else {
+          console.log("Generated images saved successfully:", data);
+        }
+      })
+      .catch(e => console.error("Erreur sauvegarde generated_images:", e));
     }
   };
   window.toggleSessionImg = (id) => { const item = state.sessionGeneratedImages.find(x => x.id == id); if(!item) return; const idx = state.selectedSessionImagesIdx.indexOf(item); if (idx > -1) { state.selectedSessionImagesIdx.splice(idx, 1); const imgToRemove = item.image; const inputIdx = state.inputImages.indexOf(imgToRemove); if (inputIdx > -1) state.inputImages.splice(inputIdx, 1); } else { state.selectedSessionImagesIdx.push(item); if (!state.inputImages.includes(item.image)) state.inputImages.push(item.image); } renderInputImages(); renderGenImages(); };

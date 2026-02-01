@@ -60,7 +60,10 @@ export async function onRequest(context) {
   // --- PATCH (SAUVEGARDE INTELLIGENTE) ---
   if (request.method === "PATCH") {
     try {
-        const body = await request.json();
+        const bodyText = await request.text();
+        console.log("PATCH raw body length:", bodyText.length);
+
+        const body = JSON.parse(bodyText);
         const { id, generated_images } = body;
 
         if (!id) return new Response(JSON.stringify({ error: "ID manquant" }), { status: 400 });
@@ -70,15 +73,29 @@ export async function onRequest(context) {
         const fields = ['title', 'description', 'image', 'headlines', 'product_url', 'ad_copys', 'headlines_trans', 'ads_trans'];
         const updates = [];
         const values = [];
+
+        // Debug: log si image est présent
+        console.log("PATCH request - id:", id, "has image:", !!body.image, "image length:", body.image?.length || 0);
+
         for (const field of fields) {
             if (body[field] !== undefined) {
                 updates.push(`${field} = ?`);
                 values.push(body[field]);
+                console.log("Adding field to update:", field, "length:", typeof body[field] === 'string' ? body[field].length : 'N/A');
             }
         }
+
         if (updates.length > 0) {
             values.push(id);
-            await db.prepare(`UPDATE history SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
+            console.log("Running UPDATE with", updates.length, "fields for id:", id);
+            const result = await db.prepare(`UPDATE history SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
+            console.log("UPDATE result:", JSON.stringify(result));
+
+            // Vérification post-sauvegarde pour l'image
+            if (body.image) {
+                const check = await db.prepare("SELECT LENGTH(image) as img_len FROM history WHERE id = ?").bind(id).first();
+                console.log("Post-save image length in DB:", check?.img_len, "- sent length:", body.image.length);
+            }
         }
 
         // 2. Gestion des Images (Découpage)
