@@ -87,6 +87,12 @@ export async function onRequest(context) {
             console.log("Running UPDATE with", updates.length, "fields for id:", id);
             const result = await db.prepare(`UPDATE history SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
             console.log("UPDATE result:", JSON.stringify(result));
+
+            // Vérification post-sauvegarde pour l'image
+            if (body.image) {
+                const check = await db.prepare("SELECT LENGTH(image) as img_len FROM history WHERE id = ?").bind(id).first();
+                console.log("Post-save image length in DB:", check?.img_len, "- sent length:", body.image.length);
+            }
         }
 
         // 2. Gestion des Images (Découpage)
