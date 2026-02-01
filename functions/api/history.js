@@ -51,14 +51,52 @@ export async function onRequest(context) {
 
   // --- POST (CREATION) ---
   if (request.method === "POST") {
-    const { title, description, image, product_name, headlines, product_url, ad_copys } = await request.json();
-    const result = await db.prepare(
-      "INSERT INTO history (title, description, image, product_name, headlines, product_url, ad_copys, headlines_trans, ads_trans, generated_images) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).bind(
-      title || "", description || "", image || "", product_name || "", 
-      headlines || "[]", product_url || "", ad_copys || "[]", "{}", "{}", "[]"
-    ).run();
-    return new Response(JSON.stringify({ id: result.meta.last_row_id }), { headers: { "content-type": "application/json" } });
+    try {
+      const { title, description, image, product_name, headlines, product_url, ad_copys } = await request.json();
+
+      // Créer l'entrée sans l'image (sera ajoutée via PATCH avec chunking)
+      const result = await db.prepare(
+        "INSERT INTO history (title, description, image, product_name, headlines, product_url, ad_copys, headlines_trans, ads_trans, generated_images) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).bind(
+        title || "", description || "", "", product_name || "",
+        headlines || "[]", product_url || "", ad_copys || "[]", "{}", "{}", "[]"
+      ).run();
+
+      const newId = result.meta.last_row_id;
+
+      // Si une image est fournie, la sauvegarder via chunking
+      if (image && image.length > 0) {
+        const CHUNK_SIZE = 100 * 1024;
+
+        // Créer l'entrée MAIN image
+        const imgRes = await db.prepare("INSERT INTO history_images (history_id, prompt, aspect_ratio, image) VALUES (?, '__MAIN__', '', '')").bind(newId).run();
+        const mainImgId = imgRes.meta.last_row_id;
+
+        // Découper et insérer les chunks
+        const chunks = [];
+        for (let i = 0; i < image.length; i += CHUNK_SIZE) {
+          chunks.push(image.slice(i, i + CHUNK_SIZE));
+        }
+
+        if (chunks.length > 0) {
+          const stmt = db.prepare("INSERT INTO history_image_chunks (history_image_id, chunk_index, chunk_data) VALUES (?, ?, ?)");
+          const batch = chunks.map((c, idx) => stmt.bind(mainImgId, idx, c));
+          await db.batch(batch);
+        }
+
+        // Essayer de sauvegarder aussi dans history.image pour la sidebar (best effort)
+        try {
+          await db.prepare("UPDATE history SET image = ? WHERE id = ?").bind(image, newId).run();
+        } catch (e) {
+          console.log("Sidebar thumbnail skipped (image too large)");
+        }
+      }
+
+      return new Response(JSON.stringify({ id: newId }), { headers: { "content-type": "application/json" } });
+    } catch (e) {
+      console.error("D1 POST Error:", e);
+      return new Response(JSON.stringify({ error: "D1 Error: " + e.message }), { status: 500, headers: { "content-type": "application/json" } });
+    }
   }
 
   // --- PATCH (SAUVEGARDE INTELLIGENTE) ---
