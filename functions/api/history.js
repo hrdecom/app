@@ -60,7 +60,10 @@ export async function onRequest(context) {
   // --- PATCH (SAUVEGARDE INTELLIGENTE) ---
   if (request.method === "PATCH") {
     try {
-        const body = await request.json();
+        const bodyText = await request.text();
+        console.log("PATCH raw body length:", bodyText.length);
+
+        const body = JSON.parse(bodyText);
         const { id, generated_images } = body;
 
         if (!id) return new Response(JSON.stringify({ error: "ID manquant" }), { status: 400 });
