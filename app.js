@@ -352,6 +352,29 @@
   // Track current ad language for info block
   state.currentAdLang = 'original';
 
+  // Helper: traduire les URLs dans un texte selon la langue
+  function translateUrlsInText(text, langCode) {
+    const langData = LANGUAGES.find(l => l.code === langCode);
+    if (!langData?.subdomain) return text;
+
+    // Regex pour trouver les URLs
+    const urlRegex = /(https?:\/\/)([\w.-]+)(\/[^\s]*)?/gi;
+
+    return text.replace(urlRegex, (match, protocol, hostname, path = '') => {
+      const hostParts = hostname.split('.');
+      const langCodes = LANGUAGES.map(l => l.code.split('-')[0]);
+
+      // Vérifier si le premier segment est déjà un code langue
+      if (langCodes.includes(hostParts[0]) || hostParts[0].match(/^(en|fr|de|it|es|pt|pl|nl|pt-br)$/i)) {
+        hostParts[0] = langData.subdomain.replace('.', '');
+      } else {
+        hostParts.unshift(langData.subdomain.replace('.', ''));
+      }
+
+      return protocol + hostParts.join('.') + path;
+    });
+  }
+
   window.showAdLang = (lang) => {
     state.currentAdLang = lang;
     document.querySelectorAll('#adsSavedList .lang-tab').forEach(t => t.classList.remove('active'));
@@ -377,9 +400,11 @@
     } else {
       const translated = state.adsTrans[lang] || [];
       contentDiv.innerHTML = translated.map((t, i) => {
-        const escapedText = t.replace(/`/g, "\\`").replace(/\\/g, "\\\\");
+        // Traduire les URLs dans le texte de l'ad copy
+        const translatedText = translateUrlsInText(t, lang);
+        const escapedText = translatedText.replace(/`/g, "\\`").replace(/\\/g, "\\\\");
         return `<div class="headline-item no-hover saved-item translated-item" style="background:#f8f9fa; border:1px solid #e0e0e0;">
-          <span class="headline-text" style="white-space:pre-wrap;">${t}</span>
+          <span class="headline-text" style="white-space:pre-wrap;">${translatedText}</span>
           <button class="icon-btn-small" onclick="window.copyToClip(\`${escapedText}\`, this)">📋</button>
         </div>`;
       }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucune traduction</div>';
@@ -1506,7 +1531,14 @@
     if (state.savedGeneratedImages.length === 0) return alert("Aucune image à télécharger.");
 
     const productTitle = $("titleText").textContent || "images";
-    const zipFilename = productTitle.replace(/[^a-z0-9]/gi, '_') + ".zip";
+    // Formater le nom: remplacer guillemets par " - " et nettoyer
+    const cleanTitle = productTitle
+      .replace(/["'"]/g, ' - ')  // Remplacer guillemets par " - "
+      .replace(/\s*-\s*-\s*/g, ' - ')  // Éviter double tirets
+      .replace(/^\s*-\s*|\s*-\s*$/g, '')  // Retirer tirets en début/fin
+      .replace(/[<>:"/\\|?*]/g, '')  // Retirer caractères invalides pour fichiers
+      .trim();
+    const zipFilename = cleanTitle + ".zip";
 
     // Utiliser JSZip si disponible, sinon télécharger individuellement
     if (typeof JSZip !== 'undefined') {
@@ -1589,11 +1621,11 @@
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = async (e) => {
+    input.onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = async (ev) => {
+      reader.onload = (ev) => {
         // Sauvegarder l'ancien main dans les images enregistrées
         if (state.imageBase64) {
           state.savedGeneratedImages.unshift({
@@ -1610,29 +1642,27 @@
         state.inputImages[0] = state.imageBase64;
         state.tempMainImage = null;
 
-        // Sauvegarder en base de données
-        if (state.currentHistoryId) {
-          try {
-            await fetch("/api/history", {
-              method: "PATCH",
-              body: JSON.stringify({
-                id: state.currentHistoryId,
-                image: state.imageBase64,
-                generated_images: JSON.stringify(state.savedGeneratedImages)
-              })
-            });
-            // Mettre à jour le cache pour que la sidebar affiche la nouvelle image
-            const cached = state.historyCache?.find(h => h.id === state.currentHistoryId);
-            if (cached) cached.image = state.imageBase64;
-            renderHistoryUI();
-          } catch(e) {
-            console.error("Erreur sauvegarde image:", e);
-          }
-        }
+        // Mettre à jour le cache immédiatement
+        const cached = state.historyCache?.find(h => h.id === state.currentHistoryId);
+        if (cached) cached.image = state.imageBase64;
 
+        // Mise à jour UI immédiate
+        renderHistoryUI();
         renderInputImages();
         renderGenImages();
         renderSavedImagesCarousel();
+
+        // Sauvegarder en base de données en arrière-plan
+        if (state.currentHistoryId) {
+          fetch("/api/history", {
+            method: "PATCH",
+            body: JSON.stringify({
+              id: state.currentHistoryId,
+              image: state.imageBase64,
+              generated_images: JSON.stringify(state.savedGeneratedImages)
+            })
+          }).catch(e => console.error("Erreur sauvegarde image:", e));
+        }
       };
       reader.readAsDataURL(file);
     };
@@ -1664,7 +1694,7 @@
   };
 
   // Définir une image enregistrée comme image principale (avec échange)
-  window.setMainFromSaved = async (index) => {
+  window.setMainFromSaved = (index) => {
     const img = state.savedGeneratedImages[index];
     if (!img) return;
 
@@ -1694,29 +1724,27 @@
     const modal = document.getElementById('savedImagesSelectorModal');
     if (modal) modal.remove();
 
-    // Sauvegarder en base de données
-    if (state.currentHistoryId) {
-      try {
-        await fetch("/api/history", {
-          method: "PATCH",
-          body: JSON.stringify({
-            id: state.currentHistoryId,
-            image: state.imageBase64,
-            generated_images: JSON.stringify(state.savedGeneratedImages)
-          })
-        });
-        // Mettre à jour le cache pour que la sidebar affiche la nouvelle image
-        const cached = state.historyCache?.find(h => h.id === state.currentHistoryId);
-        if (cached) cached.image = state.imageBase64;
-        renderHistoryUI();
-      } catch(e) {
-        console.error("Erreur sauvegarde image:", e);
-      }
-    }
+    // Mettre à jour le cache immédiatement
+    const cached = state.historyCache?.find(h => h.id === state.currentHistoryId);
+    if (cached) cached.image = state.imageBase64;
 
+    // Mise à jour UI immédiate
+    renderHistoryUI();
     renderInputImages();
     renderGenImages();
     renderSavedImagesCarousel();
+
+    // Sauvegarder en base de données en arrière-plan
+    if (state.currentHistoryId) {
+      fetch("/api/history", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: state.currentHistoryId,
+          image: state.imageBase64,
+          generated_images: JSON.stringify(state.savedGeneratedImages)
+        })
+      }).catch(e => console.error("Erreur sauvegarde image:", e));
+    }
   };
   window.toggleSessionImg = (id) => { const item = state.sessionGeneratedImages.find(x => x.id == id); if(!item) return; const idx = state.selectedSessionImagesIdx.indexOf(item); if (idx > -1) { state.selectedSessionImagesIdx.splice(idx, 1); const imgToRemove = item.image; const inputIdx = state.inputImages.indexOf(imgToRemove); if (inputIdx > -1) state.inputImages.splice(inputIdx, 1); } else { state.selectedSessionImagesIdx.push(item); if (!state.inputImages.includes(item.image)) state.inputImages.push(item.image); } renderInputImages(); renderGenImages(); };
   window.viewImage = (b64) => { const byteCharacters = atob(b64); const byteNumbers = new Array(byteCharacters.length); for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i); const byteArray = new Uint8Array(byteNumbers); const blob = new Blob([byteArray], {type: 'image/jpeg'}); const blobUrl = URL.createObjectURL(blob); window.open(blobUrl, '_blank'); };
@@ -1725,9 +1753,15 @@
     if (state.selectedSessionImagesIdx.length === 0) return alert("Aucune image sélectionnée.");
     const newImages = state.selectedSessionImagesIdx.map(item => ({ image: item.image, prompt: item.prompt, aspectRatio: item.aspectRatio }));
     state.savedGeneratedImages = [...newImages, ...state.savedGeneratedImages];
+    // Désélectionner les images: retirer de inputImages et vider selectedSessionImagesIdx
+    state.selectedSessionImagesIdx.forEach(item => {
+      const idx = state.inputImages.indexOf(item.image);
+      if (idx > -1) state.inputImages.splice(idx, 1);
+    });
     state.selectedSessionImagesIdx = [];
     // Mise à jour immédiate de l'UI
     showSuccess($("saveImgSelectionBtn"), 'Enregistrer');
+    renderInputImages();
     renderGenImages();
     renderSavedImagesCarousel();
     document.querySelector('button[data-tab="tab-img-saved"]').click();
