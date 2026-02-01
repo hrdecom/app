@@ -39,6 +39,7 @@
     currentImgCategory: "", activeFolderId: null, selectedImgStyles: [], manualImgStyles: [], expandedGroups: [],
     draggedItem: null,
     treeExpandedIds: [],
+    selectedTreeNodes: [], // Pour multi-sélection dans l'éditeur d'arbre
     // Historique des titres pour éviter les doublons
     globalTitleHistory: [], // Tous les titres générés (global)
     productTitleHistory: [] // Titres générés pour le produit actuel
@@ -46,6 +47,31 @@
 
   const startLoading = () => { let s = 0; $("timer").textContent = "00:00"; if (state.timerInterval) clearInterval(state.timerInterval); state.timerInterval = setInterval(() => { s++; const mm = String(Math.floor(s/60)).padStart(2,"0"); const ss = String(s%60).padStart(2,"0"); $("timer").textContent = `${mm}:${ss}`; }, 1000); $("loading").classList.remove("hidden"); };
   const stopLoading = () => { clearInterval(state.timerInterval); $("loading").classList.add("hidden"); };
+
+  // --- FEEDBACK VISUEL (Remplace les alerts de succès) ---
+  function showSuccess(btn, originalText = null) {
+    if (!btn) return;
+    const original = originalText || btn.innerHTML;
+    const originalBg = btn.style.background;
+    btn.classList.add('success-feedback');
+    btn.innerHTML = '<span class="checkmark">✓</span>';
+    setTimeout(() => {
+      btn.classList.remove('success-feedback');
+      btn.innerHTML = original;
+      btn.style.background = originalBg;
+    }, 1200);
+  }
+
+  function showSuccessIcon(btn) {
+    if (!btn) return;
+    btn.classList.add('success-feedback');
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '✓';
+    setTimeout(() => {
+      btn.classList.remove('success-feedback');
+      btn.innerHTML = originalContent;
+    }, 1200);
+  }
 
   const formatLangUrl = (url, sub = "en.") => { if (!url) return ""; let cleanUrl = url.replace(/https:\/\/(en\.|dn\.|du\.|de\.|it\.|pl\.|pt-br\.|pt\.|es\.)/, "https://"); return cleanUrl.replace("https://", `https://${sub}`); };
 
@@ -152,7 +178,7 @@
       const escapedText = h.replace(/'/g, "\\'").replace(/\n/g, "\\n");
       return `<div class="headline-item ${isSelected ? 'selected' : ''}" onclick="window.toggleHeadline(${globalIdx})">
         <span class="headline-text">${h}</span>
-        <button class="icon-btn-small" onclick="event.stopPropagation(); window.copyToClip('${escapedText}')">📋</button>
+        <button class="icon-btn-small copy-btn-hl" onclick="event.stopPropagation(); window.copyToClip('${escapedText}', this)">📋</button>
       </div>`;
     }).join("");
 
@@ -179,7 +205,7 @@
       return `<div class="headline-item ${isSelected ? 'selected' : ''}" onclick="window.toggleAd(${globalIdx})">
         ${label ? `<span style="font-size:9px; background:#007AFF; color:#fff; padding:2px 6px; border-radius:10px; margin-right:8px;">${label}</span>` : ''}
         <span class="headline-text" style="white-space:pre-wrap;">${text}</span>
-        <button class="icon-btn-small" onclick="event.stopPropagation(); window.copyToClip(\`${escapedText}\`)">📋</button>
+        <button class="icon-btn-small copy-btn-ad" onclick="event.stopPropagation(); window.copyToClip(\`${escapedText}\`, this)">📋</button>
       </div>`;
     }).join("");
 
@@ -229,33 +255,121 @@
 
   function renderSavedHl() {
     const container = $("headlinesSavedList");
-    container.innerHTML = state.selectedHeadlines.map((h, i) => {
+    let html = '';
+
+    // Onglets de langue
+    const langs = Object.keys(state.headlinesTrans);
+    if (langs.length > 0 || state.selectedHeadlines.length > 0) {
+      html += `<div class="lang-tabs" style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap;">
+        <button class="lang-tab active" onclick="window.showHlLang('original')">Original</button>
+        ${langs.map(l => `<button class="lang-tab" onclick="window.showHlLang('${l}')">${LANGUAGES.find(x => x.code === l)?.flag || ''} ${l.toUpperCase()}</button>`).join('')}
+      </div>`;
+    }
+
+    html += `<div id="hlLangContent">`;
+    html += state.selectedHeadlines.map((h, i) => {
       const escapedText = h.replace(/'/g, "\\'").replace(/\n/g, "\\n");
       return `<div class="headline-item no-hover" style="background:#fff; border:1px solid #ddd;">
         <span class="headline-text">${h}</span>
-        <button class="icon-btn-small" onclick="window.copyToClip('${escapedText}')">📋</button>
+        <button class="icon-btn-small" onclick="window.copyToClip('${escapedText}', this)">📋</button>
         <button class="icon-btn-small delete-hl" onclick="window.removeSavedHl(${i})">×</button>
       </div>`;
     }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucune headline enregistrée</div>';
+    html += `</div>`;
+
+    container.innerHTML = html;
   }
+
+  window.showHlLang = (lang) => {
+    document.querySelectorAll('#headlinesSavedList .lang-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+
+    const contentDiv = $("hlLangContent");
+    if (lang === 'original') {
+      contentDiv.innerHTML = state.selectedHeadlines.map((h, i) => {
+        const escapedText = h.replace(/'/g, "\\'").replace(/\n/g, "\\n");
+        return `<div class="headline-item no-hover" style="background:#fff; border:1px solid #ddd;">
+          <span class="headline-text">${h}</span>
+          <button class="icon-btn-small" onclick="window.copyToClip('${escapedText}', this)">📋</button>
+          <button class="icon-btn-small delete-hl" onclick="window.removeSavedHl(${i})">×</button>
+        </div>`;
+      }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucune headline enregistrée</div>';
+    } else {
+      const translated = state.headlinesTrans[lang] || [];
+      contentDiv.innerHTML = translated.map((h, i) => {
+        const escapedText = h.replace(/'/g, "\\'").replace(/\n/g, "\\n");
+        return `<div class="headline-item no-hover" style="background:#f0f7ff; border:1px solid #007AFF;">
+          <span class="headline-text">${h}</span>
+          <button class="icon-btn-small" onclick="window.copyToClip('${escapedText}', this)">📋</button>
+        </div>`;
+      }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucune traduction</div>';
+    }
+  };
 
   function renderSavedAds() {
     const container = $("adsSavedList");
-    container.innerHTML = state.selectedAds.map((ad, i) => {
+    let html = '';
+
+    // Onglets de langue
+    const langs = Object.keys(state.adsTrans);
+    if (langs.length > 0 || state.selectedAds.length > 0) {
+      html += `<div class="lang-tabs" style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap;">
+        <button class="lang-tab active" onclick="window.showAdLang('original')">Original</button>
+        ${langs.map(l => `<button class="lang-tab" onclick="window.showAdLang('${l}')">${LANGUAGES.find(x => x.code === l)?.flag || ''} ${l.toUpperCase()}</button>`).join('')}
+      </div>`;
+    }
+
+    html += `<div id="adLangContent">`;
+    html += state.selectedAds.map((ad, i) => {
       const text = typeof ad === 'object' ? ad.text : ad;
       const label = typeof ad === 'object' ? ad.style : '';
       const escapedText = text.replace(/`/g, "\\`").replace(/\\/g, "\\\\");
       return `<div class="headline-item no-hover" style="background:#fff; border:1px solid #ddd;">
         ${label ? `<span style="font-size:9px; background:#007AFF; color:#fff; padding:2px 6px; border-radius:10px; margin-right:8px;">${label}</span>` : ''}
         <span class="headline-text" style="white-space:pre-wrap;">${text}</span>
-        <button class="icon-btn-small" onclick="window.copyToClip(\`${escapedText}\`)">📋</button>
+        <button class="icon-btn-small" onclick="window.copyToClip(\`${escapedText}\`, this)">📋</button>
         <button class="icon-btn-small delete-hl" onclick="window.removeSavedAd(${i})">×</button>
       </div>`;
     }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucun ad copy enregistré</div>';
+    html += `</div>`;
+
+    container.innerHTML = html;
 
     // Render info block for default ad
     renderAdsInfoBlock();
   }
+
+  window.showAdLang = (lang) => {
+    document.querySelectorAll('#adsSavedList .lang-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+
+    const contentDiv = $("adLangContent");
+    if (lang === 'original') {
+      contentDiv.innerHTML = state.selectedAds.map((ad, i) => {
+        const text = typeof ad === 'object' ? ad.text : ad;
+        const label = typeof ad === 'object' ? ad.style : '';
+        const escapedText = text.replace(/`/g, "\\`").replace(/\\/g, "\\\\");
+        return `<div class="headline-item no-hover" style="background:#fff; border:1px solid #ddd;">
+          ${label ? `<span style="font-size:9px; background:#007AFF; color:#fff; padding:2px 6px; border-radius:10px; margin-right:8px;">${label}</span>` : ''}
+          <span class="headline-text" style="white-space:pre-wrap;">${text}</span>
+          <button class="icon-btn-small" onclick="window.copyToClip(\`${escapedText}\`, this)">📋</button>
+          <button class="icon-btn-small delete-hl" onclick="window.removeSavedAd(${i})">×</button>
+        </div>`;
+      }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucun ad copy enregistré</div>';
+    } else {
+      const translated = state.adsTrans[lang] || [];
+      contentDiv.innerHTML = translated.map((t, i) => {
+        const escapedText = t.replace(/`/g, "\\`").replace(/\\/g, "\\\\");
+        return `<div class="headline-item no-hover" style="background:#f0f7ff; border:1px solid #007AFF;">
+          <span class="headline-text" style="white-space:pre-wrap;">${t}</span>
+          <button class="icon-btn-small" onclick="window.copyToClip(\`${escapedText}\`, this)">📋</button>
+        </div>`;
+      }).join("") || '<div style="text-align:center; color:#999; padding:40px;">Aucune traduction</div>';
+    }
+
+    // Always render info block
+    renderAdsInfoBlock();
+  };
 
   function renderAdsInfoBlock() {
     const container = $("adsDefaultInfoBlock");
@@ -281,35 +395,35 @@
     html += `<div class="ads-info-row">
       <span class="ads-info-label">TITRE PRODUIT</span>
       <span style="flex:1;">${title}</span>
-      <button class="icon-btn-small" onclick="window.copyToClip('${title.replace(/'/g, "\\'")}')">📋</button>
+      <button class="icon-btn-small" onclick="window.copyToClip('${title.replace(/'/g, "\\'")}', this)">📋</button>
     </div>`;
 
     // Titre 1
     html += `<div class="ads-info-row">
       <span class="ads-info-label">TITRE 1</span>
       <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(state.adsInfo.title1 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title1', this.value)">
-      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value)">📋</button>
+      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value, this)">📋</button>
     </div>`;
 
     // Titre 2
     html += `<div class="ads-info-row">
       <span class="ads-info-label">TITRE 2</span>
       <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(state.adsInfo.title2 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title2', this.value)">
-      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value)">📋</button>
+      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value, this)">📋</button>
     </div>`;
 
     // Titre 3
     html += `<div class="ads-info-row">
       <span class="ads-info-label">TITRE 3</span>
       <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(state.adsInfo.title3 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title3', this.value)">
-      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value)">📋</button>
+      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value, this)">📋</button>
     </div>`;
 
     // Titre 4
     html += `<div class="ads-info-row">
       <span class="ads-info-label">TITRE 4</span>
       <input type="text" class="ios-input" style="flex:1; font-size:12px; padding:8px;" value="${(state.adsInfo.title4 || '').replace(/"/g, '&quot;')}" onchange="window.updateAdsInfo('title4', this.value)">
-      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value)">📋</button>
+      <button class="icon-btn-small" onclick="window.copyToClip(this.previousElementSibling.value, this)">📋</button>
     </div>`;
 
     // Sub description
@@ -317,7 +431,7 @@
       <span class="ads-info-label">SUB DESCRIPTION</span>
       <div style="display:flex; gap:5px;">
         <textarea class="ios-input" style="flex:1; font-size:12px; padding:8px; min-height:50px; resize:vertical;" onchange="window.updateAdsInfo('sub', this.value)">${state.adsInfo.sub || ''}</textarea>
-        <button class="icon-btn-small" style="align-self:flex-start;" onclick="window.copyToClip(this.previousElementSibling.value)">📋</button>
+        <button class="icon-btn-small" style="align-self:flex-start;" onclick="window.copyToClip(this.previousElementSibling.value, this)">📋</button>
       </div>
     </div>`;
 
@@ -325,7 +439,7 @@
     html += `<div class="ads-info-row">
       <span class="ads-info-label">URL PRODUIT</span>
       <span style="flex:1; font-size:11px;">${productUrl || 'Non définie'}</span>
-      <button class="icon-btn-small" onclick="window.copyToClip('${productUrl}')">📋</button>
+      <button class="icon-btn-small" onclick="window.copyToClip('${productUrl}', this)">📋</button>
     </div>`;
 
     container.innerHTML = html;
@@ -348,6 +462,7 @@
   async function saveSelections(type) {
     if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
 
+    const saveBtn = type === 'hl' ? $("saveHeadlinesBtn") : $("saveAdsBtn");
     startLoading();
     try {
       const payload = { id: state.currentHistoryId };
@@ -365,7 +480,15 @@
       const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify(payload) });
       if (!res.ok) throw new Error("Erreur serveur");
 
-      alert(type === 'hl' ? "Headlines enregistrées !" : "Ad Copys enregistrés !");
+      // Feedback visuel + switch to saved tab
+      showSuccess(saveBtn, type === 'hl' ? 'Enregistrer sélections' : 'Enregistrer sélections');
+      if (type === 'hl') {
+        document.querySelector('#headlinesTabs [data-tab="tab-saved-headlines"]').click();
+        renderSavedHl();
+      } else {
+        document.querySelector('#adsTabs [data-tab="tab-saved-ads"]').click();
+        renderSavedAds();
+      }
     } catch(e) {
       alert("Erreur: " + e.message);
     } finally {
@@ -562,6 +685,10 @@
           if(!isExpanded) childrenClass += " hidden";
       }
 
+      // Multi-select class
+      const isMultiSelected = state.selectedTreeNodes.some(n => n.id === data.id);
+      if (isMultiSelected) el.classList.add('multi-selected');
+
       el.innerHTML = `
         <div class="tree-header">
             ${chevron}
@@ -577,10 +704,31 @@
         <div class="${childrenClass}"></div>
       `;
 
-      // --- DRAG & DROP ---
+      // --- MULTI-SELECT (Ctrl/Cmd+click) ---
       const header = el.querySelector('.tree-header');
+      header.addEventListener('click', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+          e.stopPropagation();
+          const nodeInfo = { id: data.id, type: type, parentId: parentId };
+          const existingIdx = state.selectedTreeNodes.findIndex(n => n.id === data.id);
+          if (existingIdx > -1) {
+            state.selectedTreeNodes.splice(existingIdx, 1);
+            el.classList.remove('multi-selected');
+          } else {
+            state.selectedTreeNodes.push(nodeInfo);
+            el.classList.add('multi-selected');
+          }
+        }
+      });
+
+      // --- DRAG & DROP ---
       el.addEventListener('dragstart', (e) => {
-          state.draggedItem = { id: data.id, type: type, parentId: parentId };
+          // Si cet élément fait partie de la multi-sélection, drag tout le groupe
+          if (state.selectedTreeNodes.some(n => n.id === data.id) && state.selectedTreeNodes.length > 1) {
+            state.draggedItem = { multi: true, items: [...state.selectedTreeNodes] };
+          } else {
+            state.draggedItem = { id: data.id, type: type, parentId: parentId };
+          }
           e.stopPropagation();
           e.dataTransfer.effectAllowed = 'move';
           el.style.opacity = '0.5';
@@ -632,7 +780,19 @@
           if (!header.classList.contains('drag-over-top') && !header.classList.contains('drag-over-bottom') && !header.classList.contains('drag-over-center')) return;
 
           header.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
-          if(state.draggedItem && state.draggedItem.id !== data.id) window.moveNode(state.draggedItem, { id: data.id, type: type, parentId: parentId }, action);
+          if (state.draggedItem) {
+            if (state.draggedItem.multi) {
+              // Multi-drag
+              state.draggedItem.items.forEach(item => {
+                if (item.id !== data.id) {
+                  window.moveNode(item, { id: data.id, type: type, parentId: parentId }, action);
+                }
+              });
+              state.selectedTreeNodes = []; // Clear selection after drag
+            } else if (state.draggedItem.id !== data.id) {
+              window.moveNode(state.draggedItem, { id: data.id, type: type, parentId: parentId }, action);
+            }
+          }
       });
       return el;
   }
@@ -892,11 +1052,41 @@
       html += `</div>`; if (!isInline) html += `</div>`; return html;
   }
   function renderStyleBtn(s) {
-      let isActive = false; if (s.mode === 'manual') isActive = state.manualImgStyles.includes(s.name); else isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
-      const borderStyle = s.mode === 'manual' ? 'border:1px dashed #007AFF;' : 'border:1px solid #e5e5e5;'; const bgColor = isActive ? '#007AFF' : '#fff'; const color = isActive ? '#fff' : '#1d1d1f'; const shadow = isActive ? 'box-shadow: 0 2px 5px rgba(0,122,255,0.3);' : 'box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
-      return `<button class="style-tag style-btn-click" data-name="${s.name.replace(/"/g, '&quot;')}" style="display:inline-flex; align-items:center; gap:5px; flex-shrink:0; ${borderStyle} background:${bgColor}; color:${color}; ${shadow} padding:5px 12px; border-radius:18px; transition: all 0.2s; font-weight:500; font-size:11px;">${s.refImage ? '<span style="width:14px; height:14px; background:#f0f0f0; border-radius:50%; display:inline-block; overflow:hidden; border:1px solid rgba(0,0,0,0.1);"><img src="data:image/jpeg;base64,'+s.refImage+'" style="width:100%;height:100%;object-fit:cover;"></span>' : ''}<span>${s.name}</span>${s.mode === 'manual' ? '<span style="font-size:9px; opacity:0.7;">📝</span>' : ''}</button>`;
+      let isActive = false;
+      if (s.mode === 'manual') isActive = state.manualImgStyles.includes(s.name);
+      else isActive = state.selectedImgStyles.some(sel => sel.name === s.name);
+
+      const isManual = s.mode === 'manual';
+      const selectedClass = isActive ? 'selected' : '';
+
+      return `<button class="studio-preset-btn style-btn-click ${selectedClass}" data-name="${s.name.replace(/"/g, '&quot;')}" data-prompt="${(s.prompt || '').replace(/"/g, '&quot;')}">
+        ${s.refImage ? `<span class="btn-icon"><img src="data:image/jpeg;base64,${s.refImage}"></span>` : ''}
+        <span>${s.name}</span>
+        ${isManual ? '<span style="font-size:10px; opacity:0.6;">📝</span>' : ''}
+      </button>`;
   }
-  document.addEventListener('click', function(e) { const btn = e.target.closest('.style-btn-click'); if (btn) { const name = btn.getAttribute('data-name'); if (name) window.toggleImgStyle(name); } });
+
+  // Shift+click pour coller le prompt dans le chat et désélectionner
+  document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.style-btn-click');
+    if (btn) {
+      const name = btn.getAttribute('data-name');
+      const prompt = btn.getAttribute('data-prompt');
+
+      if (e.shiftKey && prompt) {
+        // Shift+click: coller dans le chat et ne pas sélectionner
+        const chatInput = $("imgGenPrompt");
+        const currentText = chatInput.value.trim();
+        chatInput.value = currentText ? currentText + " " + prompt : prompt;
+        chatInput.focus();
+        // Animation visuelle
+        btn.style.transform = 'scale(0.95)';
+        setTimeout(() => btn.style.transform = '', 150);
+      } else if (name) {
+        window.toggleImgStyle(name);
+      }
+    }
+  });
   window.toggleImgStyle = (styleName) => {
       const style = state.config.imgStyles.find(s => s.name === styleName); if(!style) return;
       const promptClean = style.prompt.trim();
@@ -914,6 +1104,11 @@
     // Vérification pour headlines et ads - besoin d'un produit chargé
     if ((action.includes('headlines') || action.includes('ad_copys')) && !state.currentHistoryId) {
       return alert("Veuillez d'abord générer ou charger un produit.");
+    }
+
+    // Vérification URL obligatoire pour ad_copys
+    if (action.includes('ad_copys') && !$("productUrlInput").value.trim()) {
+      return alert("Veuillez renseigner une URL produit avant de générer des Ad Copys.");
     }
 
     startLoading();
@@ -982,6 +1177,15 @@
           }
           // Réinitialiser l'historique par produit
           state.productTitleHistory = [data.title];
+
+          // Ajouter automatiquement le titre à la blacklist
+          if (data.title) {
+            const currentBlacklist = state.config.blacklist || "";
+            if (!currentBlacklist.includes(data.title)) {
+              state.config.blacklist = currentBlacklist + (currentBlacklist ? "\n" : "") + data.title;
+              saveConfigToApi();
+            }
+          }
 
           const hRes = await fetch("/api/history", {
             method: "POST",
@@ -1055,7 +1259,25 @@
   window.addSavedToInputOrig = () => { if(state.imageBase64 && !state.inputImages.includes(state.imageBase64)) { state.inputImages.push(state.imageBase64); renderInputImages(); document.querySelector('button[data-tab="tab-img-chat"]').click(); } };
   window.toggleSessionImg = (id) => { const item = state.sessionGeneratedImages.find(x => x.id == id); if(!item) return; const idx = state.selectedSessionImagesIdx.indexOf(item); if (idx > -1) { state.selectedSessionImagesIdx.splice(idx, 1); const imgToRemove = item.image; const inputIdx = state.inputImages.indexOf(imgToRemove); if (inputIdx > -1) state.inputImages.splice(inputIdx, 1); } else { state.selectedSessionImagesIdx.push(item); if (!state.inputImages.includes(item.image)) state.inputImages.push(item.image); } renderInputImages(); renderGenImages(); };
   window.viewImage = (b64) => { const byteCharacters = atob(b64); const byteNumbers = new Array(byteCharacters.length); for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i); const byteArray = new Uint8Array(byteNumbers); const blob = new Blob([byteArray], {type: 'image/jpeg'}); const blobUrl = URL.createObjectURL(blob); window.open(blobUrl, '_blank'); };
-  window.saveImgSelection = async () => { if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit."); if (state.selectedSessionImagesIdx.length === 0) return alert("Aucune image sélectionnée."); const newImages = state.selectedSessionImagesIdx.map(item => ({ image: item.image, prompt: item.prompt, aspectRatio: item.aspectRatio })); state.savedGeneratedImages = [...newImages, ...state.savedGeneratedImages]; state.selectedSessionImagesIdx = []; startLoading(); try { const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) }); if (!res.ok) throw new Error("Erreur serveur"); alert("Images enregistrées !"); renderGenImages(); document.querySelector('button[data-tab="tab-img-saved"]').click(); } catch(e) { alert("Erreur sauvegarde: " + e.message); } finally { stopLoading(); } };
+  window.saveImgSelection = async () => {
+    if (!state.currentHistoryId) return alert("Veuillez d'abord générer/charger un produit.");
+    if (state.selectedSessionImagesIdx.length === 0) return alert("Aucune image sélectionnée.");
+    const newImages = state.selectedSessionImagesIdx.map(item => ({ image: item.image, prompt: item.prompt, aspectRatio: item.aspectRatio }));
+    state.savedGeneratedImages = [...newImages, ...state.savedGeneratedImages];
+    state.selectedSessionImagesIdx = [];
+    startLoading();
+    try {
+      const res = await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) });
+      if (!res.ok) throw new Error("Erreur serveur");
+      showSuccess($("saveImgSelectionBtn"), 'Enregistrer');
+      renderGenImages();
+      document.querySelector('button[data-tab="tab-img-saved"]').click();
+    } catch(e) {
+      alert("Erreur sauvegarde: " + e.message);
+    } finally {
+      stopLoading();
+    }
+  };
   window.deleteSavedImage = async (index) => { if(!confirm("Supprimer cette image ?")) return; state.savedGeneratedImages.splice(index, 1); startLoading(); try { await fetch("/api/history", { method: "PATCH", body: JSON.stringify({ id: state.currentHistoryId, generated_images: JSON.stringify(state.savedGeneratedImages) }) }); renderGenImages(); } catch(e) { alert(e.message); } finally { stopLoading(); } };
   async function loadHistory() { try { const r = await fetch("/api/history"); state.historyCache = await r.json(); renderHistoryUI(); } catch(e){} }
   function renderHistoryUI() { const filtered = (state.historyCache || []).filter(i => (i.title||"").toLowerCase().includes(state.searchQuery.toLowerCase())); const start = (state.currentPage - 1) * 5; const pag = filtered.slice(start, start + 5); $("historyList").innerHTML = pag.map(item => `<div class="history-item ${state.currentHistoryId == item.id ? 'active-history' : ''}" onclick="restore(${item.id})"><img src="data:image/jpeg;base64,${item.image}" class="history-img"><div style="flex:1"><h4>${item.title || "Sans titre"}</h4></div><button onclick="event.stopPropagation(); deleteItem(${item.id})">🗑</button></div>`).join(""); renderPagination(Math.ceil(filtered.length / 5)); }
@@ -1096,7 +1318,10 @@
     }
   };
   window.deleteItem = async (id) => { if(!confirm("Supprimer ?")) return; await fetch(`/api/history?id=${id}`, { method: "DELETE" }); if(state.currentHistoryId == id) { state.currentHistoryId = null; localStorage.removeItem('lastHistoryId'); } loadHistory(); };
-  window.copyToClip = (t) => { navigator.clipboard.writeText(t); alert("Copié !"); };
+  window.copyToClip = (t, btn = null) => {
+    navigator.clipboard.writeText(t);
+    if (btn) showSuccessIcon(btn);
+  };
   function switchTab(e) { const m = e.target.closest('.modal-content'); if (!m) return; m.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active")); m.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden")); e.target.classList.add("active"); const target = $(e.target.dataset.tab); if(target) target.classList.remove("hidden"); }
 
   // --- NOUVELLE FONCTION: COMPRESSION IMAGE POUR SETTINGS ---
@@ -1130,7 +1355,17 @@
     $("loading").classList.add("hidden");
     $("settingsBtn").onclick = () => $("settingsModal").classList.remove("hidden");
     $("closeSettings").onclick = () => { $("settingsModal").classList.add("hidden"); if(window.cancelImgStyleEdit) window.cancelImgStyleEdit(); };
-    $("saveConfig").onclick = async () => { ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => state.config[id] = $(id).value); state.config.blacklist = $("configBlacklist").value; state.config.collections = Array.from(document.querySelectorAll('.collections-item')).map(r => ({ name: r.querySelector('.col-name').value, meaning: r.querySelector('.col-meaning').value })); state.config.headlineStyles = Array.from(document.querySelectorAll('.headline-style-item')).map(r => ({ name: r.querySelector('.style-name').value, prompt: r.querySelector('.style-prompt').value })); state.config.adStyles = Array.from(document.querySelectorAll('.ad-style-item')).map(r => ({ name: r.querySelector('.ad-style-name').value, prompt: r.querySelector('.ad-style-prompt').value })); await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) }); alert("Enregistré"); $("settingsModal").classList.add("hidden"); renderConfigUI(); };
+    $("saveConfig").onclick = async () => {
+      ["promptSystem", "promptTitles", "promptDesc", "promptHeadlines", "promptAdCopys", "promptTranslate"].forEach(id => state.config[id] = $(id).value);
+      state.config.blacklist = $("configBlacklist").value;
+      state.config.collections = Array.from(document.querySelectorAll('.collections-item')).map(r => ({ name: r.querySelector('.col-name').value, meaning: r.querySelector('.col-meaning').value }));
+      state.config.headlineStyles = Array.from(document.querySelectorAll('.headline-style-item')).map(r => ({ name: r.querySelector('.style-name').value, prompt: r.querySelector('.style-prompt').value }));
+      state.config.adStyles = Array.from(document.querySelectorAll('.ad-style-item')).map(r => ({ name: r.querySelector('.ad-style-name').value, prompt: r.querySelector('.ad-style-prompt').value }));
+      await fetch("/api/settings", { method: "POST", body: JSON.stringify({ id: 'full_config', value: JSON.stringify(state.config) }) });
+      showSuccess($("saveConfig"), 'Enregistrer tout');
+      setTimeout(() => $("settingsModal").classList.add("hidden"), 800);
+      renderConfigUI();
+    };
     $("openHeadlinesBtn").onclick = () => {
       if(!state.currentHistoryId) return alert("Veuillez d'abord générer ou charger un produit.");
       $("headlinesModal").classList.remove("hidden");
@@ -1264,28 +1499,57 @@
 
     // --- Boutons Copier ---
     $("copyTitle").onclick = () => {
-      // Copier le titre brut (texte simple)
       const title = $("titleText").textContent;
       navigator.clipboard.writeText(title);
-      alert("Titre copié !");
+      showSuccess($("copyTitle"), 'Copier');
     };
 
     $("copyDesc").onclick = () => {
-      // Copier la description avec le format/style (innerHTML préservé en texte)
       const desc = $("descText").innerHTML;
-      // Convertir le HTML en texte formaté (préserver les sauts de ligne)
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = desc.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<p>/gi, '');
-      const formattedText = tempDiv.textContent || tempDiv.innerText;
+      let formattedText = tempDiv.textContent || tempDiv.innerText;
+      // Convertir les tirets en bullet points pour Shopify
+      formattedText = formattedText.replace(/^- /gm, '• ').replace(/\n- /g, '\n• ');
       navigator.clipboard.writeText(formattedText.trim());
-      alert("Description copiée !");
+      showSuccess($("copyDesc"), 'Copier');
     };
 
     // --- Édition du titre et description ---
+    // --- Boutons Modifier ---
+    $("editTitle").onclick = () => {
+      const el = $("titleText");
+      el.contentEditable = "true";
+      el.classList.add("editing");
+      el.focus();
+      // Placer le curseur à la fin
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    };
+
+    $("editDesc").onclick = () => {
+      const el = $("descText");
+      el.contentEditable = "true";
+      el.classList.add("editing");
+      el.focus();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    };
+
     $("titleText").addEventListener('blur', async () => {
+      const el = $("titleText");
+      el.contentEditable = "false";
+      el.classList.remove("editing");
       if (state.currentHistoryId) {
-        const newTitle = $("titleText").textContent;
-        // Ajouter à l'historique des titres
+        const newTitle = el.textContent;
         if (newTitle && !state.productTitleHistory.includes(newTitle)) {
           state.productTitleHistory.push(newTitle);
         }
@@ -1293,13 +1557,16 @@
           method: "PATCH",
           body: JSON.stringify({ id: state.currentHistoryId, title: newTitle })
         });
-        loadHistory(); // Refresh sidebar
+        loadHistory();
       }
     });
 
     $("descText").addEventListener('blur', async () => {
+      const el = $("descText");
+      el.contentEditable = "false";
+      el.classList.remove("editing");
       if (state.currentHistoryId) {
-        const newDesc = $("descText").textContent;
+        const newDesc = el.textContent;
         await fetch("/api/history", {
           method: "PATCH",
           body: JSON.stringify({ id: state.currentHistoryId, description: newDesc })
@@ -1308,7 +1575,22 @@
     });
     $("drop").onclick = () => $("imageInput").click();
     $("imageInput").onchange = (e) => { const f = e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = (ev) => { state.imageMime = ev.target.result.split(";")[0].split(":")[1]; state.imageBase64 = ev.target.result.split(",")[1]; $("previewImg").src = ev.target.result; $("preview").classList.remove("hidden"); $("dropPlaceholder").style.display = "none"; $("generateBtn").disabled = false; state.currentHistoryId = null; state.inputImages = [state.imageBase64]; renderInputImages(); }; r.readAsDataURL(f); };
-    $("removeImage").onclick = (e) => { e.stopPropagation(); state.imageBase64 = null; state.currentHistoryId = null; $("preview").classList.add("hidden"); $("dropPlaceholder").style.display = "block"; $("generateBtn").disabled = true; };
+    $("removeImage").onclick = (e) => {
+      e.stopPropagation();
+      state.imageBase64 = null;
+      state.currentHistoryId = null;
+      $("preview").classList.add("hidden");
+      $("dropPlaceholder").style.display = "block";
+      $("generateBtn").disabled = true;
+      // Masquer le titre et la description
+      $("titleText").textContent = "";
+      $("descText").textContent = "";
+      $("productUrlInput").value = "";
+      $("regenTitleBtn").disabled = true;
+      $("regenDescBtn").disabled = true;
+      // Réinitialiser l'historique produit
+      state.productTitleHistory = [];
+    };
     $("historySearch").oninput = (e) => { state.searchQuery = e.target.value; state.currentPage = 1; renderHistoryUI(); };
     loadConfig(); 
     const lastId = localStorage.getItem('lastHistoryId');

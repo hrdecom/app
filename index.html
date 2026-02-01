@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>HR Decom — Bijoux Pro</title>
+  <title>HRD MAGIC</title>
   <link rel="stylesheet" href="app.css"/>
 </head>
 <body>
 
 <div id="app">
   <header class="header">
-    <div class="brand"><div class="logo">✧</div><h1>Copywriting Bijoux</h1></div>
+    <div class="brand"><div class="logo">✧</div><h1>HRD MAGIC</h1></div>
     <button id="settingsBtn" class="icon-btn">⚙️ Paramètres</button>
   </header>
 
@@ -289,12 +289,24 @@
         </div>
       </section>
       <section class="card">
-        <div class="card-head"><h3>Titre</h3><button id="copyTitle" class="copy-btn">Copier</button></div>
-        <div id="titleText" class="editable-content" contenteditable="true" data-placeholder="Le titre apparaîtra ici..."></div>
+        <div class="card-head">
+          <h3>Titre</h3>
+          <div style="display:flex; gap:8px;">
+            <button id="editTitle" class="copy-btn">Modifier</button>
+            <button id="copyTitle" class="copy-btn">Copier</button>
+          </div>
+        </div>
+        <div id="titleText" class="editable-content" contenteditable="false" data-placeholder="Le titre apparaîtra ici..."></div>
       </section>
       <section class="card">
-        <div class="card-head"><h3>Description</h3><button id="copyDesc" class="copy-btn">Copier</button></div>
-        <div id="descText" class="editable-content" contenteditable="true" data-placeholder="La description apparaîtra ici..."></div>
+        <div class="card-head">
+          <h3>Description</h3>
+          <div style="display:flex; gap:8px;">
+            <button id="editDesc" class="copy-btn">Modifier</button>
+            <button id="copyDesc" class="copy-btn">Copier</button>
+          </div>
+        </div>
+        <div id="descText" class="editable-content" contenteditable="false" data-placeholder="La description apparaîtra ici..."></div>
         <div class="product-url-section">
           <label>Product URL</label>
           <input type="text" id="productUrlInput" placeholder="https://en.riccardiparis.com/..."/>
