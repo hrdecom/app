@@ -216,18 +216,30 @@ export async function onRequest(context) {
 
   // --- DELETE ---
   if (request.method === "DELETE") {
-    const id = url.searchParams.get("id");
-    // Nettoyage en cascade (Chunks -> Images -> History)
-    // Note: D1 ne gère pas toujours bien les sous-requêtes complexes dans un batch, on fait séquentiel pour être sûr
-    const oldImages = await db.prepare("SELECT id FROM history_images WHERE history_id = ?").bind(id).all();
-    if (oldImages.results.length > 0) {
+    try {
+      const id = url.searchParams.get("id");
+      if (!id) return new Response(JSON.stringify({ error: "ID manquant" }), { status: 400, headers: { "content-type": "application/json" } });
+
+      // Nettoyage en cascade (Chunks -> Images -> History)
+      // 1. Récupérer tous les IDs d'images associées
+      const oldImages = await db.prepare("SELECT id FROM history_images WHERE history_id = ?").bind(id).all();
+
+      // 2. Supprimer tous les chunks de ces images
+      if (oldImages.results && oldImages.results.length > 0) {
         const idsToDelete = oldImages.results.map(r => r.id).join(',');
         await db.prepare(`DELETE FROM history_image_chunks WHERE history_image_id IN (${idsToDelete})`).run();
-    }
-    await db.batch([
+      }
+
+      // 3. Supprimer les images et l'entrée historique
+      await db.batch([
         db.prepare("DELETE FROM history_images WHERE history_id = ?").bind(id),
         db.prepare("DELETE FROM history WHERE id = ?").bind(id)
-    ]);
-    return new Response(JSON.stringify({ success: true }), { headers: { "content-type": "application/json" } });
+      ]);
+
+      return new Response(JSON.stringify({ success: true }), { headers: { "content-type": "application/json" } });
+    } catch (e) {
+      console.error("D1 DELETE Error:", e);
+      return new Response(JSON.stringify({ error: "Erreur suppression: " + e.message }), { status: 500, headers: { "content-type": "application/json" } });
+    }
   }
 }
