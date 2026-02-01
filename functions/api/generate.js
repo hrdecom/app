@@ -1,19 +1,25 @@
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
-    const { action, image, media_type, collection, config, historyNames, currentTitle, currentDesc, product_url, style, selectedForSimilar, itemsToTranslate, infoToTranslate, targetLang } = body;
+    const { action, image, media_type, suggestion, config, historyNames, currentTitle, currentDesc, product_url, style, selectedForSimilar, itemsToTranslate, infoToTranslate, targetLang, titlesToAvoid } = body;
 
     if (!env.ANTHROPIC_API_KEY) return new Response(JSON.stringify({ error: "Clé API manquante" }), { status: 500 });
 
     const jsonSafeRule = "IMPORTANT: Return valid JSON. Escape double quotes with backslash (\\\"). Output ONLY JSON.";
-    const baseInstructions = `${config.promptSystem}\n${jsonSafeRule}\nCONTEXT: ${collection}\nTITLES: ${config.promptTitles}\nDESC: ${config.promptDesc}\nPRODUCT URL: ${product_url}`;
+    const suggestionContext = suggestion ? `\nUSER SUGGESTION: ${suggestion}` : "";
+    const baseInstructions = `${config.promptSystem}\n${jsonSafeRule}${suggestionContext}\nTITLES: ${config.promptTitles}\nDESC: ${config.promptDesc}\nPRODUCT URL: ${product_url}`;
+
+    // Liste des titres à éviter pour la génération
+    const titlesBlacklist = Array.isArray(titlesToAvoid) && titlesToAvoid.length > 0
+      ? `\nTITLES TO AVOID (generate something different): ${JSON.stringify(titlesToAvoid)}`
+      : "";
 
     let prompt = "";
-    
+
     if (action === "generate") {
-      prompt = `${baseInstructions}\nBLACKLIST: ${config.blacklist}\nHISTORY: ${JSON.stringify(historyNames)}\nTASK: Analyze image and output JSON: { "product_name": "...", "title": "...", "description": "..." }`;
+      prompt = `${baseInstructions}\nBLACKLIST: ${config.blacklist}\nHISTORY: ${JSON.stringify(historyNames)}${titlesBlacklist}\nTASK: Analyze image and output JSON: { "product_name": "...", "title": "...", "description": "..." }`;
     } else if (action === "regen_title") {
-      prompt = `${baseInstructions}\nTASK: New product_name/title. Different from: "${currentTitle}". JSON: { "product_name": "...", "title": "..." }`;
+      prompt = `${baseInstructions}${titlesBlacklist}\nTASK: New product_name/title. MUST be completely different from all titles in TITLES TO AVOID list. Current title: "${currentTitle}". JSON: { "product_name": "...", "title": "..." }`;
     } else if (action === "regen_desc") {
       prompt = `${baseInstructions}\nTASK: New description. JSON: { "description": "..." }`;
     } else if (action === "headlines") {
