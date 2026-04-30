@@ -1,0 +1,9 @@
+{% comment %}
+  Riccardiparis Personalizer — install once in your product template.
+  Place ABOVE the existing add-to-cart button (typically inside the
+  <form action="/cart/add"> ... </form> wrapper).
+{% endcomment %}
+<div id="rp-personalizer"
+     data-product-handle="{{ product.handle }}"
+     data-product-id="{{ product.id }}"></div>
+<script src="https://app.riccardiparis.com/storefront/personalizer.js" defer></script>

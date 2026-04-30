@@ -1,0 +1,24 @@
+-- Per-AD-number admin approval tracking on ad_assets.
+--
+-- Background: when the ads-creator resends an asset (e.g. they added
+-- AD 5 to a package where AD 1–4 were already approved or published),
+-- the ad_assets row is reset to status='ready_for_review'. Without a
+-- per-AD record of past approvals the admin's Pending Review pane
+-- shows EVERY video — including the ones already shipped or signed
+-- off in a prior cycle.
+--
+-- This column stores a JSON array of integer AD numbers the admin has
+-- approved at any point. The PATCH /api/ads/assets/:id endpoint
+-- snapshots the current set of AD numbers from videos_json (parsed
+-- from each video's projectName / IndexedDB key prefix) into this
+-- column whenever the admin clicks Approve. The column is NOT cleared
+-- on resubmit, so the history persists across iterations.
+--
+-- AdsReviewPanel reads this column alongside published_ad_numbers
+-- (queried per-asset from the existing /api/facebook/published-ads-for-asset
+-- endpoint) and filters the per-tab video grid:
+--   • Pending Review → exclude approved ∪ published
+--   • Approved       → include approved \ published
+--   • Published      → include published
+
+ALTER TABLE ad_assets ADD COLUMN approved_ad_numbers TEXT NOT NULL DEFAULT '[]';
