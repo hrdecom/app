@@ -821,6 +821,55 @@ async function mount({ el, productHandle }: MountSpec) {
   }
 
   /**
+   * P25-V5.6 — when the visible <img> doesn't match the active variant's
+   * featured image (customer navigated the gallery away), snap the
+   * gallery back to the variant slide by clicking its thumbnail. We
+   * deliberately AVOID `scrollIntoView` here — V5.3 used that and it
+   * caused a viewport jump on iOS that the user perceived as a zoom.
+   * `button.click()` doesn't move document focus, so the input the
+   * customer is typing into stays focused (no iOS keyboard dismiss /
+   * re-zoom) and Dawn's slider scrolls horizontally to the variant.
+   *
+   * Wired into every text-field `input` event so the moment the
+   * customer starts editing a name or initials, the live preview is
+   * back in front of them. No-op when the gallery is already on the
+   * variant image, when the cache hasn't loaded, or when no thumbnail
+   * targets the variant's media id (older themes).
+   */
+  function ensureVariantImageVisible() {
+    const img = findProductImage();
+    if (!img) return;
+    if (isImageMatchingActiveVariant(img, productHandle)) return;
+    const w = window as any;
+    const product = w.__rpShopifyProduct?.[productHandle];
+    if (!product || !Array.isArray(product.variants)) return;
+    const variantId =
+      document.querySelector<HTMLInputElement>('input[name="id"]')?.value ||
+      document.querySelector<HTMLSelectElement>('select[name="id"]')?.value ||
+      null;
+    const v = variantId
+      ? product.variants.find((x: any) => String(x.id) === String(variantId))
+      : null;
+    const mediaId = v?.featured_media?.id;
+    if (!mediaId) return;
+    // Dawn / Online Store 2.0: every gallery thumbnail's <li> carries
+    // `data-target` ending in the media id (`...__main-${mediaId}`).
+    // Older themes use [data-thumbnail-id="${mediaId}"] or
+    // [data-image-id="${mediaId}"].
+    const sel = [
+      `[data-target$="-${mediaId}"] button`,
+      `[data-target$="-${mediaId}"]`,
+      `[data-thumbnail-id="${mediaId}"]`,
+      `[data-image-id="${mediaId}"]`,
+      `button[data-id="${mediaId}"]`,
+    ].join(',');
+    const thumb = document.querySelector<HTMLElement>(sel);
+    if (thumb) {
+      try { thumb.click(); } catch { /* never break input */ }
+    }
+  }
+
+  /**
    * Mount (or update) the overlay SVG on top of the product image.
    * The SVG has the same viewBox as the personalizer's design canvas
    * (typically 1080×1080), so field positions stay correct when the
@@ -835,6 +884,17 @@ async function mount({ el, productHandle }: MountSpec) {
     if (!img) return; // No image found yet — try again on next rerender.
     const parent = img.parentElement;
     if (!parent) return;
+    // P25-V5.6 — Dawn-class themes keep ALL slides in the DOM and just
+    // mark one `is-active`. Each time the active slide changes,
+    // findProductImage() picks up the new IMG and we'd append a fresh
+    // overlay to its parent — leaving the OLD overlay stranded on the
+    // previous slide's parent. Result: 2-3 stale overlays accumulating
+    // on every gallery navigation. Sweep them up here so EXACTLY one
+    // overlay exists at any time, attached to whatever the visible
+    // active slide is. Idempotent — no-op once we're in steady state.
+    document.querySelectorAll('[data-rp-overlay]').forEach((o) => {
+      if (o.parentElement && o.parentElement !== parent) o.remove();
+    });
     if (getComputedStyle(parent).position === 'static') {
       parent.style.position = 'relative';
     }
@@ -848,9 +908,7 @@ async function mount({ el, productHandle }: MountSpec) {
     // P25-V5.5 — image-tied overlay. Texts only show when the visible
     // <img> is the active variant's featured_image. Fails-open (opacity
     // 1) until /products/<handle>.js lands so first paint isn't blank.
-    // The 500ms rerender loop drives gallery-navigation transitions —
-    // we DO NOT trigger from input/change events (that caused the iOS
-    // viewport jump bug in V5.3).
+    // The 500ms rerender loop drives gallery-navigation transitions.
     const matches = isImageMatchingActiveVariant(img, productHandle);
     overlay.style.opacity = matches ? '1' : '0';
     // P25-6 — only paint fields whose row is currently visible. The
@@ -1099,6 +1157,10 @@ async function mount({ el, productHandle }: MountSpec) {
         initialValues[String(f.id)] = input.value;
         const count = wrap.querySelector<HTMLDivElement>('.rp-pz-count');
         if (count) count.textContent = `${input.value.length} / ${f.max_chars || '∞'}`;
+        // P25-V5.6 — snap gallery back to the variant image so the
+        // customer sees the live preview as they type. Idempotent /
+        // cheap when already on the right image (early-return inside).
+        ensureVariantImageVisible();
         rerender();
       });
       wrap.appendChild(input);
