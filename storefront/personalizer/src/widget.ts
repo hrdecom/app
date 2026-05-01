@@ -880,8 +880,10 @@ async function mount({ el, productHandle }: MountSpec) {
    *   • Dawn's slider scrolls horizontally only → no page viewport jump
    */
   function ensureVariantImageVisible() {
-    if (isVariantSlideActive(productHandle)) return;
+    const onVariant = isVariantSlideActive(productHandle);
     const mediaId = getActiveVariantMediaId(productHandle);
+    try { console.info('[rp-snap] called', { onVariant, mediaId, productHandle }); } catch { /* */ }
+    if (onVariant) return;
     if (!mediaId) return;
     // Dawn / Online Store 2.0: thumbnails are <li data-target="...-${mediaId}">
     // wrapping a <button>. Click the button so Dawn runs its own
