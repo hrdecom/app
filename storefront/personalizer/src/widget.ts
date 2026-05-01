@@ -880,15 +880,10 @@ async function mount({ el, productHandle }: MountSpec) {
    *   • Dawn's slider scrolls horizontally only → no page viewport jump
    */
   function ensureVariantImageVisible() {
-    const onVariant = isVariantSlideActive(productHandle);
+    if (isVariantSlideActive(productHandle)) return;
     const mediaId = getActiveVariantMediaId(productHandle);
-    try { console.info('[rp-snap] called', { onVariant, mediaId, productHandle }); } catch { /* */ }
-    if (onVariant) return;
     if (!mediaId) return;
-    // Dawn / Online Store 2.0: thumbnails are <li data-target="...-${mediaId}">
-    // wrapping a <button>. Click the button so Dawn runs its own
-    // slide-to-media animation. Older themes use [data-thumbnail-id]
-    // / [data-image-id] / button[data-id].
+    // Find the variant's thumbnail button.
     const sel = [
       `[data-target$="-${mediaId}"] button`,
       `[data-target$="-${mediaId}"]`,
@@ -897,9 +892,27 @@ async function mount({ el, productHandle }: MountSpec) {
       `button[data-id="${mediaId}"]`,
     ].join(',');
     const thumb = document.querySelector<HTMLElement>(sel);
-    if (thumb) {
-      try { thumb.click(); } catch { /* never break input */ }
-    }
+    if (!thumb) return;
+    // P25-V6.2 — Dawn's slider-component listens for pointerdown +
+    // pointerup (not just click). A bare `.click()` synthetic event
+    // dispatches `click` only and Dawn's handler ignores it. Fire
+    // the full pointer/mouse sequence a real tap produces so Dawn's
+    // PointerEvent listeners react. `bubbles:true` is required to
+    // reach delegated listeners higher up in the DOM.
+    try {
+      const opts = { bubbles: true, cancelable: true, composed: true } as EventInit;
+      try { thumb.dispatchEvent(new PointerEvent('pointerdown', opts)); } catch { /* */ }
+      try { thumb.dispatchEvent(new MouseEvent('mousedown', opts)); } catch { /* */ }
+      try { thumb.dispatchEvent(new PointerEvent('pointerup', opts)); } catch { /* */ }
+      try { thumb.dispatchEvent(new MouseEvent('mouseup', opts)); } catch { /* */ }
+      try { thumb.click(); } catch { /* */ }
+      // Belt-and-suspenders: also click the parent <li> in case the
+      // listener delegates from there.
+      const li = thumb.closest('li');
+      if (li && li !== thumb) {
+        try { li.dispatchEvent(new MouseEvent('click', opts)); } catch { /* */ }
+      }
+    } catch { /* never break input */ }
   }
 
   /**
