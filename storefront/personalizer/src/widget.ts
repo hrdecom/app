@@ -283,6 +283,24 @@ function normalizeShopifyImageUrl(u: string | null | undefined): string {
 }
 
 /**
+ * P25-V5.7 — extract the FILENAME from a Shopify image URL. The
+ * substring-include compare in V5.5 failed in production because
+ * Shopify exposes the same image at two different URLs:
+ *   • /products/<handle>.js returns `cdn.shopify.com/s/files/.../files/IMG.webp`
+ *   • Dawn renders the storefront IMG with `<shop>.myshopify.com/cdn/shop/files/IMG.webp`
+ * Different host AND different path. After normalize, neither
+ * substring contained the other. Filenames ARE unique per image
+ * upload, so comparing just the last path segment (after stripping
+ * size suffixes) is reliable across CDN proxies.
+ */
+function imageFilename(u: string | null | undefined): string {
+  const norm = normalizeShopifyImageUrl(u);
+  if (!norm) return '';
+  const idx = norm.lastIndexOf('/');
+  return idx >= 0 ? norm.slice(idx + 1) : norm;
+}
+
+/**
  * P25-V5 — TRUE when the visible product image matches the selected
  * variant's featured_image. Once we know the variant data is available
  * (post-fetch), strict mode applies: mismatch → false. Before the
@@ -293,10 +311,15 @@ function isImageMatchingActiveVariant(img: HTMLImageElement | null, productHandl
   if (!img) return true;
   const expected = getActiveVariantFeaturedImage(productHandle);
   if (!expected || !expected.src) return true; // variant data not loaded yet
-  const got = normalizeShopifyImageUrl(img.src || img.currentSrc || '');
-  const want = normalizeShopifyImageUrl(expected.src);
+  // P25-V5.7 — compare on filename (last path segment after stripping
+  // size suffix). Substring-include compare on full URLs broke when
+  // the storefront proxies images through `<shop>/cdn/shop/files/` —
+  // different host/path prefix from the canonical `cdn.shopify.com`
+  // URL the .js API returns. Filename equality is reliable.
+  const got = imageFilename(img.src || img.currentSrc || '');
+  const want = imageFilename(expected.src);
   if (!got || !want) return true;
-  return got.includes(want) || want.includes(got);
+  return got === want;
 }
 
 function readCurrentVariantOptionPairs(): Array<{ name: string; value: string }> {
