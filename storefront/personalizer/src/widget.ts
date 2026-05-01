@@ -301,25 +301,48 @@ function imageFilename(u: string | null | undefined): string {
 }
 
 /**
- * P25-V5 — TRUE when the visible product image matches the selected
- * variant's featured_image. Once we know the variant data is available
- * (post-fetch), strict mode applies: mismatch → false. Before the
- * fetch lands we fail-open (return true) so the overlay shows on
- * first paint instead of flashing.
+ * P25-V6 — return the active variant's featured_media.id from the
+ * cached product. Returns null when the cache hasn't loaded or the
+ * variant has no featured_media (rare). String type so it concatenates
+ * cleanly into selectors.
  */
-function isImageMatchingActiveVariant(img: HTMLImageElement | null, productHandle: string): boolean {
-  if (!img) return true;
-  const expected = getActiveVariantFeaturedImage(productHandle);
-  if (!expected || !expected.src) return true; // variant data not loaded yet
-  // P25-V5.7 — compare on filename (last path segment after stripping
-  // size suffix). Substring-include compare on full URLs broke when
-  // the storefront proxies images through `<shop>/cdn/shop/files/` —
-  // different host/path prefix from the canonical `cdn.shopify.com`
-  // URL the .js API returns. Filename equality is reliable.
-  const got = imageFilename(img.src || img.currentSrc || '');
-  const want = imageFilename(expected.src);
-  if (!got || !want) return true;
-  return got === want;
+function getActiveVariantMediaId(productHandle: string): string | null {
+  const w = window as any;
+  const product = w.__rpShopifyProduct?.[productHandle];
+  if (!product || !Array.isArray(product.variants)) return null;
+  const variantId =
+    document.querySelector<HTMLInputElement>('input[name="id"]')?.value ||
+    document.querySelector<HTMLSelectElement>('select[name="id"]')?.value ||
+    (w.ShopifyAnalytics?.meta?.selectedVariantId as string | undefined) ||
+    null;
+  if (!variantId) return null;
+  const v = product.variants.find((x: any) => String(x.id) === String(variantId));
+  const id = v?.featured_media?.id;
+  return id ? String(id) : null;
+}
+
+/**
+ * P25-V6 — TRUE when the visible (.is-active) gallery slide is the
+ * variant's featured slide. Compares Dawn's `.product__media-item.is-active`
+ * id suffix against the variant's `featured_media.id` (an integer
+ * exposed by /products/<handle>.js). This sidesteps the V5.5–V5.7
+ * URL-comparison bug where Shopify served the SAME image at two
+ * different URLs (cdn.shopify.com vs <shop>/cdn/shop/) — IDs are
+ * deterministic and don't get rewritten by CDN proxies.
+ *
+ * Fail-open in three cases so first paint never flashes blank:
+ *   1) cache not loaded yet → true
+ *   2) no `.is-active` slide (non-Dawn theme) → true
+ *   3) variant has no featured_media id → true
+ */
+function isVariantSlideActive(productHandle: string): boolean {
+  const wantId = getActiveVariantMediaId(productHandle);
+  if (!wantId) return true;
+  const active = document.querySelector<HTMLElement>('.product__media-item.is-active');
+  if (!active) return true;
+  const idSuffix = '-' + wantId;
+  return (active.id || '').endsWith(idSuffix)
+    || (active.getAttribute('data-media-id') || '').endsWith(idSuffix);
 }
 
 function readCurrentVariantOptionPairs(): Array<{ name: string; value: string }> {
@@ -629,6 +652,11 @@ function startProductCacheWatchdog() {
 }
 
 async function init() {
+  // P25-V6 — version stamp so the merchant can verify in browser
+  // console (Cmd+Opt+J → Console tab) which bundle is running. If
+  // they see V5 or older, they're on a cached bundle — hard refresh
+  // (Cmd+Shift+R / Ctrl+Shift+R) clears it.
+  try { console.info('[rp-personalizer] V6 — slide-id matching'); } catch { /* */ }
   // Inject custom @font-face rules before mounting widgets so fonts are
   // available immediately for SVG text rendering.
   await injectCustomFonts();
@@ -844,41 +872,21 @@ async function mount({ el, productHandle }: MountSpec) {
   }
 
   /**
-   * P25-V5.6 — when the visible <img> doesn't match the active variant's
-   * featured image (customer navigated the gallery away), snap the
-   * gallery back to the variant slide by clicking its thumbnail. We
-   * deliberately AVOID `scrollIntoView` here — V5.3 used that and it
-   * caused a viewport jump on iOS that the user perceived as a zoom.
-   * `button.click()` doesn't move document focus, so the input the
-   * customer is typing into stays focused (no iOS keyboard dismiss /
-   * re-zoom) and Dawn's slider scrolls horizontally to the variant.
-   *
-   * Wired into every text-field `input` event so the moment the
-   * customer starts editing a name or initials, the live preview is
-   * back in front of them. No-op when the gallery is already on the
-   * variant image, when the cache hasn't loaded, or when no thumbnail
-   * targets the variant's media id (older themes).
+   * P25-V6 — snap the gallery to the variant's featured slide when the
+   * customer types in a personalizer input but the gallery is on a
+   * non-variant image. Idempotent: returns early if already on the
+   * right slide. Uses `button.click()` (not `scrollIntoView`) so:
+   *   • document focus stays on the input → no iOS keyboard dismiss/zoom
+   *   • Dawn's slider scrolls horizontally only → no page viewport jump
    */
   function ensureVariantImageVisible() {
-    const img = findProductImage();
-    if (!img) return;
-    if (isImageMatchingActiveVariant(img, productHandle)) return;
-    const w = window as any;
-    const product = w.__rpShopifyProduct?.[productHandle];
-    if (!product || !Array.isArray(product.variants)) return;
-    const variantId =
-      document.querySelector<HTMLInputElement>('input[name="id"]')?.value ||
-      document.querySelector<HTMLSelectElement>('select[name="id"]')?.value ||
-      null;
-    const v = variantId
-      ? product.variants.find((x: any) => String(x.id) === String(variantId))
-      : null;
-    const mediaId = v?.featured_media?.id;
+    if (isVariantSlideActive(productHandle)) return;
+    const mediaId = getActiveVariantMediaId(productHandle);
     if (!mediaId) return;
-    // Dawn / Online Store 2.0: every gallery thumbnail's <li> carries
-    // `data-target` ending in the media id (`...__main-${mediaId}`).
-    // Older themes use [data-thumbnail-id="${mediaId}"] or
-    // [data-image-id="${mediaId}"].
+    // Dawn / Online Store 2.0: thumbnails are <li data-target="...-${mediaId}">
+    // wrapping a <button>. Click the button so Dawn runs its own
+    // slide-to-media animation. Older themes use [data-thumbnail-id]
+    // / [data-image-id] / button[data-id].
     const sel = [
       `[data-target$="-${mediaId}"] button`,
       `[data-target$="-${mediaId}"]`,
@@ -928,12 +936,12 @@ async function mount({ el, productHandle }: MountSpec) {
       overlay.className = 'rp-pz-overlay';
       parent.appendChild(overlay);
     }
-    // P25-V5.5 — image-tied overlay. Texts only show when the visible
-    // <img> is the active variant's featured_image. Fails-open (opacity
-    // 1) until /products/<handle>.js lands so first paint isn't blank.
-    // The 500ms rerender loop drives gallery-navigation transitions.
-    const matches = isImageMatchingActiveVariant(img, productHandle);
-    overlay.style.opacity = matches ? '1' : '0';
+    // P25-V6 — image-tied overlay. Texts only show when Dawn's active
+    // gallery slide IS the variant's featured slide (compared by
+    // media-id, not URL). Fails-open until /products/<handle>.js
+    // lands so first paint isn't blank. The 500ms rerender loop +
+    // variant watcher drive transitions; no extra event hooks needed.
+    overlay.style.opacity = isVariantSlideActive(productHandle) ? '1' : '0';
     // P25-6 — only paint fields whose row is currently visible. The
     // variant watcher toggles row.style.display; we mirror that into
     // the SVG so a hidden "Pendant 2" doesn't show on the preview
@@ -1294,68 +1302,9 @@ async function mount({ el, productHandle }: MountSpec) {
   syncCartMirrorsRef = syncCartMirrors;
 
   // Wrap each text/file change to also sync the cart mirrors.
-  // P25-V5 — when the user types in any field while the gallery is on
-  // a non-variant image, snap back to the variant's featured_image so
-  // they can see the live preview. Tries the gallery thumbnail click
-  // first (cleanest — theme runs its swap animation), falls back to a
-  // direct img.src write.
-  function ensureMatchingImage() {
-    const img = findProductImage();
-    if (!img) return;
-    if (isImageMatchingActiveVariant(img, productHandle)) return;
-    const expected = getActiveVariantFeaturedImage(productHandle);
-    if (!expected || !expected.src) return;
-    const wantNorm = normalizeShopifyImageUrl(expected.src);
-
-    // P25-V5 — strategy 1: find the matching slide LI and scroll it
-    // into view. On Dawn (slider-component), the slider auto-updates
-    // its `is-active` class based on which slide is centered in the
-    // scroll viewport, so scrollIntoView naturally syncs both the
-    // visible image AND the thumbnail highlight. Works on every
-    // theme that uses Shopify's stock <slider-component>.
-    const slides = document.querySelectorAll<HTMLElement>(
-      '.product__media-item, .product-media, [data-media-type], li[id^="Slide-"]',
-    );
-    for (const slide of Array.from(slides)) {
-      const innerImg = slide.querySelector<HTMLImageElement>('img');
-      if (!innerImg) continue;
-      const got = normalizeShopifyImageUrl(innerImg.src || innerImg.currentSrc || '');
-      if (got && (got.includes(wantNorm) || wantNorm.includes(got))) {
-        try {
-          slide.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'nearest', inline: 'center' });
-          // Some themes (Dawn included) also listen for a click on
-          // the slide to advance the focus state — fire it as a
-          // belt-and-suspenders measure.
-          const clickable = slide.querySelector<HTMLElement>('button, a') || slide;
-          try { clickable.click(); } catch { /* noop */ }
-          // Re-evaluate the overlay after the scroll lands.
-          setTimeout(attachOrUpdateOverlay, 80);
-          return;
-        } catch { /* fall through */ }
-      }
-    }
-
-    // P25-V5 — strategy 2: data-attr selectors (themes that expose
-    // image-id / thumbnail-id mappings outside the slider pattern).
-    if (expected.id) {
-      const idSel = [
-        `[data-thumbnail-id="${expected.id}"]`,
-        `[data-image-id="${expected.id}"]`,
-        `button[data-id="${expected.id}"]`,
-      ].join(',');
-      const thumb = document.querySelector<HTMLElement>(idSel);
-      if (thumb) {
-        try { thumb.click(); return; } catch { /* fall through */ }
-      }
-    }
-
-    // P25-V5 — strategy 3: last-resort direct src write.
-    try {
-      img.src = expected.src;
-      img.removeAttribute('srcset');
-    } catch { /* never break input handling */ }
-    setTimeout(attachOrUpdateOverlay, 50);
-  }
+  // P25-V6 — `ensureMatchingImage` removed. It was V5.3-era scroll-based
+  // snap that caused iOS viewport jumps and is fully replaced by
+  // `ensureVariantImageVisible()` (media-id thumbnail click).
 
   fieldsEl.addEventListener('input', syncCartMirrors);
   fieldsEl.addEventListener('change', syncCartMirrors);
