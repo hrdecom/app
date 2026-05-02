@@ -93,14 +93,17 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
             </SelectContent>
           </Select>
         </Row>
-        {/* P25-6 — cart_label overrides what shows in the Shopify
-            cart line item. Lets the admin keep a long descriptive
-            label in the storefront input ("Enter the recipient's
-            first name") but display a clean short tag in the cart
-            ("First name"). Empty = falls back to the regular Label. */}
-        <Row label="Cart label (overrides label in Shopify cart)">
+        {/* P25-6 / P26-17 — cart_label overrides what shows in the
+            Shopify cart line item. Lets the admin keep a long
+            descriptive label in the storefront input ("Enter the
+            recipient's first name") but display a clean short tag
+            in the cart ("First name"). Empty = falls back to the
+            regular Label. P26-17: placeholder echoes the active
+            label so the merchant immediately understands what the
+            cart will read if they leave it blank. */}
+        <Row label="Cart label (what shows in Shopify cart)">
           <Input
-            placeholder="(uses Label by default)"
+            placeholder={draft.label ? `(uses "${draft.label}" by default)` : '(uses Label by default)'}
             value={draft.cart_label || ''}
             onChange={(e) => patch('cart_label', e.target.value || null)}
           />
@@ -300,7 +303,20 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
       )}
 
       {draft.field_kind === 'image' && (
-        <Section title="Image">
+        <Section title="Image" defaultOpen>
+          {/* P26-17 — cart_label is also exposed in Identity, but
+              merchants editing a Photo field expect to see the cart
+              property here. Without it the line item shows the raw
+              "Photo" / "Photo 1" label and they assume the feature
+              is missing. Same value as Identity → cart_label; both
+              edit the same field. */}
+          <Row label="Cart label (what shows in Shopify cart)">
+            <Input
+              placeholder={draft.label ? `(uses "${draft.label}" by default)` : 'e.g. Customer photo'}
+              value={draft.cart_label || ''}
+              onChange={(e) => patch('cart_label', e.target.value || null)}
+            />
+          </Row>
           <Row label="Mask shape">
             <Select value={draft.mask_shape || 'rect'} onValueChange={(v) => patch('mask_shape', v as any)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
