@@ -2,7 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { listFonts, type PersonalizerField } from '@/lib/personalizer-api';
+import { listFonts, type PersonalizerField, type BirthstoneOption } from '@/lib/personalizer-api';
+
+// P26-26 — month-name defaults used when the template's birthstones
+// library hasn't been populated yet OR the merchant left the label
+// blank. Allows the field's "Default selected month" dropdown to
+// always show something readable.
+const DEFAULT_MONTH_LABELS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
 // P26-10 — curated Google Fonts library. Lato is the default for
 // new fields (most readable on jewelry product photography). The
@@ -39,9 +48,13 @@ interface Props {
    * admin gets one row per color instead of typing keys by hand. Empty
    * = section hidden. */
   availableColorValues?: string[];
+  /** P26-26 — template-level birthstones library, parsed from
+   * `tpl.birthstones_json`. Drives the "Default selected month"
+   * dropdown for birthstone fields and the per-month label preview. */
+  birthstones?: BirthstoneOption[];
 }
 
-export function FieldConfigForm({ field, onPatch, availableVariantValues = [], availableColorValues = [] }: Props) {
+export function FieldConfigForm({ field, onPatch, availableVariantValues = [], availableColorValues = [], birthstones = [] }: Props) {
   const [draft, setDraft] = useState(field);
   const [fontOptions, setFontOptions] = useState<string[]>(CURATED_FONTS);
 
@@ -375,6 +388,57 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
               Optional. The customer sees this image in the live preview before they upload their own.
             </div>
           </Row>
+        </Section>
+      )}
+
+      {/* P26-26 — Birthstone settings. The 12 PNG icons live at
+          template level (uploaded via the "Birthstones library" panel
+          above the field list), so this form only configures the
+          DEFAULT selected month (drives the canvas preview + first
+          paint on the storefront) and the cart label override. The
+          actual selector UI is rendered by the storefront widget. */}
+      {draft.field_kind === 'birthstone' && (
+        <Section title="Birthstone" defaultOpen>
+          <Row label="Cart label (what shows in Shopify cart)">
+            <Input
+              placeholder={draft.label ? `(uses "${draft.label}" by default)` : 'e.g. Birthstone'}
+              value={draft.cart_label || ''}
+              onChange={(e) => patch('cart_label', e.target.value || null)}
+            />
+          </Row>
+          <Row label="Default selected month">
+            <Select
+              value={String(draft.default_value || '1')}
+              onValueChange={(v) => patch('default_value', v)}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 12 }, (_, i) => {
+                  const monthIdx = i + 1;
+                  const fromLib = birthstones.find((b) => b.month_index === monthIdx);
+                  const label = (fromLib && fromLib.label) || DEFAULT_MONTH_LABELS[i];
+                  return (
+                    <SelectItem key={monthIdx} value={String(monthIdx)}>
+                      {monthIdx}. {label}
+                      {fromLib?.image_url ? '' : ' (no icon yet)'}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </Row>
+          <Row label="Mask shape">
+            <Select value={draft.mask_shape || 'rect'} onValueChange={(v) => patch('mask_shape', v as any)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MASKS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Row>
+          <div className="text-[11px] text-muted-foreground mt-1 leading-snug">
+            Upload the 12 birthstone icons in the <strong>Birthstones library</strong> panel
+            above the field list. They are shared across every birthstone layer on this product.
+          </div>
         </Section>
       )}
 

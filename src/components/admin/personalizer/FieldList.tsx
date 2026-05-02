@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { Plus, Type, Image as ImageIcon, GripVertical, Trash2, Loader2, ImagePlus, Copy } from 'lucide-react';
+import { Plus, Type, Image as ImageIcon, GripVertical, Trash2, Loader2, ImagePlus, Copy, Gem } from 'lucide-react';
 import { useState } from 'react';
 import type { PersonalizerField } from '@/lib/personalizer-api';
 
@@ -9,6 +9,7 @@ interface Props {
   onSelect: (id: number) => void;
   onAddText: () => void;
   onAddImage: () => void;
+  onAddBirthstone: () => void;
   onReorder: (ids: number[]) => void;
   /** P25-2 — fired when the trash button on a row is clicked (and confirmed). */
   onDelete: (fieldId: number) => Promise<void> | void;
@@ -24,7 +25,7 @@ interface Props {
 }
 
 export function FieldList({
-  fields, selectedId, onSelect, onAddText, onAddImage, onReorder, onDelete, onDuplicate,
+  fields, selectedId, onSelect, onAddText, onAddImage, onAddBirthstone, onReorder, onDelete, onDuplicate,
   baseImageLayerZ, onChangeBaseImageLayerZ,
 }: Props) {
   const [busyDeletingId, setBusyDeletingId] = useState<number | null>(null);
@@ -194,7 +195,13 @@ export function FieldList({
               ].join(' ')}
             >
               <GripVertical className="h-3 w-3 text-muted-foreground" />
-              {f.field_kind === 'text' ? <Type className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
+              {f.field_kind === 'text' ? (
+                <Type className="h-3.5 w-3.5" />
+              ) : f.field_kind === 'birthstone' ? (
+                <Gem className="h-3.5 w-3.5 text-violet-600" />
+              ) : (
+                <ImageIcon className="h-3.5 w-3.5" />
+              )}
               <span className="flex-1 truncate">{f.label}</span>
               <span className="text-[10px] text-muted-foreground">z{f.layer_z}</span>
               <button
@@ -234,6 +241,15 @@ export function FieldList({
         </Button>
         <Button variant="outline" size="sm" className="w-full justify-start" onClick={onAddImage}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Add image field
+        </Button>
+        {/* P26-26 — Birthstone field. Renders on the storefront as a
+            compact dropdown selector (12 months with thumbnail + name)
+            plus an SVG image overlay at the field's position that
+            swaps to the selected month's PNG. The 12 PNGs are
+            uploaded once at template level and reused across every
+            birthstone layer on this product. */}
+        <Button variant="outline" size="sm" className="w-full justify-start" onClick={onAddBirthstone}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Add birthstone field
         </Button>
       </div>
     </div>

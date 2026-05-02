@@ -11,7 +11,51 @@ import {
   getSettings,
   type PersonalizerTemplate, type PersonalizerField,
   type ShopifyVariantInfo, type VariantOverride,
+  type BirthstoneOption,
 } from '@/lib/personalizer-api';
+import { BirthstonesLibraryPanel } from './BirthstonesLibraryPanel';
+
+// P26-26 — default month names used when bootstrapping a fresh
+// birthstones library OR when the merchant left a label blank.
+const DEFAULT_MONTH_LABELS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/**
+ * P26-26 — parse `tpl.birthstones_json` into a 12-entry array. Missing
+ * months are filled with empty defaults so the library UI always
+ * renders 12 rows (the merchant can upload them in any order).
+ */
+function parseBirthstones(raw: string | null | undefined): BirthstoneOption[] {
+  let parsed: any[] = [];
+  if (raw) {
+    try {
+      const j = JSON.parse(raw);
+      if (Array.isArray(j)) parsed = j;
+    } catch { /* malformed — start fresh */ }
+  }
+  const byMonth = new Map<number, BirthstoneOption>();
+  for (const e of parsed) {
+    if (!e || typeof e !== 'object') continue;
+    const idx = Number(e.month_index);
+    if (!Number.isFinite(idx) || idx < 1 || idx > 12) continue;
+    byMonth.set(idx, {
+      month_index: idx,
+      label: typeof e.label === 'string' ? e.label : DEFAULT_MONTH_LABELS[idx - 1],
+      image_url: typeof e.image_url === 'string' ? e.image_url : null,
+    });
+  }
+  const out: BirthstoneOption[] = [];
+  for (let i = 1; i <= 12; i++) {
+    out.push(byMonth.get(i) || {
+      month_index: i,
+      label: DEFAULT_MONTH_LABELS[i - 1],
+      image_url: null,
+    });
+  }
+  return out;
+}
 
 interface Props {
   productId: number;
@@ -239,6 +283,26 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
     setSelectedFieldId(created.id);
   }
 
+  async function handleAddBirthstone() {
+    if (!tpl) return;
+    // P26-26 — auto-number birthstone labels (Birthstone, Birthstone 2,
+    // Birthstone 3, ...) the same way image fields do. Default value =
+    // month index "1" (January) so the canvas preview has something to
+    // render before the merchant changes the default in the form.
+    const existing = (tpl.fields || []).filter((f) => f.field_kind === 'birthstone').length;
+    const label = existing === 0 ? 'Birthstone' : `Birthstone ${existing + 1}`;
+    const created = await createField(tpl.id, {
+      field_kind: 'birthstone',
+      label,
+      default_value: '1',
+      mask_shape: 'rect',
+      position_x: 100, position_y: 100, width: 160, height: 160,
+      layer_z: 5,
+    });
+    await load();
+    setSelectedFieldId(created.id);
+  }
+
   async function handlePatch(patch: Partial<PersonalizerField>) {
     if (!selectedFieldId) return;
     // P26-5 — record history for FieldConfigForm-driven changes too
@@ -447,12 +511,37 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
         </Button>
       </div>
       <div className="flex flex-1 min-h-0">
+        <div className="flex flex-col bg-white border-r border-gray-200 min-w-[260px] max-w-[320px] overflow-y-auto">
+          {/* P26-26 — Birthstones library: 12 PNG icons shared by every
+              birthstone field on this template. Auto-expands when at
+              least one birthstone field exists so the merchant doesn't
+              hunt for it. Sits ABOVE the field list because it's a
+              prerequisite for any birthstone layer to display. */}
+          <div className="p-2">
+            <BirthstonesLibraryPanel
+              birthstones={parseBirthstones(tpl.birthstones_json)}
+              autoOpen={(tpl.fields || []).some((f) => f.field_kind === 'birthstone')}
+              onChange={async (next) => {
+                const json = JSON.stringify(next);
+                const prev = tpl.birthstones_json;
+                setTpl((t) => t ? { ...t, birthstones_json: json } : t);
+                try {
+                  await updateTemplate(tpl.id, { birthstones_json: json });
+                } catch (e: any) {
+                  setTpl((t) => t ? { ...t, birthstones_json: prev } : t);
+                  toast({ title: 'Failed to save birthstones', description: e?.message, variant: 'destructive' });
+                }
+              }}
+            />
+          </div>
+          <div className="flex-1 [&>div]:border-r-0 [&>div]:min-w-0">
         <FieldList
           fields={baseFields}
           selectedId={selectedFieldId}
           onSelect={setSelectedFieldId}
           onAddText={handleAddText}
           onAddImage={handleAddImage}
+          onAddBirthstone={handleAddBirthstone}
           onReorder={async (ids) => {
             // P26-8 — unified layer reorder. ids is the new order from
             // top of list to bottom, including the sentinel -1 for the
@@ -562,6 +651,8 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
             }
           }}
         />
+          </div>
+        </div>
         <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3">
           {/* P25-V3 — variant picker. Always shows "Default" + one pill
               per non-color signature. Clicking a pill swaps the canvas
@@ -730,6 +821,10 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
               }
               return out;
             })()}
+            // P26-26 — birthstones library, parsed from the template's
+            // birthstones_json. Drives the "Default selected month"
+            // dropdown for birthstone fields.
+            birthstones={parseBirthstones(tpl.birthstones_json)}
           />
         )}
       </div>

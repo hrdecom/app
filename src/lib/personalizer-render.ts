@@ -22,11 +22,15 @@ export interface PreviewTemplate {
    * on top (default behaviour). Defaults to 5 so admins can place
    * fields anywhere in [0, 10]. */
   base_image_layer_z?: number | null;
+  /** P26-26 — JSON-encoded BirthstoneOption[] (length 12). Birthstone
+   * fields look up their image URL here based on the value (month
+   * index "1".."12") in `values[fieldId]`. NULL = no library. */
+  birthstones_json?: string | null;
 }
 
 export interface PreviewField {
   id: number;
-  field_kind: 'text' | 'image';
+  field_kind: 'text' | 'image' | 'birthstone';
   label: string;
   layer_z?: number;
   sort_order?: number;
@@ -70,6 +74,10 @@ export function renderPreviewSvg(opts: RenderOptions): string {
   const baseZ = template.base_image_layer_z ?? 5;
   const ordered = [...fields].sort((a, b) => (a.layer_z ?? 10) - (b.layer_z ?? 10));
 
+  // P26-26 — parse the template-level birthstones library once so
+  // birthstone fields can look up their image URL by month_index.
+  const birthstones = parseBirthstones(template.birthstones_json);
+
   const parts: string[] = [];
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">`);
 
@@ -94,12 +102,23 @@ export function renderPreviewSvg(opts: RenderOptions): string {
     const rotation = Number(f.rotation_deg) || 0;
     const cx = f.position_x + Math.floor(f.width / 2);
     const cy = f.position_y + Math.floor(f.height / 2);
-    const inner =
-      f.field_kind === 'text'
-        ? renderTextField(f, value, currentColorValue)
-        : f.field_kind === 'image'
-          ? renderImageField(f, value)
-          : '';
+    // P26-26 — birthstone fields render exactly like image fields,
+    // but the URL is resolved from the template's birthstones library
+    // using `value` as the month_index (1-12). If the library is
+    // missing the entry or the URL is null, the field renders nothing
+    // for this paint (the customer hasn't picked a month with an
+    // uploaded icon yet).
+    let inner = '';
+    if (f.field_kind === 'text') {
+      inner = renderTextField(f, value, currentColorValue);
+    } else if (f.field_kind === 'image') {
+      inner = renderImageField(f, value);
+    } else if (f.field_kind === 'birthstone') {
+      const monthIdx = parseInt(String(value), 10);
+      if (Number.isFinite(monthIdx) && birthstones[monthIdx] && birthstones[monthIdx].image_url) {
+        inner = renderImageField(f, birthstones[monthIdx].image_url as string);
+      }
+    }
     if (!inner) continue;
     if (rotation !== 0) {
       parts.push(`<g transform="rotate(${rotation} ${cx} ${cy})">${inner}</g>`);
@@ -235,6 +254,33 @@ function renderImageField(f: PreviewField, url: string): string {
 function circlePath(cx: number, cy: number, r: number): string {
   const a = Math.abs(r);
   return `M ${cx - a} ${cy} A ${a} ${a} 0 1 1 ${cx + a} ${cy} A ${a} ${a} 0 1 1 ${cx - a} ${cy} Z`;
+}
+
+/**
+ * P26-26 — parse the birthstones_json column on a template. Returns a
+ * { month_index: { month_index, label, image_url } } map (1-indexed)
+ * for fast lookup. Empty / malformed JSON returns {}.
+ */
+function parseBirthstones(raw: string | null | undefined): Record<number, { month_index: number; label: string; image_url: string | null }> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return {};
+    const out: Record<number, { month_index: number; label: string; image_url: string | null }> = {};
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== 'object') continue;
+      const idx = Number(entry.month_index);
+      if (!Number.isFinite(idx) || idx < 1 || idx > 12) continue;
+      out[idx] = {
+        month_index: idx,
+        label: typeof entry.label === 'string' ? entry.label : '',
+        image_url: typeof entry.image_url === 'string' ? entry.image_url : null,
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
 }
 
 // P26-2 — arcPath helper removed; arc geometry is now inlined inside
