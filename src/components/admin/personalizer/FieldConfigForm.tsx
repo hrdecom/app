@@ -74,8 +74,15 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
     onPatch({ [k]: v } as Partial<PersonalizerField>);
   }
 
+  // P26-26 follow-up — bound the form's width AND let it shrink so
+  // the canvas in the middle column always gets enough room to
+  // show the live preview. Without max-w / flex-shrink-0 the form
+  // grows past its 320px floor whenever a Section is opened, the
+  // canvas gets squeezed out of view, and the merchant can't
+  // position fields visually. Width range 280-360 keeps every
+  // input usable at any viewport.
   return (
-    <div className="bg-white border-l border-gray-200 p-4 space-y-5 min-w-[320px] overflow-y-auto">
+    <div className="bg-white border-l border-gray-200 p-4 space-y-5 w-[320px] min-w-[280px] max-w-[360px] flex-shrink-0 overflow-y-auto">
 
       <Section title="Identity" defaultOpen>
         <Row label="Label (internal admin name)">
