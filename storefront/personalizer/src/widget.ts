@@ -340,17 +340,30 @@ async function openImageCropper(opts: {
         stageDispH = stageMax;
         stageDispW = Math.round(stageMax * stageAspect);
       }
-      // Compute imageScale so the field area takes ~65% of the stage's
-      // smaller dimension. Customer sees field + a generous border of
-      // surrounding product context (the rest of the necklace).
-      const targetFieldDisp = Math.min(stageDispW, stageDispH) * 0.65;
-      const fieldLong = Math.max(fc.w, fc.h);
-      const imgScale = targetFieldDisp / fieldLong;
+      // P26-24 — fit the WHOLE product image to the stage (rather
+      // than zooming in to put the field at 65% of the stage). This
+      // guarantees the merchant always sees the complete necklace
+      // even when the field is huge or has been moved by a variant
+      // override to a non-standard size or position. For small
+      // fields we still zoom in modestly so the customer has enough
+      // pixels to drag against; for fields that already cover most
+      // of the canvas we stay at fit scale.
+      const fitScale = Math.min(stageDispW / cw, stageDispH / ch);
+      const fieldLong = Math.max(1, Math.max(fc.w, fc.h));
+      // Want the field at least ~80 px on screen so dragging is
+      // comfortable, but never zoom in past 2× fit (the rest of the
+      // product would clip aggressively).
+      const minInteractScale = 80 / fieldLong;
+      const maxZoomScale = fitScale * 2;
+      const imgScale = Math.min(maxZoomScale, Math.max(fitScale, minInteractScale));
       imgDispW = cw * imgScale;
       imgDispH = ch * imgScale;
       fieldDispW = fc.w * imgScale;
       fieldDispH = fc.h * imgScale;
-      // Center the field area on the stage.
+      // Center the field on the stage. When the product image is
+      // larger than the stage (zoom case), the rest of it overflows
+      // and is clipped by overflow:hidden — that's fine, the field
+      // is what the customer cares about.
       const fieldCenterOnImg = { x: fc.x + fc.w / 2, y: fc.y + fc.h / 2 };
       imgDispLeft = stageDispW / 2 - fieldCenterOnImg.x * imgScale;
       imgDispTop = stageDispH / 2 - fieldCenterOnImg.y * imgScale;
