@@ -833,36 +833,50 @@ async function mount({ el, productHandle }: MountSpec) {
         .rp-pz-row input[type=file] { font-family: inherit; font-size: 14px; }
         .rp-pz-error { font-family: inherit; color: #c0392b; font-size: 12px; margin-top: 6px; }
 
-        /* P26-14 — apple-style upload affordance for image fields.
-           Full-width dashed-border drop zone with centered label.
-           Hover lightens the background for a clear interaction cue.
-           Inherits the merchant's typography (font_color / font_size_px
-           / font_family) via inline style on the label element. */
+        /* P26-15 — upload affordance for image fields. Full-width
+           rounded button with a soft dashed border (signals "drop /
+           pick a file" without screaming). Subtle shadow on hover so
+           it reads as clickable. Font-size is FIXED at 16px (also
+           prevents iOS focus-zoom) regardless of the field's
+           font_size_px (which is meant for the engraved text on the
+           product, not the upload control). */
         .rp-pz-upload {
-          display: flex;
+          display: inline-flex;
           align-items: center;
           justify-content: center;
+          gap: 8px;
           width: 100%;
-          padding: 16px 18px;
+          padding: 14px 18px;
           border: 1.5px dashed rgba(0,0,0,0.22);
-          border-radius: inherit;
-          background: rgba(0,0,0,0.015);
+          border-radius: 10px;
+          background: rgba(0,0,0,0.02);
           font-family: inherit;
-          font-size: 14px;
+          font-size: 16px;
+          font-weight: 500;
           color: inherit;
           text-align: center;
           cursor: pointer;
-          transition: background-color .15s, border-color .15s;
+          transition: background-color .15s, border-color .15s, box-shadow .15s, transform .05s;
           box-sizing: border-box;
           line-height: 1.3;
+          user-select: none;
         }
         .rp-pz-upload:hover {
-          background: rgba(0,0,0,0.04);
+          background: rgba(0,0,0,0.05);
           border-color: rgba(0,0,0,0.45);
+          box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+        }
+        .rp-pz-upload:active {
+          transform: scale(0.99);
+          background: rgba(0,0,0,0.07);
         }
         .rp-pz-upload-text {
           word-break: break-word;
           max-width: 100%;
+        }
+        .rp-pz-upload-icon {
+          flex: 0 0 auto;
+          opacity: 0.55;
         }
 
         .rp-pz-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 5; transition: opacity .15s; }
@@ -1318,16 +1332,33 @@ async function mount({ el, productHandle }: MountSpec) {
       wrap.appendChild(count);
       row.appendChild(wrap);
     } else if (f.field_kind === 'image') {
-      // P26-14 — apple-style upload affordance: full-width
-      // dashed-border drop zone with centered label, click-anywhere
-      // opens the file picker, filename appears once uploaded. The
-      // merchant's typography fields (font_family / font_size_px /
-      // font_color) style the label so it can match the brand.
+      // P26-15 — apple-style upload affordance: full-width
+      // dashed-border button with centered label, click-anywhere opens
+      // the file picker, filename appears once uploaded. The label
+      // text inherits font_family / font_color from the field for
+      // brand consistency, but font-size is FIXED at 16px (the
+      // field's font_size_px is for the engraving render — using it
+      // here would make a 60px headline button when the merchant
+      // designed a big curved name).
       const dropZone = document.createElement('label');
       dropZone.className = 'rp-pz-upload';
       if (f.font_color) dropZone.style.color = f.font_color;
       if (f.font_family) dropZone.style.fontFamily = f.font_family;
-      if (f.font_size_px) dropZone.style.fontSize = f.font_size_px + 'px';
+      // Small upload icon so the button reads unmistakably as
+      // "click to send a file" (the dashed border alone is too easy
+      // to miss). Inline SVG = no extra request.
+      const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      icon.setAttribute('class', 'rp-pz-upload-icon');
+      icon.setAttribute('width', '18');
+      icon.setAttribute('height', '18');
+      icon.setAttribute('viewBox', '0 0 24 24');
+      icon.setAttribute('fill', 'none');
+      icon.setAttribute('stroke', 'currentColor');
+      icon.setAttribute('stroke-width', '2');
+      icon.setAttribute('stroke-linecap', 'round');
+      icon.setAttribute('stroke-linejoin', 'round');
+      icon.innerHTML = '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>';
+      dropZone.appendChild(icon);
       const dropText = document.createElement('span');
       dropText.className = 'rp-pz-upload-text';
       dropText.textContent = f.placeholder || 'Upload your photo';
@@ -1335,7 +1366,16 @@ async function mount({ el, productHandle }: MountSpec) {
 
       const file = document.createElement('input');
       file.type = 'file';
-      file.accept = 'image/jpeg,image/png,image/webp';
+      // P26-15 — accept the formats every modern phone / camera produces.
+      // Wide net here because mobile share-sheets sometimes hand HEIC
+      // over with a generic MIME; the server-side validator does the
+      // strict check.
+      file.accept = [
+        'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
+        'image/heic', 'image/heif', 'image/avif', 'image/bmp', 'image/tiff',
+        '.jpg', '.jpeg', '.png', '.webp',
+        '.heic', '.heif', '.avif', '.bmp', '.tif', '.tiff',
+      ].join(',');
       file.style.display = 'none';
       file.addEventListener('change', async () => {
         const f0 = file.files?.[0];
