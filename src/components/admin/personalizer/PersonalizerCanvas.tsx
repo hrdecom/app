@@ -32,13 +32,17 @@ type DragMode =
    * Pivot = bbox center; new angle = atan2(pointer - pivot) - startOffset. */
   | { kind: 'rotate'; fieldId: number; pivotX: number; pivotY: number; startAngleDeg: number; startRotationDeg: number };
 
-const HANDLE_SIZE_PX = 12;
+// P26-3 — refined handle geometry. Smaller resize squares so they
+// don't obscure the text being edited; rotation handle bumped much
+// further from the bbox so it doesn't sit on top of the curve apex
+// handle (frequent confusion source for the merchant).
+const HANDLE_SIZE_PX = 9;
 // P26 — radius can grow up to 50× the bbox dimension so the user can
 // dial in nearly-flat curves that match real jewelry shapes (slightly
 // curved necklaces, gentle pendant arcs). With factor 4 you couldn't
 // get past a fairly tight curl.
 const MAX_CURVE_RADIUS_FACTOR = 50;
-const ROTATION_HANDLE_OFFSET_PX = 30; // distance above bbox top in design space units
+const ROTATION_HANDLE_OFFSET_PX = 70; // far enough above to not crowd the curve handle
 
 /**
  * Personalizer admin canvas. Renders the base product image + each
@@ -546,102 +550,148 @@ export function PersonalizerCanvas({
                     y={b.y}
                     width={b.w}
                     height={b.h}
-                    fill={showChrome ? 'rgba(24,95,165,0.08)' : 'transparent'}
+                    // P26-3 — bbox outline only (no fill) so the text
+                    // underneath stays fully readable. Dashed stroke
+                    // reads as "guide / selection box" rather than a
+                    // colored block dominating the canvas.
+                    fill="transparent"
                     stroke={showChrome ? stroke : 'none'}
-                    strokeWidth={showChrome ? 2 : 0}
+                    strokeWidth={showChrome ? 1.5 : 0}
+                    strokeDasharray={showChrome ? '4 3' : undefined}
                     vectorEffect="non-scaling-stroke"
                     style={{ cursor: 'move' }}
                     onPointerDown={(e) => handleBodyPointerDown(e, f)}
                   />
                 )}
+                {/* P26-3 — corner resize handles. Refined to small white
+                    circles with a thin blue border so they sit lightly
+                    on the canvas instead of dominating it. The hit
+                    region is a separate transparent square 2× the
+                    visible radius so they're still easy to grab. */}
                 {showChrome &&
                   handles.map((hd) => (
-                    <rect
-                      key={hd.corner}
-                      x={hd.cx - handleR}
-                      y={hd.cy - handleR}
-                      width={handleR * 2}
-                      height={handleR * 2}
-                      fill="#fff"
-                      stroke="#185FA5"
-                      strokeWidth={1.5}
-                      vectorEffect="non-scaling-stroke"
-                      style={{ cursor: hd.cursor }}
-                      onPointerDown={(e) => handleHandlePointerDown(e, f, hd.corner)}
-                    />
+                    <g key={hd.corner}>
+                      <circle
+                        cx={hd.cx}
+                        cy={hd.cy}
+                        r={handleR}
+                        fill="#fff"
+                        stroke="#185FA5"
+                        strokeWidth={1.5}
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
+                      />
+                      <rect
+                        x={hd.cx - handleR * 1.6}
+                        y={hd.cy - handleR * 1.6}
+                        width={handleR * 3.2}
+                        height={handleR * 3.2}
+                        fill="transparent"
+                        style={{ cursor: hd.cursor }}
+                        onPointerDown={(e) => handleHandlePointerDown(e, f, hd.corner)}
+                      />
+                    </g>
                   ))}
                 {showCurveAffordance && (
                   <>
-                    {/* Larger transparent hit-target so the tiny visual
-                        dot is easier to grab on touch devices. */}
-                    <circle
-                      cx={handleX}
-                      cy={handleY}
-                      r={handleR * 1.5}
+                    {/* P26-3 — curve apex handle. Distinct purple
+                        diamond so it cannot be confused with the
+                        green rotation circle above. Hit target is a
+                        bigger transparent square. */}
+                    <rect
+                      x={handleX - handleR * 1.8}
+                      y={handleY - handleR * 1.8}
+                      width={handleR * 3.6}
+                      height={handleR * 3.6}
                       fill="transparent"
-                      style={{ cursor: 'grab' }}
+                      style={{ cursor: 'ns-resize' }}
                       onPointerDown={(e) => handleCurveHandlePointerDown(e, f)}
                     />
-                    {/* Visible handle dot — solid blue with white halo
-                        so it stands out against any product image. */}
-                    <circle
-                      cx={handleX}
-                      cy={handleY}
-                      r={handleR * 0.8}
-                      fill="#185FA5"
-                      stroke="#fff"
-                      strokeWidth={2}
-                      vectorEffect="non-scaling-stroke"
-                      style={{ cursor: 'grab', pointerEvents: 'none' }}
-                    />
+                    <g
+                      transform={`translate(${handleX} ${handleY}) rotate(45)`}
+                      pointerEvents="none"
+                    >
+                      <rect
+                        x={-handleR}
+                        y={-handleR}
+                        width={handleR * 2}
+                        height={handleR * 2}
+                        fill="#a855f7"
+                        stroke="#fff"
+                        strokeWidth={2}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    </g>
                   </>
                 )}
-                {/* P25-V4 — rotation handle. Floats above the bbox top edge,
-                    centered horizontally. The OUTER <g> wrapper already
-                    rotates the entire chrome (bbox + handles + this) so
-                    we draw the handle in pre-rotation coords. */}
-                {showChrome && (
-                  <g>
-                    <line
-                      x1={b.x + b.w / 2}
-                      y1={b.y}
-                      x2={b.x + b.w / 2}
-                      y2={b.y - ROTATION_HANDLE_OFFSET_PX}
-                      stroke="#185FA5"
-                      strokeWidth={1.5}
-                      vectorEffect="non-scaling-stroke"
-                      pointerEvents="none"
-                    />
-                    {/* Larger transparent hit-target. */}
-                    <circle
-                      cx={b.x + b.w / 2}
-                      cy={b.y - ROTATION_HANDLE_OFFSET_PX}
-                      r={handleR * 1.6}
-                      fill="transparent"
-                      style={{ cursor: 'grab' }}
-                      onPointerDown={(e) => handleRotateHandlePointerDown(e, f)}
-                    />
-                    {/* Visible rotation icon — green ring (distinct from
-                        the blue resize handles + curve dot). */}
-                    <circle
-                      cx={b.x + b.w / 2}
-                      cy={b.y - ROTATION_HANDLE_OFFSET_PX}
-                      r={handleR * 0.9}
-                      fill="#fff"
-                      stroke="#16a34a"
-                      strokeWidth={2}
-                      vectorEffect="non-scaling-stroke"
-                      pointerEvents="none"
-                    />
-                    <circle
-                      cx={b.x + b.w / 2}
-                      cy={b.y - ROTATION_HANDLE_OFFSET_PX}
-                      r={handleR * 0.3}
-                      fill="#16a34a"
-                      pointerEvents="none"
-                    />
-                  </g>
-                )}
+                {/* P26-3 — rotation handle. Now sits 70 px above the
+                    bbox (was 30) so it's visually well separated from
+                    the purple curve apex handle. Drawn as a green
+                    circular-arrow icon inside a circle so its purpose
+                    is unmistakable. The dashed leader line connects
+                    it to the bbox top edge so the user reads it as a
+                    field control rather than a stray dot. */}
+                {showChrome && (() => {
+                  const rx = b.x + b.w / 2;
+                  const ry = b.y - ROTATION_HANDLE_OFFSET_PX;
+                  const ringR = handleR * 1.1;
+                  const arrowR = ringR * 0.55;
+                  return (
+                    <g>
+                      <line
+                        x1={rx}
+                        y1={b.y}
+                        x2={rx}
+                        y2={ry + ringR}
+                        stroke="#16a34a"
+                        strokeWidth={1.25}
+                        strokeDasharray="3 3"
+                        opacity={0.7}
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
+                      />
+                      {/* hit target */}
+                      <circle
+                        cx={rx}
+                        cy={ry}
+                        r={ringR * 1.6}
+                        fill="transparent"
+                        style={{ cursor: 'grab' }}
+                        onPointerDown={(e) => handleRotateHandlePointerDown(e, f)}
+                      />
+                      {/* visible: green disc with white circular-arrow icon */}
+                      <circle
+                        cx={rx}
+                        cy={ry}
+                        r={ringR}
+                        fill="#16a34a"
+                        stroke="#fff"
+                        strokeWidth={2}
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
+                      />
+                      <path
+                        d={`M ${rx + arrowR} ${ry} A ${arrowR} ${arrowR} 0 1 1 ${rx - arrowR * 0.001} ${ry - arrowR}`}
+                        fill="none"
+                        stroke="#fff"
+                        strokeWidth={1.5}
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d={`M ${rx - arrowR * 0.35} ${ry - arrowR} L ${rx + arrowR * 0.001} ${ry - arrowR * 1.3} L ${rx + arrowR * 0.4} ${ry - arrowR * 0.7}`}
+                        fill="none"
+                        stroke="#fff"
+                        strokeWidth={1.5}
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </g>
+                  );
+                })()}
               </g>
             );
           })}
