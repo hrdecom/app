@@ -232,6 +232,18 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
 
   async function handlePatch(patch: Partial<PersonalizerField>) {
     if (!selectedFieldId) return;
+    // P26-5 — record history for FieldConfigForm-driven changes too
+    // (label, font, color, default_value, alignment, etc.) so Cmd+Z
+    // covers everything, not just canvas drags.
+    const prevField = (tpl?.fields || []).find((f) => f.id === selectedFieldId);
+    if (prevField) {
+      const before: Partial<PersonalizerField> = {};
+      for (const k of Object.keys(patch) as (keyof PersonalizerField)[]) {
+        (before as any)[k] = (prevField as any)[k];
+      }
+      setHistory((h) => [...h, { kind: 'base', fieldId: selectedFieldId, before, after: patch }]);
+      setRedoStack([]);
+    }
     await updateField(selectedFieldId, patch);
     setTpl((prev) => prev && {
       ...prev,

@@ -1176,9 +1176,11 @@ async function mount({ el, productHandle }: MountSpec) {
     if (allowed) row.setAttribute('data-rp-allowed-variants', allowed.join('|').toLowerCase());
     (row as any).__rpAllowedVariants = allowed;
 
-    // P25-V4 — info-only fields short-circuit the input render path.
-    // Visible: a small (i) icon with `info_text` as tooltip. Excluded
-    // from the cart-property mirror so they NEVER POST to /cart/add.
+    // P26-6 — Info hint is no longer a SEPARATE field type. Every
+    // text/image field can carry an optional info_text that renders
+    // as a small (i) tooltip next to the label. Legacy info-only
+    // fields (is_info===1) still render as the icon-only block for
+    // backward compat with templates the merchant already saved.
     if (Number(f.is_info || 0) === 1) {
       const wrap = document.createElement('div');
       wrap.className = 'rp-pz-info';
@@ -1204,6 +1206,18 @@ async function mount({ el, productHandle }: MountSpec) {
     // shopper actually reads.
     const visibleLabel = (f.customer_label && f.customer_label.trim()) || f.label;
     labelEl.textContent = visibleLabel + (f.required ? ' *' : '');
+    // P26-6 — append a small (i) tooltip icon when info_text is set,
+    // so the merchant can attach a hint to a normal input.
+    if (f.info_text && f.info_text.trim()) {
+      const infoBtn = document.createElement('button');
+      infoBtn.type = 'button';
+      infoBtn.className = 'rp-pz-info-icon';
+      infoBtn.textContent = 'i';
+      infoBtn.title = f.info_text;
+      infoBtn.setAttribute('aria-label', f.info_text);
+      infoBtn.style.marginLeft = '6px';
+      labelEl.appendChild(infoBtn);
+    }
     row.appendChild(labelEl);
 
     // P25-6 — cart label override. Defaults to label when null/empty.
