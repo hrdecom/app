@@ -833,6 +833,38 @@ async function mount({ el, productHandle }: MountSpec) {
         .rp-pz-row input[type=file] { font-family: inherit; font-size: 14px; }
         .rp-pz-error { font-family: inherit; color: #c0392b; font-size: 12px; margin-top: 6px; }
 
+        /* P26-14 — apple-style upload affordance for image fields.
+           Full-width dashed-border drop zone with centered label.
+           Hover lightens the background for a clear interaction cue.
+           Inherits the merchant's typography (font_color / font_size_px
+           / font_family) via inline style on the label element. */
+        .rp-pz-upload {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          padding: 16px 18px;
+          border: 1.5px dashed rgba(0,0,0,0.22);
+          border-radius: inherit;
+          background: rgba(0,0,0,0.015);
+          font-family: inherit;
+          font-size: 14px;
+          color: inherit;
+          text-align: center;
+          cursor: pointer;
+          transition: background-color .15s, border-color .15s;
+          box-sizing: border-box;
+          line-height: 1.3;
+        }
+        .rp-pz-upload:hover {
+          background: rgba(0,0,0,0.04);
+          border-color: rgba(0,0,0,0.45);
+        }
+        .rp-pz-upload-text {
+          word-break: break-word;
+          max-width: 100%;
+        }
+
         .rp-pz-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 5; transition: opacity .15s; }
         .rp-pz-overlay svg { width: 100%; height: 100%; display: block; }
 
@@ -1286,31 +1318,74 @@ async function mount({ el, productHandle }: MountSpec) {
       wrap.appendChild(count);
       row.appendChild(wrap);
     } else if (f.field_kind === 'image') {
+      // P26-14 — apple-style upload affordance: full-width
+      // dashed-border drop zone with centered label, click-anywhere
+      // opens the file picker, filename appears once uploaded. The
+      // merchant's typography fields (font_family / font_size_px /
+      // font_color) style the label so it can match the brand.
+      const dropZone = document.createElement('label');
+      dropZone.className = 'rp-pz-upload';
+      if (f.font_color) dropZone.style.color = f.font_color;
+      if (f.font_family) dropZone.style.fontFamily = f.font_family;
+      if (f.font_size_px) dropZone.style.fontSize = f.font_size_px + 'px';
+      const dropText = document.createElement('span');
+      dropText.className = 'rp-pz-upload-text';
+      dropText.textContent = f.placeholder || 'Upload your photo';
+      dropZone.appendChild(dropText);
+
       const file = document.createElement('input');
       file.type = 'file';
       file.accept = 'image/jpeg,image/png,image/webp';
+      file.style.display = 'none';
       file.addEventListener('change', async () => {
         const f0 = file.files?.[0];
         if (!f0) return;
-        const fd = new FormData();
-        fd.append('file', f0);
-        const r = await fetch(`${API_BASE}/api/personalizer/upload`, { method: 'POST', body: fd });
-        if (!r.ok) {
-          const err = row.querySelector<HTMLDivElement>('.rp-pz-error');
-          if (err) err.textContent = 'Upload failed';
-          return;
+        const prevText = dropText.textContent || '';
+        dropText.textContent = 'Uploading...';
+        const errEl = row.querySelector<HTMLDivElement>('.rp-pz-error');
+        if (errEl) errEl.textContent = '';
+        try {
+          const fd = new FormData();
+          fd.append('file', f0);
+          const r = await fetch(`${API_BASE}/api/personalizer/upload`, {
+            method: 'POST',
+            body: fd,
+          });
+          if (!r.ok) throw new Error('Upload HTTP ' + r.status);
+          const j: { url: string } = await r.json();
+          const fullUrl = j.url.startsWith('http') ? j.url : `${API_BASE}${j.url}`;
+          // P26-14 — REPLACE the default value in initialValues so
+          // the SVG overlay re-renders with the customer's photo
+          // (was a real bug — the rerender ran but used cached
+          // value because we only set it once at mount).
+          initialValues[String(f.id)] = fullUrl;
+          // Replace existing hidden mirror or create one. Avoid
+          // appending duplicates if the user uploads a second time.
+          const propName = `properties[${cartName}]`;
+          let hidden = row.querySelector<HTMLInputElement>(
+            `input[type=hidden][name="${propName.replace(/"/g, '\\"')}"]`,
+          );
+          if (!hidden) {
+            hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = propName;
+            row.appendChild(hidden);
+          }
+          hidden.value = fullUrl;
+          // Show filename so the customer knows the upload landed.
+          dropText.textContent = f0.name;
+          rerender();
+          // Also sync cart mirrors immediately (file dispatched no
+          // 'input' event on the personalizer wrapper, so the
+          // delegated input listener wouldn't fire).
+          syncCartMirrorsRef();
+        } catch (e: any) {
+          dropText.textContent = prevText || (f.placeholder || 'Upload your photo');
+          if (errEl) errEl.textContent = e?.message || 'Upload failed';
         }
-        const j: { url: string } = await r.json();
-        const fullUrl = j.url.startsWith('http') ? j.url : `${API_BASE}${j.url}`;
-        initialValues[String(f.id)] = fullUrl;
-        const hidden = document.createElement('input');
-        hidden.type = 'hidden';
-        hidden.name = `properties[${cartName}]`;
-        hidden.value = fullUrl;
-        row.appendChild(hidden);
-        rerender();
       });
-      row.appendChild(file);
+      dropZone.appendChild(file);
+      row.appendChild(dropZone);
       const err = document.createElement('div');
       err.className = 'rp-pz-error';
       row.appendChild(err);
