@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2, Rocket, ImageIcon, RotateCcw } from 'lucide-react';
+import { Loader2, Rocket, ImageIcon, RotateCcw, Globe } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/lib/auth';
 import { FieldList } from './FieldList';
 import { FieldConfigForm } from './FieldConfigForm';
 import { PersonalizerCanvas } from './PersonalizerCanvas';
+import { TranslationsDialog } from './TranslationsDialog';
 import {
   getTemplate, createTemplate, updateTemplate, createField, updateField, deleteField,
   listTemplateVariants, listFieldOverrides, upsertFieldOverride, deleteFieldOverride,
@@ -114,6 +116,10 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
   // and passed to FieldConfigForm so the birthstone field's
   // "Default selected month" dropdown shows the merchant's labels.
   const [birthstoneLibrary, setBirthstoneLibrary] = useState<BirthstoneOption[]>(() => parseBirthstones(null));
+  // P26-28 — translations dialog state.
+  const [translationsOpen, setTranslationsOpen] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   // P26-5 — undo / redo for canvas commits (drags, resizes, curve,
   // rotation). Each entry is a (before, after) pair tagged with the
@@ -527,11 +533,27 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
     <div className="flex flex-col h-full">
       <div className="border-b border-gray-200 px-4 py-2 flex items-center justify-between">
         <div className="text-sm font-medium">Personalizer · {tpl.status}</div>
-        <Button size="sm" onClick={handlePublish} disabled={saving}>
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Rocket className="h-3.5 w-3.5 mr-1" />}
-          Publish
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* P26-28 — Translations editor opens a modal dialog with
+              one tab per supported locale + Claude auto-translate. */}
+          <Button size="sm" variant="outline" onClick={() => setTranslationsOpen(true)}>
+            <Globe className="h-3.5 w-3.5 mr-1" />
+            Translations
+          </Button>
+          <Button size="sm" onClick={handlePublish} disabled={saving}>
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Rocket className="h-3.5 w-3.5 mr-1" />}
+            Publish
+          </Button>
+        </div>
       </div>
+      <TranslationsDialog
+        open={translationsOpen}
+        onClose={() => setTranslationsOpen(false)}
+        templateId={tpl.id}
+        fields={tpl.fields || []}
+        birthstoneLibrary={birthstoneLibrary}
+        isAdmin={isAdmin}
+      />
       <div className="flex flex-1 min-h-0">
         {/* P26-26 follow-up — Birthstones library is now GLOBAL,
             managed by admin in the Personalizer Settings page. The

@@ -113,6 +113,50 @@ function parseFontColorMapWidget(raw: string | null | undefined): Record<string,
 }
 
 /**
+ * P26-28 — detect the storefront locale so the API can return
+ * translated content. Returns a BCP-47 locale string (e.g. "es",
+ * "pt-BR") or null when the visitor is on the source language.
+ *
+ * Detection order (most specific first):
+ *   1. window.Shopify.locale — every modern theme sets this. Most
+ *      reliable across Shopify Markets / Shopify Translate & Adapt.
+ *   2. <html lang> — fallback for legacy themes; sometimes more
+ *      accurate than #1 if the theme overrides per page.
+ *   3. URL subdomain — heuristic for shops that map locales to
+ *      country subdomains (es.example.com, fr.example.com…).
+ *
+ * Empty string, "en", "en-*" all return null so the API serves the
+ * source strings without a translation overlay.
+ */
+function detectStorefrontLocale(): string | null {
+  const tryLoc = (raw: any): string | null => {
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    if (!trimmed || /^en($|-)/i.test(trimmed)) return null;
+    return trimmed;
+  };
+  try {
+    const w = window as any;
+    const fromShopify = tryLoc(w.Shopify && w.Shopify.locale);
+    if (fromShopify) return fromShopify;
+  } catch { /* */ }
+  try {
+    const fromLang = tryLoc(document.documentElement?.lang);
+    if (fromLang) return fromLang;
+  } catch { /* */ }
+  try {
+    const host = location.hostname || '';
+    const sub = host.split('.')[0];
+    // Only trust the subdomain when it's a known 2-letter code
+    // (avoids picking up "www" / "shop" / brand subdomains).
+    if (/^[a-z]{2}$/i.test(sub) && sub.toLowerCase() !== 'en') {
+      return sub.toLowerCase();
+    }
+  } catch { /* */ }
+  return null;
+}
+
+/**
  * P26-19 — escape user/admin strings before injecting them into HTML
  * (modal titles, button labels, hint text). Local helper so the widget
  * stays dependency-free.
@@ -1440,9 +1484,21 @@ async function mount({ el, productHandle }: MountSpec) {
   // variant's featured_image. Awaiting both is fine; the personalizer
   // template fetch is the slower of the two anyway.
   loadShopifyProduct(productHandle);
+  // P26-28 — detect storefront locale so the template payload arrives
+  // already translated. Source order:
+  //   1. window.Shopify.locale — set by every modern Shopify theme,
+  //      always reflects the visitor's market locale (es / fr / pt-BR…).
+  //   2. <html lang> — fallback for older themes that don't expose
+  //      Shopify globals; sometimes more accurate than #1.
+  //   3. URL subdomain (es.example.com) — last-resort heuristic.
+  // Empty / "en" / unsupported locale = source strings.
+  const locale = detectStorefrontLocale();
+  const url = locale
+    ? `${API_BASE}/api/personalizer/template/${encodeURIComponent(productHandle)}?locale=${encodeURIComponent(locale)}`
+    : `${API_BASE}/api/personalizer/template/${encodeURIComponent(productHandle)}`;
   let payload: any;
   try {
-    const res = await fetch(`${API_BASE}/api/personalizer/template/${encodeURIComponent(productHandle)}`);
+    const res = await fetch(url);
     if (!res.ok) return;
     payload = await res.json();
     if (!payload?.found) return;
