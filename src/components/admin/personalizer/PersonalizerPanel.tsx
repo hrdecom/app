@@ -207,9 +207,12 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
       default_value: null,
       required: 0,
       max_chars: 12,
-      font_family: 'Pinyon Script',
+      // P26-10 — Lato as default font (clean and very readable on
+      // jewelry photography); merchant can switch to script/serif
+      // in the dropdown.
+      font_family: 'Lato',
       font_size_px: 22,
-      font_color: '#FAEEDA',
+      font_color: '#030303',
       curve_mode: 'linear',
       position_x: 100, position_y: 100, width: 200, height: 40,
       layer_z: 10,

@@ -4,9 +4,23 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { listFonts, type PersonalizerField } from '@/lib/personalizer-api';
 
+// P26-10 — curated Google Fonts library. Lato is the default for
+// new fields (most readable on jewelry product photography). The
+// rest covers script (engraving / monogram), serif (luxury), and
+// sans (modern / minimal) styles. Storefront widget loads these
+// via a single Google Fonts CSS link injected at boot.
 const CURATED_FONTS = [
-  'Pinyon Script', 'Great Vibes', 'Cormorant Garamond',
-  'Playfair Display', 'Cinzel', 'Inter',
+  // Sans-serif (default + modern)
+  'Lato', 'Inter', 'Montserrat', 'Poppins', 'Raleway', 'Nunito', 'Quicksand',
+  'Work Sans', 'Open Sans', 'Source Sans 3',
+  // Serif (luxury / traditional)
+  'Playfair Display', 'Cormorant Garamond', 'Cinzel', 'EB Garamond',
+  'Libre Baskerville', 'Lora', 'Crimson Text', 'Merriweather',
+  // Script / handwritten (engraving)
+  'Pinyon Script', 'Great Vibes', 'Allura', 'Dancing Script', 'Sacramento',
+  'Parisienne', 'Tangerine', 'Pacifico', 'Satisfy', 'Yellowtail',
+  // Display (statement)
+  'Bebas Neue', 'Oswald', 'Abril Fatface', 'Comfortaa',
 ];
 const CURVES = ['linear', 'arc', 'circle'] as const;
 const MASKS = ['rect', 'circle', 'heart'] as const;

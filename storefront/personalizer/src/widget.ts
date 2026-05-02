@@ -601,6 +601,36 @@ interface MountSpec {
   productId: string;
 }
 
+/**
+ * P26-10 — Google Fonts library. Mirrors the curated set the admin
+ * dropdown offers so any field that picks one of these will render
+ * with the right webfont on the storefront. Loaded via a single
+ * stylesheet link so we benefit from Google's CDN cache. We only
+ * inject the link once per page even with multiple personalizer
+ * mounts. Lato is the default font for new fields; the rest cover
+ * script (engraving), serif (luxury), and display (statement) needs.
+ */
+const GOOGLE_FONTS_FAMILIES = [
+  'Lato', 'Inter', 'Montserrat', 'Poppins', 'Raleway', 'Nunito', 'Quicksand',
+  'Work Sans', 'Open Sans', 'Source Sans 3',
+  'Playfair Display', 'Cormorant Garamond', 'Cinzel', 'EB Garamond',
+  'Libre Baskerville', 'Lora', 'Crimson Text', 'Merriweather',
+  'Pinyon Script', 'Great Vibes', 'Allura', 'Dancing Script', 'Sacramento',
+  'Parisienne', 'Tangerine', 'Pacifico', 'Satisfy', 'Yellowtail',
+  'Bebas Neue', 'Oswald', 'Abril Fatface', 'Comfortaa',
+];
+function injectGoogleFontsLink(): void {
+  if (document.getElementById('rp-google-fonts')) return;
+  const families = GOOGLE_FONTS_FAMILIES
+    .map((f) => 'family=' + encodeURIComponent(f).replace(/%20/g, '+'))
+    .join('&');
+  const link = document.createElement('link');
+  link.id = 'rp-google-fonts';
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
+  document.head.appendChild(link);
+}
+
 async function injectCustomFonts(): Promise<void> {
   try {
     const res = await fetch(`${API_BASE}/api/personalizer/fonts/active`);
@@ -659,6 +689,10 @@ async function init() {
   try { console.info('[rp-personalizer] V6 — slide-id matching'); } catch { /* */ }
   // Inject custom @font-face rules before mounting widgets so fonts are
   // available immediately for SVG text rendering.
+  // P26-10 — load Google Fonts before mounting widgets so SVG text
+  // hits the right webfont on first paint (display=swap means we
+  // also degrade gracefully if the user is offline).
+  injectGoogleFontsLink();
   await injectCustomFonts();
 
   const mounts: MountSpec[] = [];
