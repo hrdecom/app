@@ -42,7 +42,17 @@ async function handlePatch(context) {
   let body;
   try { body = await request.json(); } catch { return errorJson('Invalid JSON', 400); }
 
-  const allowed = ['shopify_product_handle', 'base_image_url', 'canvas_width', 'canvas_height', 'status'];
+  const allowed = [
+    'shopify_product_handle', 'base_image_url', 'canvas_width', 'canvas_height',
+    'status', 'base_image_layer_z',
+    // P25-V3 — JSON map { variant_signature: image_url } for per-variant
+    // base image swaps. NULL/empty = no override (use template base_image_url).
+    'variant_image_overrides_json',
+    // P26-26 — JSON array of 12 birthstone entries
+    // ([{ month_index, label, image_url }, ...]) shared by every
+    // birthstone field on this template. NULL = no library yet.
+    'birthstones_json',
+  ];
   const sets = [];
   const binds = [];
   for (const k of allowed) {
