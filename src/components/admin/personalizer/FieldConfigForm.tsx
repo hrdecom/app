@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -154,23 +154,16 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
 
           <Section title="Typography">
             <Row label="Font family">
-              {/* P26-11 — searchable font picker. The plain Select had
-                  no filter, which is awful with 30+ Google Fonts on
-                  the list. A native HTML <datalist> gives the user a
-                  search-as-you-type dropdown without a heavy combobox
-                  dependency. The text input value is the font_family;
-                  any string is accepted (so the merchant can type a
-                  custom font they uploaded). */}
-              <Input
-                list="rp-font-family-list"
-                placeholder="Search font (e.g. Lato, Pinyon Script)..."
+              {/* P26-13 — proper combobox: full list visible on open
+                  with a search field at the top. Built inline because
+                  shadcn doesn't ship Command/Popover here. The trigger
+                  shows the current selection in its own typeface so
+                  the merchant gets a live preview. */}
+              <FontPicker
                 value={draft.font_family || ''}
-                onChange={(e) => patch('font_family', e.target.value)}
-                style={{ fontFamily: draft.font_family || 'inherit' }}
+                options={fontOptions}
+                onChange={(v) => patch('font_family', v)}
               />
-              <datalist id="rp-font-family-list">
-                {fontOptions.map((f) => <option key={f} value={f} />)}
-              </datalist>
             </Row>
             <Row label="Max font size (px)">
               <Input type="number" value={draft.font_size_px || ''} onChange={(e) => patch('font_size_px', e.target.value ? parseInt(e.target.value) : null)} />
@@ -447,6 +440,83 @@ function Section({
         </span>
       </button>
       {open && <div className="space-y-3 px-3 py-3 bg-white">{children}</div>}
+    </div>
+  );
+}
+
+// P26-13 — searchable font picker. Click the trigger to open a panel
+// with the FULL list visible (so the merchant can browse) plus a
+// search field at the top to narrow it down. Each option renders in
+// its own typeface so the merchant can pick by visual appearance.
+function FontPicker({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+  const filtered = query.trim()
+    ? options.filter((f) => f.toLowerCase().includes(query.toLowerCase()))
+    : options;
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-50 text-sm transition-colors"
+        style={{ fontFamily: value || 'inherit' }}
+      >
+        <span className="truncate">{value || 'Pick a font'}</span>
+        <span className="text-gray-400 text-xs ml-2">{open ? 'v' : '>'}</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg overflow-hidden">
+          <input
+            type="text"
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search font..."
+            className="w-full px-3 py-2 text-sm border-b border-gray-200 outline-none"
+          />
+          <div className="max-h-72 overflow-y-auto">
+            {filtered.length === 0 && (
+              <div className="px-3 py-2 text-xs text-gray-400">No fonts match "{query}"</div>
+            )}
+            {filtered.map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => {
+                  onChange(f);
+                  setOpen(false);
+                  setQuery('');
+                }}
+                className={[
+                  'w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors',
+                  f === value ? 'bg-blue-50 text-blue-700' : '',
+                ].join(' ')}
+                style={{ fontFamily: f }}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
