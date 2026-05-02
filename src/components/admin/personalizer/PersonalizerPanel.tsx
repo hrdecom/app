@@ -520,7 +520,11 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
           <div className="p-2">
             <BirthstonesLibraryPanel
               birthstones={parseBirthstones(tpl.birthstones_json)}
-              autoOpen={(tpl.fields || []).some((f) => f.field_kind === 'birthstone')}
+              // P26-26 — always start expanded so the merchant
+              // discovers the panel even before adding their first
+              // birthstone field. Once the library is fully
+              // populated they can collapse it manually.
+              autoOpen={true}
               onChange={async (next) => {
                 const json = JSON.stringify(next);
                 const prev = tpl.birthstones_json;
