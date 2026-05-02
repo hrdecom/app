@@ -29,6 +29,10 @@ export interface PersonalizerSettings {
    * "color" and should be excluded from the variant_signature. NULL =
    * use the server-side defaults (Color, Couleur, Métal, Metal, ...). */
   color_option_names_json?: string | null;
+  /** P26-26 — global birthstones library (12 PNG icons shared by every
+   * birthstone field on every product). JSON-encoded BirthstoneOption[]
+   * (length 12). Admin-only PATCH. NULL = no library yet. */
+  birthstones_json?: string | null;
   updated_at?: string;
 }
 
@@ -64,8 +68,12 @@ export interface PersonalizerTemplate {
    * (e.g. "1 Heart" → 1-heart.png, "2 Hearts" → 2-hearts.png). NULL =
    * always use base_image_url. */
   variant_image_overrides_json?: string | null;
-  /** P26-26 — JSON-encoded BirthstoneOption[] (length 12). Shared by
-   * every birthstone field on this template. NULL = no library yet. */
+  /** P26-26 — JSON-encoded BirthstoneOption[] (length 12). LEGACY —
+   * the live storefront API now injects the GLOBAL library
+   * (personalizer_settings.birthstones_json) into this field at read
+   * time. The per-template column is kept in the database for
+   * backward compatibility but is no longer written by the admin.
+   * Treat this as read-only. */
   birthstones_json?: string | null;
   status: 'draft' | 'published' | 'archived';
   published_at: string | null;

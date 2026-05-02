@@ -226,6 +226,17 @@ function migrateOne(path) {
         'personalizer_settings.color_option_names_json');
   }
 
+  console.log('  migration 0152');
+  // P26-26 follow-up — birthstones library moved from per-template
+  // to per-shop (global). Admin uploads the 12 PNG icons in
+  // Personalizer Settings; the storefront API now joins them into
+  // the template payload. The per-template column stays in place
+  // for backward compatibility (kept by 0151).
+  if (hasTable('personalizer_settings') && !hasColumn('personalizer_settings', 'birthstones_json')) {
+    run(`ALTER TABLE personalizer_settings ADD COLUMN birthstones_json TEXT`,
+        'personalizer_settings.birthstones_json');
+  }
+
   console.log('  migration 0151');
   // P26-26 — birthstone field type. Adds a JSON library column at
   // template level (12 PNGs shared by all birthstone fields on a

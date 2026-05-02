@@ -13,8 +13,6 @@ import {
   type ShopifyVariantInfo, type VariantOverride,
   type BirthstoneOption,
 } from '@/lib/personalizer-api';
-import { BirthstonesLibraryPanel } from './BirthstonesLibraryPanel';
-
 // P26-26 — default month names used when bootstrapping a fresh
 // birthstones library OR when the merchant left a label blank.
 const DEFAULT_MONTH_LABELS = [
@@ -111,6 +109,11 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
   //   base image when the admin picks a non-default variant.
   const [shopifyVariants, setShopifyVariants] = useState<ShopifyVariantInfo[]>([]);
   const [colorOptionNames, setColorOptionNames] = useState<string[]>(DEFAULT_COLOR_OPTION_NAMES);
+  // P26-26 follow-up — global birthstones library (admin-managed in
+  // Personalizer Settings). Loaded once on mount via getSettings()
+  // and passed to FieldConfigForm so the birthstone field's
+  // "Default selected month" dropdown shows the merchant's labels.
+  const [birthstoneLibrary, setBirthstoneLibrary] = useState<BirthstoneOption[]>(() => parseBirthstones(null));
 
   // P26-5 — undo / redo for canvas commits (drags, resizes, curve,
   // rotation). Each entry is a (before, after) pair tagged with the
@@ -169,6 +172,11 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
           }
         } catch { /* keep defaults */ }
       }
+      // P26-26 follow-up — load global birthstones library so the
+      // birthstone field's default-month dropdown can show the
+      // merchant's custom month labels (and "(no icon yet)" hints
+      // for entries the admin hasn't uploaded yet).
+      setBirthstoneLibrary(parseBirthstones(settings?.birthstones_json ?? null));
       setShopifyVariants(variantsResp.items || []);
       const map: Record<number, Record<string, VariantOverride>> = {};
       for (const [fid, list] of fieldOverridesResults) {
@@ -511,34 +519,13 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
         </Button>
       </div>
       <div className="flex flex-1 min-h-0">
-        <div className="flex flex-col bg-white border-r border-gray-200 min-w-[260px] max-w-[320px] overflow-y-auto">
-          {/* P26-26 — Birthstones library: 12 PNG icons shared by every
-              birthstone field on this template. Auto-expands when at
-              least one birthstone field exists so the merchant doesn't
-              hunt for it. Sits ABOVE the field list because it's a
-              prerequisite for any birthstone layer to display. */}
-          <div className="p-2">
-            <BirthstonesLibraryPanel
-              birthstones={parseBirthstones(tpl.birthstones_json)}
-              // P26-26 — always start expanded so the merchant
-              // discovers the panel even before adding their first
-              // birthstone field. Once the library is fully
-              // populated they can collapse it manually.
-              autoOpen={true}
-              onChange={async (next) => {
-                const json = JSON.stringify(next);
-                const prev = tpl.birthstones_json;
-                setTpl((t) => t ? { ...t, birthstones_json: json } : t);
-                try {
-                  await updateTemplate(tpl.id, { birthstones_json: json });
-                } catch (e: any) {
-                  setTpl((t) => t ? { ...t, birthstones_json: prev } : t);
-                  toast({ title: 'Failed to save birthstones', description: e?.message, variant: 'destructive' });
-                }
-              }}
-            />
-          </div>
-          <div className="flex-1 [&>div]:border-r-0 [&>div]:min-w-0">
+        {/* P26-26 follow-up — Birthstones library is now GLOBAL,
+            managed by admin in the Personalizer Settings page. The
+            integrator only sees the field list + canvas here. The
+            library is fetched into birthstoneLibrary state below
+            and passed down to FieldConfigForm so the "Default
+            selected month" dropdown still shows the merchant's
+            custom labels. */}
         <FieldList
           fields={baseFields}
           selectedId={selectedFieldId}
@@ -655,8 +642,6 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
             }
           }}
         />
-          </div>
-        </div>
         <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3">
           {/* P25-V3 — variant picker. Always shows "Default" + one pill
               per non-color signature. Clicking a pill swaps the canvas
@@ -825,10 +810,12 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
               }
               return out;
             })()}
-            // P26-26 — birthstones library, parsed from the template's
-            // birthstones_json. Drives the "Default selected month"
-            // dropdown for birthstone fields.
-            birthstones={parseBirthstones(tpl.birthstones_json)}
+            // P26-26 follow-up — birthstones library is GLOBAL
+            // (admin-managed in Personalizer Settings). Loaded once
+            // on mount via getSettings() into birthstoneLibrary
+            // state and passed to the field form so the merchant's
+            // labels / "no icon yet" hints are visible.
+            birthstones={birthstoneLibrary}
           />
         )}
       </div>
