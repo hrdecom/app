@@ -52,10 +52,50 @@ async function handlePatch(context) {
   }
   if (sets.length === 0) return errorJson('No editable fields supplied', 400);
   sets.push(`updated_at = datetime('now')`);
-  await context.env.DB
-    .prepare(`UPDATE personalizer_settings SET ${sets.join(', ')} WHERE id = 1`)
-    .bind(...binds)
-    .run();
+  // P26-26 — defensively self-heal the schema: if the merchant's
+  // production D1 instance has not had `wrangler d1 migrations apply`
+  // run for migration 0152, the birthstones_json column is missing
+  // and the UPDATE returns SQLITE_ERROR ("no such column"). We catch
+  // that, run the ALTER TABLE inline, and retry once. Idempotent —
+  // subsequent calls go straight through. Same logic applies to any
+  // future column the API references before its migration ships.
+  async function tryUpdate() {
+    await context.env.DB
+      .prepare(`UPDATE personalizer_settings SET ${sets.join(', ')} WHERE id = 1`)
+      .bind(...binds)
+      .run();
+  }
+  try {
+    await tryUpdate();
+  } catch (err) {
+    const msg = String(err?.message || err);
+    const m = msg.match(/no such column:\s*([a-zA-Z0-9_]+)/i);
+    if (m) {
+      const col = m[1];
+      // Allowlist of columns we are willing to add on the fly.
+      const knownCols = {
+        birthstones_json: 'TEXT',
+        widget_padding_top: 'INTEGER NOT NULL DEFAULT 10',
+        widget_padding_bottom: 'INTEGER NOT NULL DEFAULT 10',
+        color_option_names_json: 'TEXT',
+      };
+      if (knownCols[col]) {
+        try {
+          await context.env.DB
+            .prepare(`ALTER TABLE personalizer_settings ADD COLUMN ${col} ${knownCols[col]}`)
+            .run();
+          await tryUpdate();
+        } catch (alterErr) {
+          console.error('Self-heal ALTER failed:', alterErr);
+          throw err; // surface the original error
+        }
+      } else {
+        throw err;
+      }
+    } else {
+      throw err;
+    }
+  }
   const row = await context.env.DB.prepare(`SELECT * FROM personalizer_settings WHERE id = 1`).first();
   return json(row);
 }

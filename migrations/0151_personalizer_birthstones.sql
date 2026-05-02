@@ -26,10 +26,12 @@ ALTER TABLE customization_templates ADD COLUMN birthstones_json TEXT;
 
 -- Step 2: relax the field_kind CHECK constraint so 'birthstone' is
 -- accepted. SQLite doesn't support ALTER on a CHECK directly, so we
--- rebuild the table preserving every column + index. Wrapped in a
--- transaction so a partial migration leaves the DB consistent.
-
-BEGIN TRANSACTION;
+-- rebuild the table preserving every column + index.
+--
+-- NOTE: no BEGIN TRANSACTION / COMMIT here — `wrangler d1 migrations
+-- apply` runs each migration inside its own implicit transaction, and
+-- nesting them causes the whole migration to fail silently on
+-- Cloudflare D1.
 
 CREATE TABLE customization_fields_new (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,5 +99,3 @@ DROP TABLE customization_fields;
 ALTER TABLE customization_fields_new RENAME TO customization_fields;
 
 CREATE INDEX IF NOT EXISTS idx_personalizer_fields_template ON customization_fields(template_id, sort_order);
-
-COMMIT;
