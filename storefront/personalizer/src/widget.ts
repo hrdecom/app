@@ -895,7 +895,15 @@ async function mount({ el, productHandle }: MountSpec) {
           top: 1px;
         }
 
-        .rp-pz-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 5; transition: opacity .15s; }
+        /* P26-18 — TWO overlay layers, one BEHIND the product <img>
+           and one in FRONT, so a customer photo placed at layer_z <
+           base_image_layer_z shows through transparent regions of
+           the PNG (heart-locket, ring window, etc). The product
+           IMG itself gets z-index:1 (set inline in JS) to sit
+           between them. */
+        .rp-pz-overlay { position: absolute; inset: 0; pointer-events: none; transition: opacity .15s; }
+        .rp-pz-overlay--below { z-index: 0; }
+        .rp-pz-overlay--above { z-index: 5; }
         .rp-pz-overlay svg { width: 100%; height: 100%; display: block; }
 
         .rp-pz-info {
@@ -1050,31 +1058,64 @@ async function mount({ el, productHandle }: MountSpec) {
     if (!parent) return;
     // P25-V5.6 — Dawn-class themes keep ALL slides in the DOM and just
     // mark one `is-active`. Each time the active slide changes,
-    // findProductImage() picks up the new IMG and we'd append a fresh
-    // overlay to its parent — leaving the OLD overlay stranded on the
-    // previous slide's parent. Result: 2-3 stale overlays accumulating
+    // findProductImage() picks up the new IMG and we'd append fresh
+    // overlays to its parent — leaving the OLD overlays stranded on
+    // the previous slide's parent. Result: stale overlays accumulating
     // on every gallery navigation. Sweep them up here so EXACTLY one
-    // overlay exists at any time, attached to whatever the visible
-    // active slide is. Idempotent — no-op once we're in steady state.
+    // pair (below + above) exists at any time, attached to whatever
+    // the visible active slide is. Idempotent — no-op once we're in
+    // steady state.
     document.querySelectorAll('[data-rp-overlay]').forEach((o) => {
       if (o.parentElement && o.parentElement !== parent) o.remove();
+    });
+    // P26-18 — clean up legacy single-overlay nodes (data-rp-overlay="")
+    // shipped by older bundle versions. They have neither "below" nor
+    // "above" as the attribute value and would otherwise sit on top of
+    // the new pair, painting the full field set above the IMG and
+    // hiding fields routed to the below-overlay.
+    parent.querySelectorAll(':scope > [data-rp-overlay]').forEach((o) => {
+      const v = o.getAttribute('data-rp-overlay');
+      if (v !== 'below' && v !== 'above') o.remove();
     });
     if (getComputedStyle(parent).position === 'static') {
       parent.style.position = 'relative';
     }
-    let overlay = parent.querySelector<HTMLDivElement>(':scope > [data-rp-overlay]');
-    if (!overlay) {
-      overlay = document.createElement('div');
-      overlay.setAttribute('data-rp-overlay', '');
-      overlay.className = 'rp-pz-overlay';
-      parent.appendChild(overlay);
+    // P26-18 — sandwich the IMG between two overlay layers via z-index.
+    // Without this, the product <img> stays in the static stacking flow
+    // (z-index: auto) and the below-overlay (z-index: 0) still paints
+    // ABOVE it. Setting position+z-index on the IMG creates a stacking
+    // context at z=1, so z=0 is BEHIND and z=5 is IN FRONT.
+    if (getComputedStyle(img).position === 'static') {
+      img.style.position = 'relative';
     }
-    // P25-V6 — image-tied overlay. Texts only show when Dawn's active
+    if (!img.style.zIndex) img.style.zIndex = '1';
+    // P26-18 — two overlays. "below" sits behind the IMG (z-index:0)
+    // for fields with layer_z < base_image_layer_z; "above" sits in
+    // front (z-index:5) for everything else. The below overlay gets
+    // inserted at the start of the parent so DOM order also matches
+    // paint order (defense in depth — z-index is the source of truth).
+    let belowOverlay = parent.querySelector<HTMLDivElement>(':scope > [data-rp-overlay="below"]');
+    if (!belowOverlay) {
+      belowOverlay = document.createElement('div');
+      belowOverlay.setAttribute('data-rp-overlay', 'below');
+      belowOverlay.className = 'rp-pz-overlay rp-pz-overlay--below';
+      parent.insertBefore(belowOverlay, parent.firstChild);
+    }
+    let aboveOverlay = parent.querySelector<HTMLDivElement>(':scope > [data-rp-overlay="above"]');
+    if (!aboveOverlay) {
+      aboveOverlay = document.createElement('div');
+      aboveOverlay.setAttribute('data-rp-overlay', 'above');
+      aboveOverlay.className = 'rp-pz-overlay rp-pz-overlay--above';
+      parent.appendChild(aboveOverlay);
+    }
+    // P25-V6 — image-tied overlays. Texts only show when Dawn's active
     // gallery slide IS the variant's featured slide (compared by
     // media-id, not URL). Fails-open until /products/<handle>.js
     // lands so first paint isn't blank. The 500ms rerender loop +
     // variant watcher drive transitions; no extra event hooks needed.
-    overlay.style.opacity = isVariantSlideActive(productHandle) ? '1' : '0';
+    const overlayOpacity = isVariantSlideActive(productHandle) ? '1' : '0';
+    belowOverlay.style.opacity = overlayOpacity;
+    aboveOverlay.style.opacity = overlayOpacity;
     // P25-6 — only paint fields whose row is currently visible. The
     // variant watcher toggles row.style.display; we mirror that into
     // the SVG so a hidden "Pendant 2" doesn't show on the preview
@@ -1095,11 +1136,35 @@ async function mount({ el, productHandle }: MountSpec) {
       if (row && row.style.display === 'none') continue;
       visibleFields.push(eff.field);
     }
-    // Render WITHOUT the base image — the storefront's <img> is the
-    // base. We just paint text + image-field overlays on top.
-    overlay.innerHTML = renderPreviewSvg({
+    // P26-18 — split fields by layer_z relative to base_image_layer_z.
+    // Below = renders behind the storefront <img> (only visible through
+    // transparent regions of the PNG, e.g. inside a heart-locket
+    // cutout). Above = renders on top of the <img> (the historical
+    // default for engraved text and overlays). Mirrors the admin-side
+    // renderer's `fz < baseZ` / `fz >= baseZ` split in
+    // src/lib/personalizer-render.ts.
+    const baseZ = template.base_image_layer_z ?? 5;
+    const belowFields: StorefrontField[] = [];
+    const aboveFields: StorefrontField[] = [];
+    for (const f of visibleFields) {
+      const fz = f.layer_z ?? 10;
+      if (fz < baseZ) belowFields.push(f);
+      else aboveFields.push(f);
+    }
+    // Render WITHOUT the base image in either overlay — the storefront's
+    // <img> IS the base, sitting between the two SVG layers via the
+    // z-index sandwich set up above. The renderer's own image-insertion
+    // logic (renderPreviewSvg in personalizer-render.ts) is therefore a
+    // no-op here because base_image_url is null.
+    belowOverlay.innerHTML = renderPreviewSvg({
       template: { ...template, base_image_url: null },
-      fields: visibleFields,
+      fields: belowFields,
+      values: initialValues,
+      currentColorValue: activeColorValue,
+    });
+    aboveOverlay.innerHTML = renderPreviewSvg({
+      template: { ...template, base_image_url: null },
+      fields: aboveFields,
       values: initialValues,
       // P25-V4 — drives per-color font_color_by_value_json lookups
       // inside renderTextField. effectiveField() also pre-applies
