@@ -894,15 +894,26 @@ async function mount({ el, productHandle }: MountSpec) {
     if (isVariantSlideActive(handle)) return;
     const mediaId = getActiveVariantMediaId(handle);
     if (!mediaId) return;
-    // Find the variant's thumbnail button.
-    const sel = [
+    // P25-V6.5 — Iterate selectors INDIVIDUALLY in priority order.
+    // V6.4's comma-joined querySelector returned the first match in
+    // DOCUMENT order (the parent <li>) instead of the BUTTON we
+    // wanted, because the <li> comes before its children in the tree.
+    // Dawn's slider click handler is on the <button>; clicking the
+    // <li> is a no-op. Loop guarantees we hit the button first.
+    const selectors = [
       `[data-target$="-${mediaId}"] button`,
+      `[data-thumbnail-id="${mediaId}"] button`,
+      `[data-image-id="${mediaId}"] button`,
+      `button[data-id="${mediaId}"]`,
       `[data-target$="-${mediaId}"]`,
       `[data-thumbnail-id="${mediaId}"]`,
       `[data-image-id="${mediaId}"]`,
-      `button[data-id="${mediaId}"]`,
-    ].join(',');
-    const thumb = document.querySelector<HTMLElement>(sel);
+    ];
+    let thumb: HTMLElement | null = null;
+    for (const sel of selectors) {
+      thumb = document.querySelector<HTMLElement>(sel);
+      if (thumb) break;
+    }
     if (!thumb) return;
     // P25-V6.2 — Dawn's slider-component listens for pointerdown +
     // pointerup (not just click). A bare `.click()` synthetic event
