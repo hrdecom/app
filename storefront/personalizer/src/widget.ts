@@ -2425,16 +2425,26 @@ async function mount({ el, productHandle }: MountSpec) {
         hidden.value = url;
       }
       function computeOutputDims(): { w: number; h: number } {
-        // Field design dims define the aspect ratio. The renderer
-        // displays the image at <image width=f.width height=f.height>
-        // inside a 1080-px design canvas, then scales down to the
-        // storefront's product image width (typically ~600 css px),
-        // then up by devicePixelRatio (~2-3 on phones). We aim for
-        // ~4× the design dim, capped between 600 and 1800 px on the
-        // longer side, so detail looks crisp on retina without
-        // generating multi-megabyte JPEGs.
-        const fw = Math.max(1, f.width || 1);
-        const fh = Math.max(1, f.height || 1);
+        // P26-23 — derive output dims from the EFFECTIVE field
+        // (variant override applied), NOT the base field, so the
+        // saved JPEG aspect always matches what the storefront
+        // renders. Previously this used f.width / f.height (base),
+        // which mismatched fieldRectForCropper() when the customer
+        // had a variant override changing the photo box size — the
+        // canvas drawImage call then stretched the output and the
+        // storefront slice-mode crop kicked in, making the photo
+        // look "deformed" inside the locket cutout.
+        //
+        // The renderer displays the image at <image width=eff.width
+        // height=eff.height> inside a 1080-px design canvas, then
+        // scales down to the storefront's product image width
+        // (typically ~600 css px), then up by devicePixelRatio (~2-3
+        // on phones). We aim for ~4× the design dim, capped between
+        // 600 and 1800 px on the longer side, so detail looks crisp
+        // on retina without generating multi-megabyte JPEGs.
+        const rect = fieldRectForCropper();
+        const fw = Math.max(1, rect.w || 1);
+        const fh = Math.max(1, rect.h || 1);
         const longer = Math.max(fw, fh);
         const targetLonger = Math.min(1800, Math.max(600, longer * 4));
         const k = targetLonger / longer;
