@@ -879,13 +879,18 @@ async function mount({ el, productHandle }: MountSpec) {
    *   • document focus stays on the input → no iOS keyboard dismiss/zoom
    *   • Dawn's slider scrolls horizontally only → no page viewport jump
    */
-  // P25-V6.3 — productHandle is passed EXPLICITLY (no closure capture)
-  // so Vite's minifier can't accidentally resolve it to a different
-  // outer-scope identifier when it hoists this function out of mount's
-  // body. V6.2's `y` was being captured from module scope (init's
-  // minified name) instead of mount's productHandle param, so the
-  // function silently early-returned every call.
-  function ensureVariantImageVisible(handle: string) {
+  // P25-V6.4 — read productHandle from DOM, not closure. V6.3 passed
+  // it explicitly but Vite's minifier hoisted the input arrow out of
+  // mount and the captured `y` resolved to the init function instead
+  // of mount's productHandle. Verified live: V was called but s(t)
+  // returned null because t was the init function, not the handle
+  // string. Reading from `[data-product-handle]` defeats every
+  // closure-shadowing class of bug because there's no closure to lose.
+  function ensureVariantImageVisible(_unused?: string) {
+    const handle =
+      document.querySelector<HTMLElement>('#rp-personalizer, [data-rp-personalizer]')
+        ?.getAttribute('data-product-handle') || '';
+    if (!handle) return;
     if (isVariantSlideActive(handle)) return;
     const mediaId = getActiveVariantMediaId(handle);
     if (!mediaId) return;
