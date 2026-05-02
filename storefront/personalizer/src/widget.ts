@@ -124,36 +124,7 @@ function rpEscapeHtml(s: string): string {
 }
 
 /**
- * P26-21 — load the heic2any browser library on demand. HEIC/HEIF
- * files come straight off iPhones and Android phones with HEIC
- * support; Chrome desktop and most other browsers cannot decode
- * them natively, so the storefront's <img> tag fires onerror and
- * the cropper crashes. We dynamically inject heic2any only when a
- * HEIC file is detected, then convert it to a JPEG Blob for the
- * rest of the pipeline. Cached on window so repeated uploads in
- * the same session reuse one fetch.
- */
-function loadHeic2any(): Promise<any> {
-  const w = window as any;
-  if (w.heic2any) return Promise.resolve(w.heic2any);
-  if (w.__rpHeic2anyLoading) return w.__rpHeic2anyLoading;
-  w.__rpHeic2anyLoading = new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
-    s.async = true;
-    s.crossOrigin = 'anonymous';
-    s.onload = () => {
-      if (w.heic2any) res(w.heic2any);
-      else rej(new Error('heic2any did not register on window'));
-    };
-    s.onerror = () => rej(new Error('Failed to load heic2any from CDN'));
-    document.head.appendChild(s);
-  });
-  return w.__rpHeic2anyLoading;
-}
-
-/**
- * P26-21 — return TRUE for HEIC/HEIF files. Detected by either MIME
+ * P26-22 — return TRUE for HEIC/HEIF files. Detected by either MIME
  * (image/heic, image/heif) OR file extension because mobile browsers
  * sometimes hand HEIC over with an empty / generic MIME type.
  */
@@ -164,25 +135,115 @@ function isHeicFile(file: File): boolean {
 }
 
 /**
- * P26-21 — convert a HEIC File to a JPEG File. No-op for non-HEIC
- * inputs. Throws if the browser environment can't load heic2any
- * (e.g. CSP blocks the CDN); the caller catches and falls back to
- * uploading the original (which won't render in the cropper but at
- * least lands in R2).
+ * P26-22 — load a HEIC→JPEG decoder on demand. We try TWO libraries
+ * in order:
+ *
+ *   1. heic-to (uses libheif-js v1.18+; supports the modern iPhone
+ *      HEIC variants that the legacy library can't parse). Loaded
+ *      via esm.sh through a dynamic import that we route through
+ *      Function() so Vite doesn't try to bundle / rewrite the URL.
+ *   2. heic2any (legacy UMD bundle, ~2020-vintage libheif). Loaded
+ *      via a plain script tag. Kept as a fallback because esm.sh
+ *      can be blocked by some merchant CSP setups.
+ *
+ * Cached on window so repeated uploads in the same session reuse
+ * one fetch. The returned function takes a File / Blob and returns
+ * a JPEG Blob, throwing if it cannot decode the input.
+ */
+function loadHeicConverter(): Promise<(input: Blob) => Promise<Blob>> {
+  const w = window as any;
+  if (w.__rpHeicConvert) return Promise.resolve(w.__rpHeicConvert);
+  if (w.__rpHeicLoading) return w.__rpHeicLoading;
+  w.__rpHeicLoading = (async () => {
+    // ---- Path 1: heic-to via esm.sh dynamic import ----
+    try {
+      // new Function() escape so Vite leaves the import call alone
+      // (otherwise Vite tries to resolve esm.sh at build time).
+      const dynImport = new Function('u', 'return import(u)') as (u: string) => Promise<any>;
+      const mod = await dynImport('https://esm.sh/heic-to@1.1.13');
+      const heicTo: any = mod.heicTo || (mod.default && mod.default.heicTo) || mod.default;
+      if (typeof heicTo === 'function') {
+        const convert = async (input: Blob): Promise<Blob> => {
+          return await heicTo({ blob: input, type: 'image/jpeg', quality: 0.92 });
+        };
+        // Smoke-test: heic-to lazy-loads its WASM on first call, and
+        // some CSPs block the WASM fetch. Defer the smoke-test to
+        // first real call — the surrounding try/catch in
+        // convertHeicIfNeeded will trigger the legacy fallback if
+        // it fails at runtime.
+        w.__rpHeicConvert = convert;
+        return convert;
+      }
+    } catch (err) {
+      try { console.warn('[rp] heic-to load failed, falling back to heic2any:', err); } catch { /* */ }
+    }
+    // ---- Path 2: heic2any UMD fallback ----
+    await new Promise<void>((res, rej) => {
+      if (w.heic2any) return res();
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+      s.async = true;
+      s.crossOrigin = 'anonymous';
+      s.onload = () => (w.heic2any ? res() : rej(new Error('heic2any did not register')));
+      s.onerror = () => rej(new Error('Failed to load HEIC decoder'));
+      document.head.appendChild(s);
+    });
+    const convertLegacy = async (input: Blob): Promise<Blob> => {
+      const out = await w.heic2any({ blob: input, toType: 'image/jpeg', quality: 0.92 });
+      // heic2any returns Blob OR Blob[] (multi-page HEIC).
+      return (Array.isArray(out) ? out[0] : out) as Blob;
+    };
+    w.__rpHeicConvert = convertLegacy;
+    return convertLegacy;
+  })();
+  return w.__rpHeicLoading;
+}
+
+/**
+ * P26-22 — convert a HEIC File to a JPEG File. No-op for non-HEIC
+ * inputs. Tries the modern decoder first, falls back to the legacy
+ * one if the modern one's WASM call rejects at runtime (e.g. CSP
+ * blocks the WASM blob). Throws only if BOTH paths fail; the caller
+ * surfaces a friendly "please upload JPG / PNG" error in that case.
  */
 async function convertHeicIfNeeded(file: File): Promise<File> {
   if (!isHeicFile(file)) return file;
-  const heic2any = await loadHeic2any();
-  const out = await heic2any({
-    blob: file,
-    toType: 'image/jpeg',
-    quality: 0.92,
-  });
-  // heic2any returns Blob OR Blob[] (multi-page HEIC files give an
-  // array of one frame per page; we only ever want the first).
-  const jpegBlob = (Array.isArray(out) ? out[0] : out) as Blob;
+  const w = window as any;
+  let convert = await loadHeicConverter();
+  let blob: Blob;
+  try {
+    blob = await convert(file);
+  } catch (err) {
+    // Modern decoder rejected at runtime. Force the legacy path on
+    // the SECOND attempt so a transient WASM hiccup doesn't doom
+    // the upload.
+    try { console.warn('[rp] modern HEIC decoder failed, retrying with legacy:', err); } catch { /* */ }
+    delete w.__rpHeicConvert;
+    delete w.__rpHeicLoading;
+    delete w.heic2any; // force fresh load
+    // Skip path 1 by pre-flagging:
+    w.__rpHeicLoading = (async () => {
+      await new Promise<void>((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        s.onload = () => (w.heic2any ? res() : rej(new Error('heic2any did not register')));
+        s.onerror = () => rej(new Error('Failed to load HEIC decoder'));
+        document.head.appendChild(s);
+      });
+      const c = async (input: Blob): Promise<Blob> => {
+        const out = await w.heic2any({ blob: input, toType: 'image/jpeg', quality: 0.92 });
+        return (Array.isArray(out) ? out[0] : out) as Blob;
+      };
+      w.__rpHeicConvert = c;
+      return c;
+    })();
+    convert = await w.__rpHeicLoading;
+    blob = await convert(file);
+  }
   const newName = (file.name || 'photo').replace(/\.(heic|heif)$/i, '.jpg');
-  return new File([jpegBlob], newName, { type: 'image/jpeg' });
+  return new File([blob], newName, { type: 'image/jpeg' });
 }
 
 /**
@@ -315,16 +376,24 @@ async function openImageCropper(opts: {
     modal.className = 'rp-pz-crop-modal';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
-    // P26-21 — body of the modal differs by mode:
-    //   in-context: stage holds <img product> + <div field-clip><img photo></div>
-    //   plain     : stage holds <img photo> + <div mask-overlay>
+    // P26-22 — body of the modal differs by mode:
+    //   in-context (WYSIWYG): photo sits BEHIND the product image so
+    //     transparent regions of the necklace PNG (heart-locket
+    //     cutout etc) reveal it through, exactly like the live
+    //     storefront. The product image is fully opaque while idle
+    //     so the customer sees the final result; while they drag
+    //     the photo we drop product opacity so they can see the
+    //     full photo and reposition with confidence.
+    //   plain (no product context): photo fills a rectangular
+    //     crop window with a soft outline. Used when the storefront
+    //     IMG is missing or fails to load.
     const stageBody = useContext
       ? `
-        <img class="rp-pz-crop-bg" alt="" draggable="false" />
         <div class="rp-pz-crop-frame rp-pz-crop-frame--${opts.maskShape}"
              style="left:${fieldDispLeft}px;top:${fieldDispTop}px;width:${fieldDispW}px;height:${fieldDispH}px;">
           <img class="rp-pz-crop-img" alt="" draggable="false" />
         </div>
+        <img class="rp-pz-crop-bg" alt="" draggable="false" />
         <div class="rp-pz-crop-frame-outline rp-pz-crop-frame--${opts.maskShape}"
              style="left:${fieldDispLeft}px;top:${fieldDispTop}px;width:${fieldDispW}px;height:${fieldDispH}px;">
         </div>
@@ -446,6 +515,26 @@ async function openImageCropper(opts: {
     };
     imgEl.src = opts.imageUrl;
 
+    // P26-22 — toggle "editing" class on the stage so the product
+    // image fades and the field outline appears while the customer
+    // is actively dragging or pinching (gives them a clear view of
+    // the photo behind the product). When idle the WYSIWYG view
+    // (photo only visible through the product cutout) returns.
+    let editingTimer: any = null;
+    function startEditing() {
+      stage.classList.add('rp-pz-crop-stage--editing');
+      if (editingTimer) { clearTimeout(editingTimer); editingTimer = null; }
+    }
+    function endEditingSoon() {
+      if (editingTimer) clearTimeout(editingTimer);
+      // Small grace period so a quick click-release-click sequence
+      // doesn't strobe the product opacity.
+      editingTimer = setTimeout(() => {
+        stage.classList.remove('rp-pz-crop-stage--editing');
+        editingTimer = null;
+      }, 350);
+    }
+
     // ===== Pointer drag (works anywhere on the stage; pans the photo
     // inside the field area regardless of where the customer presses) =====
     let dragging = false;
@@ -461,6 +550,7 @@ async function openImageCropper(opts: {
       lastY = e.clientY;
       activePointerId = e.pointerId;
       try { stage.setPointerCapture(e.pointerId); } catch { /* */ }
+      startEditing();
       e.preventDefault();
     });
     stage.addEventListener('pointermove', (e) => {
@@ -480,6 +570,7 @@ async function openImageCropper(opts: {
       dragging = false;
       activePointerId = null;
       try { stage.releasePointerCapture(e.pointerId); } catch { /* */ }
+      endEditingSoon();
     }
     stage.addEventListener('pointerup', endDrag);
     stage.addEventListener('pointercancel', endDrag);
@@ -489,17 +580,25 @@ async function openImageCropper(opts: {
       e.preventDefault();
       const factor = Math.exp(-e.deltaY / 400);
       setZoomRatio((scale / scaleMin) * factor);
+      startEditing();
+      endEditingSoon();
     }, { passive: false });
 
     // ===== Slider + +/- buttons =====
     slider.addEventListener('input', () => {
       setZoomRatio(parseFloat(slider.value));
+      startEditing();
+      endEditingSoon();
     });
     zoomInBtn.addEventListener('click', () => {
       setZoomRatio((scale / scaleMin) * 1.2);
+      startEditing();
+      endEditingSoon();
     });
     zoomOutBtn.addEventListener('click', () => {
       setZoomRatio((scale / scaleMin) / 1.2);
+      startEditing();
+      endEditingSoon();
     });
 
     // ===== Touch — single-finger pan + two-finger pinch. =====
@@ -513,6 +612,7 @@ async function openImageCropper(opts: {
         dragging = true;
         lastX = t.clientX;
         lastY = t.clientY;
+        startEditing();
         e.preventDefault();
       } else if (e.touches.length === 2) {
         dragging = false;
@@ -531,6 +631,7 @@ async function openImageCropper(opts: {
           x: (pinchStartFieldPt.x - offsetX) / scale,
           y: (pinchStartFieldPt.y - offsetY) / scale,
         };
+        startEditing();
         e.preventDefault();
       }
     }, { passive: false });
@@ -564,6 +665,7 @@ async function openImageCropper(opts: {
     function endTouch() {
       pinchStartDist = 0;
       dragging = false;
+      endEditingSoon();
     }
     stage.addEventListener('touchend', endTouch);
     stage.addEventListener('touchcancel', endTouch);
@@ -1562,9 +1664,14 @@ async function mount({ el, productHandle }: MountSpec) {
           -webkit-user-select: none;
         }
         .rp-pz-crop-stage:active { cursor: grabbing; }
-        /* P26-21 — product image as in-context background. Position
+        /* P26-22 — product image as the FRONT layer (matches the live
+           storefront, where the customer photo renders BEHIND the
+           product PNG and shows through transparent areas). Position
            and size are set inline by the JS so the field area lands
-           centered inside the stage. */
+           centered inside the stage. While the customer drags / pinches
+           we fade the product so they can see the full photo behind;
+           when they release, full opacity returns and they see the
+           final WYSIWYG result. */
         .rp-pz-crop-bg {
           position: absolute;
           left: 0;
@@ -1573,30 +1680,39 @@ async function mount({ el, productHandle }: MountSpec) {
           pointer-events: none;
           -webkit-user-drag: none;
           user-select: none;
+          transition: opacity 0.18s ease;
         }
-        /* P26-21 — frame: clipping container for the customer photo.
-           Positioned and sized inline by the JS to cover exactly the
-           field area on the stage. Mask shape (rect / circle / heart)
-           is applied via the modifier class. */
+        .rp-pz-crop-stage--editing .rp-pz-crop-bg {
+          opacity: 0.42;
+        }
+        /* P26-22 — frame: clipping container for the customer photo,
+           sits BEHIND the product image. Positioned and sized inline
+           by the JS to cover exactly the field area on the stage.
+           Mask shape (rect / circle / heart) is applied via the
+           modifier class. No background tint — the product image
+           handles all the visual context. */
         .rp-pz-crop-frame {
           position: absolute;
           overflow: hidden;
-          background: rgba(0, 0, 0, 0.04);
           pointer-events: none;
         }
         .rp-pz-crop-frame--circle { border-radius: 50%; }
-        /* P26-21 — outline overlay: paints a soft 2px white border
-           around the field area (and a dim 4px shadow outside) so
-           the customer can clearly see the boundary even when the
-           photo blends into the necklace. Sibling of frame so the
-           border is not clipped by overflow:hidden. */
+        /* P26-22 — outline overlay: only shown WHILE EDITING, so the
+           customer can see the field bounds during drag. When idle
+           the outline is invisible and the WYSIWYG view (photo
+           through the product cutout) reads cleanly. */
         .rp-pz-crop-frame-outline {
           position: absolute;
           pointer-events: none;
           box-shadow:
-            inset 0 0 0 2px rgba(255, 255, 255, 0.92),
-            0 0 0 4px rgba(0, 0, 0, 0.18);
+            inset 0 0 0 2px rgba(255, 255, 255, 0.95),
+            0 0 0 4px rgba(0, 0, 0, 0.22);
           border-radius: inherit;
+          opacity: 0;
+          transition: opacity 0.18s ease;
+        }
+        .rp-pz-crop-stage--editing .rp-pz-crop-frame-outline {
+          opacity: 1;
         }
         .rp-pz-crop-frame-outline.rp-pz-crop-frame--circle {
           border-radius: 50%;
@@ -2413,22 +2529,28 @@ async function mount({ el, productHandle }: MountSpec) {
         recropBtn.removeAttribute('data-visible');
         if (errEl) errEl.textContent = '';
         try {
-          // P26-21 — Step 0: convert HEIC → JPEG client-side BEFORE
-          // anything else. iPhones produce HEIC by default and most
-          // non-Safari browsers can't decode HEIC, so the cropper
+          // P26-21 / P26-22 — Step 0: convert HEIC → JPEG client-side
+          // BEFORE anything else. iPhones produce HEIC by default and
+          // most non-Safari browsers can't decode HEIC, so the cropper
           // would crash on load and the renderer would show a broken
-          // image. heic2any (loaded on demand from CDN) handles the
-          // decode. Customer sees a brief "Converting…" message.
+          // image. We try a modern decoder (heic-to + libheif-js
+          // v1.18+) first, falling back to the legacy heic2any. If
+          // BOTH decoders fail (e.g. exotic HEIC profile, CSP blocks
+          // both CDNs, OOM on a 50 MP shot…), we abort the upload
+          // with a clear message rather than letting a broken HEIC
+          // get into the cart.
           if (isHeicFile(f0)) {
             dropText.textContent = 'Converting…';
             try {
               f0 = await convertHeicIfNeeded(f0);
             } catch (heicErr: any) {
-              // If conversion fails (CSP blocks CDN, very large file
-              // OOMs, …), fall through with the original file. The
-              // upload will still land in R2 but the cropper will
-              // skip the WYSIWYG preview.
               try { console.warn('[rp] HEIC conversion failed:', heicErr); } catch { /* */ }
+              dropText.textContent = prevText || (f.placeholder || 'Upload your photo');
+              if (errEl) {
+                errEl.textContent =
+                  'This HEIC photo could not be processed. Please convert it to JPG or PNG and try again.';
+              }
+              return;
             }
           }
 
