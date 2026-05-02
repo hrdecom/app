@@ -340,22 +340,23 @@ async function openImageCropper(opts: {
         stageDispH = stageMax;
         stageDispW = Math.round(stageMax * stageAspect);
       }
-      // P26-24 — fit the WHOLE product image to the stage (rather
-      // than zooming in to put the field at 65% of the stage). This
-      // guarantees the merchant always sees the complete necklace
-      // even when the field is huge or has been moved by a variant
-      // override to a non-standard size or position. For small
-      // fields we still zoom in modestly so the customer has enough
-      // pixels to drag against; for fields that already cover most
-      // of the canvas we stay at fit scale.
+      // P26-25 — zoom in so the field area takes ~65% of the stage
+      // (gives the customer a big interactive surface focused on
+      // the locket area). Two safety bounds keep this sane for
+      // extreme variant overrides:
+      //   • Lower bound = fitScale: never let the product image
+      //     shrink below the stage. Even for an oversized override
+      //     field we still show the full necklace; the field then
+      //     overflows the stage and is clipped, which is fine —
+      //     the merchant should fix the oversized override in
+      //     admin, but at least the cropper stays usable.
+      //   • Upper bound = 3× fit: prevents an absurd close-up if
+      //     the field is tiny (1 px wide etc).
       const fitScale = Math.min(stageDispW / cw, stageDispH / ch);
+      const targetFieldDisp = Math.min(stageDispW, stageDispH) * 0.65;
       const fieldLong = Math.max(1, Math.max(fc.w, fc.h));
-      // Want the field at least ~80 px on screen so dragging is
-      // comfortable, but never zoom in past 2× fit (the rest of the
-      // product would clip aggressively).
-      const minInteractScale = 80 / fieldLong;
-      const maxZoomScale = fitScale * 2;
-      const imgScale = Math.min(maxZoomScale, Math.max(fitScale, minInteractScale));
+      const targetScale = targetFieldDisp / fieldLong;
+      const imgScale = Math.min(fitScale * 3, Math.max(fitScale, targetScale));
       imgDispW = cw * imgScale;
       imgDispH = ch * imgScale;
       fieldDispW = fc.w * imgScale;
