@@ -32,17 +32,21 @@ type DragMode =
    * Pivot = bbox center; new angle = atan2(pointer - pivot) - startOffset. */
   | { kind: 'rotate'; fieldId: number; pivotX: number; pivotY: number; startAngleDeg: number; startRotationDeg: number };
 
-// P26-3 — refined handle geometry. Smaller resize squares so they
-// don't obscure the text being edited; rotation handle bumped much
-// further from the bbox so it doesn't sit on top of the curve apex
-// handle (frequent confusion source for the merchant).
-const HANDLE_SIZE_PX = 9;
-// P26 — radius can grow up to 50× the bbox dimension so the user can
-// dial in nearly-flat curves that match real jewelry shapes (slightly
-// curved necklaces, gentle pendant arcs). With factor 4 you couldn't
-// get past a fairly tight curl.
+// P26-4 — corner handles are now smaller and OUTLINE-ONLY (no fill)
+// so the bbox content remains fully visible between them. Resize
+// hit area is still generous via a transparent square overlay.
+const HANDLE_SIZE_PX = 7;
+// P26 — radius can grow up to 50x the bbox dimension so the user can
+// dial in nearly-flat curves that match real jewelry shapes.
 const MAX_CURVE_RADIUS_FACTOR = 50;
 const ROTATION_HANDLE_OFFSET_PX = 70; // far enough above to not crowd the curve handle
+// P26-4 — curve handle resting position is now BELOW the bbox bottom
+// (instead of at the apex on top of the text) so the merchant can
+// always read what the text says. Drag math uses this resting Y as
+// the sagitta=0 origin: dragging the handle UP toward the bbox
+// increases positive sagitta (curve UP); dragging DOWN past resting
+// flips to negative sagitta (curve DOWN).
+const CURVE_HANDLE_OFFSET_PX = 38;
 
 /**
  * Personalizer admin canvas. Renders the base product image + each
@@ -190,8 +194,11 @@ export function PersonalizerCanvas({
     (e.target as Element).setPointerCapture?.(e.pointerId);
   }
 
-  // P25-5 — start a curve-radius drag. Pivot is the bbox center; new
-  // radius = distance(pointer, pivot) clamped to a sensible range.
+  // P25-5 / P26-4 — start a curve-radius drag. Pivot is now the
+  // RESTING position of the handle (below the bbox by a fixed
+  // offset). Sagitta = (restingY - cursorY) so dragging UP toward
+  // the bbox makes the text bulge up more; dragging DOWN past the
+  // resting point flips to a downward curve.
   function handleCurveHandlePointerDown(e: React.PointerEvent, f: PersonalizerField) {
     e.stopPropagation();
     e.preventDefault();
@@ -199,7 +206,7 @@ export function PersonalizerCanvas({
     setChromeHidden(false);
     const b = fieldBbox(f);
     const pivotX = b.x + Math.floor(b.w / 2);
-    const pivotY = b.y + Math.floor(b.h / 2);
+    const pivotY = b.y + b.h + CURVE_HANDLE_OFFSET_PX;
     setDrag({ kind: 'curve_radius', fieldId: f.id, pivotX, pivotY });
     (e.target as Element).setPointerCapture?.(e.pointerId);
   }
@@ -449,10 +456,16 @@ export function PersonalizerCanvas({
                 sagitta = absCurveR;
               }
             }
-            // Apex coordinates: x stays at chord midpoint, y offset by
-            // sagitta (above for r>0, below for r<0).
+            // P26-4 — handle now lives BELOW the bbox at a fixed
+            // resting offset, NOT at the apex on top of the text.
+            // The sagitta value is applied to the resting position so
+            // the visual handle still reflects current curvature:
+            //   sagitta > 0 (curve up)  -> handle moves UP from resting
+            //   sagitta < 0 (curve down) -> handle moves DOWN from resting
+            const restingY = b.y + b.h + CURVE_HANDLE_OFFSET_PX;
+            const directedSagitta = curveR >= 0 ? sagitta : -sagitta;
             const handleX = cx;
-            const handleY = curveR >= 0 ? cy - sagitta : cy + sagitta;
+            const handleY = restingY - directedSagitta;
 
             // P25-V4 — apply the field's rotation to the entire chrome
             // group (bbox + handles + curve guide + rotation handle).
@@ -563,11 +576,11 @@ export function PersonalizerCanvas({
                     onPointerDown={(e) => handleBodyPointerDown(e, f)}
                   />
                 )}
-                {/* P26-3 — corner resize handles. Refined to small white
-                    circles with a thin blue border so they sit lightly
-                    on the canvas instead of dominating it. The hit
-                    region is a separate transparent square 2× the
-                    visible radius so they're still easy to grab. */}
+                {/* P26-4 — corner resize handles. Tiny outline-only
+                    circles (no fill) so the bbox content is fully
+                    visible between them. The hit region is a separate
+                    transparent square ~3.5x the visible radius so
+                    they're still easy to grab on touch / desktop. */}
                 {showChrome &&
                   handles.map((hd) => (
                     <g key={hd.corner}>
@@ -575,17 +588,17 @@ export function PersonalizerCanvas({
                         cx={hd.cx}
                         cy={hd.cy}
                         r={handleR}
-                        fill="#fff"
+                        fill="none"
                         stroke="#185FA5"
                         strokeWidth={1.5}
                         vectorEffect="non-scaling-stroke"
                         pointerEvents="none"
                       />
                       <rect
-                        x={hd.cx - handleR * 1.6}
-                        y={hd.cy - handleR * 1.6}
-                        width={handleR * 3.2}
-                        height={handleR * 3.2}
+                        x={hd.cx - handleR * 1.8}
+                        y={hd.cy - handleR * 1.8}
+                        width={handleR * 3.6}
+                        height={handleR * 3.6}
                         fill="transparent"
                         style={{ cursor: hd.cursor }}
                         onPointerDown={(e) => handleHandlePointerDown(e, f, hd.corner)}
