@@ -226,6 +226,34 @@ function migrateOne(path) {
         'personalizer_settings.color_option_names_json');
   }
 
+  console.log('  migration 0154');
+  // P26-28 — translations for personalizer fields + birthstone library.
+  if (!hasTable('personalizer_field_translations')) {
+    run(`CREATE TABLE personalizer_field_translations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      field_id INTEGER NOT NULL,
+      locale TEXT NOT NULL,
+      customer_label TEXT,
+      cart_label TEXT,
+      info_text TEXT,
+      placeholder TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (field_id) REFERENCES customization_fields(id) ON DELETE CASCADE,
+      UNIQUE (field_id, locale)
+    )`, 'personalizer_field_translations');
+    run(`CREATE INDEX IF NOT EXISTS idx_personalizer_field_translations_field
+         ON personalizer_field_translations(field_id)`,
+        'idx_personalizer_field_translations_field');
+    run(`CREATE INDEX IF NOT EXISTS idx_personalizer_field_translations_locale
+         ON personalizer_field_translations(locale)`,
+        'idx_personalizer_field_translations_locale');
+  }
+  if (hasTable('personalizer_settings') && !hasColumn('personalizer_settings', 'birthstones_translations_json')) {
+    run(`ALTER TABLE personalizer_settings ADD COLUMN birthstones_translations_json TEXT`,
+        'personalizer_settings.birthstones_translations_json');
+  }
+
   console.log('  migration 0152');
   // P26-26 follow-up — birthstones library moved from per-template
   // to per-shop (global). Admin uploads the 12 PNG icons in

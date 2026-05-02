@@ -15,6 +15,48 @@ export interface BirthstoneOption {
   image_url: string | null;   // R2 URL of the uploaded PNG (null = not uploaded yet)
 }
 
+/**
+ * P26-28 — supported storefront locales (matches the merchant's
+ * Shopify market locales). English is the source language and never
+ * needs a translation row. Update both this list and SUPPORTED_LOCALES
+ * in functions/lib/translate-personalizer.js together.
+ */
+export const PERSONALIZER_LOCALES = [
+  { code: 'da', name: 'Danish' },
+  { code: 'de', name: 'German' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'it', name: 'Italian' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'pt-BR', name: 'Portuguese (Brazil)' },
+  { code: 'pt-PT', name: 'Portuguese (Portugal)' },
+] as const;
+export type PersonalizerLocale = typeof PERSONALIZER_LOCALES[number]['code'];
+
+/**
+ * P26-28 — per-field, per-locale translation row. customer_label /
+ * cart_label / info_text apply to all field kinds; placeholder only
+ * applies to image (Photo) fields.
+ */
+export interface FieldTranslation {
+  customer_label: string | null;
+  cart_label: string | null;
+  info_text: string | null;
+  placeholder: string | null;
+}
+
+/**
+ * P26-28 — full translations payload for a template:
+ *   fields[fieldId][locale] = FieldTranslation
+ *   birthstones[locale] = string[12]
+ */
+export interface TemplateTranslations {
+  fields: Record<number, Record<string, FieldTranslation>>;
+  birthstones: Record<string, string[]>;
+  supported_locales: string[];
+}
+
 export interface PersonalizerSettings {
   id?: number;
   default_font_family: string | null;
@@ -183,6 +225,49 @@ export async function updateTemplate(id: number, patch: Partial<PersonalizerTemp
 
 export async function archiveTemplate(id: number) {
   return api.delete(`/personalizer/templates/${id}`);
+}
+
+// ─── P26-28 — translations ─────────────────────────────────────────────────
+
+export async function getTemplateTranslations(templateId: number): Promise<TemplateTranslations> {
+  return api.get(`/personalizer/templates/${templateId}/translations`) as Promise<TemplateTranslations>;
+}
+
+/**
+ * Save manual edits. Pass only the (fieldId, locale) pairs the merchant
+ * actually changed; unchanged rows stay intact.
+ *
+ * `birthstones` is admin-only on the server side; non-admin requests
+ * with a `birthstones` key get rejected.
+ */
+export async function patchTemplateTranslations(
+  templateId: number,
+  body: {
+    fields?: Record<number, Record<string, Partial<FieldTranslation>>>;
+    birthstones?: Record<string, string[]>;
+  },
+): Promise<{ success: boolean }> {
+  return api.patch(`/personalizer/templates/${templateId}/translations`, body) as Promise<{ success: boolean }>;
+}
+
+/**
+ * Trigger Claude auto-translation. `mode='missing'` (default) only
+ * fills locales that have no translation yet; `mode='all'` overwrites
+ * everything. `locales` defaults to every supported locale.
+ */
+export async function autoTranslateTemplate(
+  templateId: number,
+  body: {
+    locales?: string[];
+    mode?: 'missing' | 'all';
+    includeBirthstones?: boolean;
+  } = {},
+): Promise<{
+  fields_translated: number;
+  locales: Record<string, { fields: number; provider: string | null }>;
+  birthstones?: Record<string, { translated?: number; skipped?: boolean }>;
+}> {
+  return api.post(`/personalizer/templates/${templateId}/translations`, body) as any;
 }
 
 export async function createField(templateId: number, body: Partial<PersonalizerField>) {

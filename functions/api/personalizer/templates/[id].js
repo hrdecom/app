@@ -1,4 +1,10 @@
 import { requireRole, json, errorJson } from '../../../lib/auth-middleware.js';
+import { graphql } from '../../../lib/shopify-graphql.js';
+import {
+  SUPPORTED_LOCALES,
+  translateTemplateFields,
+  translateBirthstoneLabels,
+} from '../../../lib/translate-personalizer.js';
 
 export async function onRequest(context) {
   const { request } = context;
@@ -67,7 +73,247 @@ async function handlePatch(context) {
     .prepare(`UPDATE customization_templates SET ${sets.join(', ')} WHERE id = ?`)
     .bind(...binds)
     .run();
-  return json({ success: true, id });
+
+  // P26-28 — Publish hook. When the merchant publishes the template,
+  // auto-translate any field strings missing for the 8 non-English
+  // locales AND mirror the full translation snapshot into a Shopify
+  // product metafield so it persists outside our app. Best-effort:
+  // failures here are logged but don't fail the publish (the
+  // merchant can re-trigger later from the Translations panel).
+  let publishExtras = null;
+  if (body.status === 'published') {
+    try {
+      publishExtras = await runPublishTranslations(env, id);
+    } catch (e) {
+      console.error('[publish translations] failed:', e?.message || e);
+      publishExtras = { error: 'translation_pipeline_failed', detail: String(e?.message || e) };
+    }
+  }
+  return json({ success: true, id, publish: publishExtras });
+}
+
+/**
+ * P26-28 — on Publish: ensure every supported locale has translated
+ * field strings + birthstone labels, then push the whole snapshot to
+ * a Shopify product metafield. Returns a summary the admin UI can
+ * surface in a toast.
+ */
+async function runPublishTranslations(env, templateId) {
+  const tpl = await env.DB
+    .prepare(`SELECT id, product_id, shopify_product_handle FROM customization_templates WHERE id = ?`)
+    .bind(templateId)
+    .first();
+  if (!tpl) throw new Error('template not found');
+
+  const { results: fields } = await env.DB
+    .prepare(
+      `SELECT id, field_kind, customer_label, cart_label, info_text, placeholder
+         FROM customization_fields
+        WHERE template_id = ?`,
+    )
+    .bind(templateId)
+    .all();
+
+  // Existing translations — only fill the gaps so the merchant's
+  // manual edits are preserved.
+  const { results: existingRows } = await env.DB
+    .prepare(
+      `SELECT t.field_id, t.locale, t.customer_label, t.cart_label, t.info_text, t.placeholder
+         FROM personalizer_field_translations t
+         JOIN customization_fields f ON f.id = t.field_id
+        WHERE f.template_id = ?`,
+    )
+    .bind(templateId)
+    .all();
+  const existingByFL = new Map();
+  for (const r of existingRows || []) existingByFL.set(`${r.field_id}|${r.locale}`, r);
+
+  const localeKeys = Object.keys(SUPPORTED_LOCALES);
+  const summary = { locales_translated: 0, fields_inserted: 0 };
+
+  await Promise.all(localeKeys.map(async (locale) => {
+    const fieldsToTranslate = (fields || []).filter((f) => {
+      const hasContent =
+        (f.customer_label && f.customer_label.trim()) ||
+        (f.cart_label && f.cart_label.trim()) ||
+        (f.info_text && f.info_text.trim()) ||
+        (f.field_kind === 'image' && f.placeholder && f.placeholder.trim());
+      if (!hasContent) return false;
+      return !existingByFL.has(`${f.id}|${locale}`);
+    });
+    if (fieldsToTranslate.length === 0) return;
+    const { fields: translated } = await translateTemplateFields(env, fieldsToTranslate, locale);
+    for (const [fid, vals] of Object.entries(translated)) {
+      const fieldId = parseInt(fid);
+      if (!Number.isFinite(fieldId)) continue;
+      await env.DB
+        .prepare(
+          `INSERT INTO personalizer_field_translations
+              (field_id, locale, customer_label, cart_label, info_text, placeholder, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(field_id, locale) DO UPDATE SET
+              customer_label = excluded.customer_label,
+              cart_label     = excluded.cart_label,
+              info_text      = excluded.info_text,
+              placeholder    = excluded.placeholder,
+              updated_at     = datetime('now')`,
+        )
+        .bind(fieldId, locale, vals.customer_label, vals.cart_label, vals.info_text, vals.placeholder)
+        .run();
+      summary.fields_inserted += 1;
+    }
+    summary.locales_translated += 1;
+  }));
+
+  // Birthstone library translations (global) — also fill gaps.
+  const settingsRow = await env.DB
+    .prepare(`SELECT birthstones_json, birthstones_translations_json FROM personalizer_settings WHERE id = 1`)
+    .first()
+    .catch(() => null);
+  let bsLibrary = [];
+  if (settingsRow?.birthstones_json) {
+    try {
+      const parsed = JSON.parse(settingsRow.birthstones_json);
+      if (Array.isArray(parsed)) bsLibrary = parsed;
+    } catch { /* */ }
+  }
+  let bsTranslations = {};
+  if (settingsRow?.birthstones_translations_json) {
+    try {
+      const parsed = JSON.parse(settingsRow.birthstones_translations_json);
+      if (parsed && typeof parsed === 'object') bsTranslations = parsed;
+    } catch { /* */ }
+  }
+  const sourceLabels = [];
+  for (let i = 1; i <= 12; i++) {
+    const entry = bsLibrary.find((b) => b && Number(b.month_index) === i);
+    sourceLabels.push((entry && typeof entry.label === 'string' && entry.label) || `Month ${i}`);
+  }
+  await Promise.all(localeKeys.map(async (locale) => {
+    const existing = bsTranslations[locale];
+    if (Array.isArray(existing) && existing.length === 12 && existing.every((s) => typeof s === 'string' && s.trim())) {
+      return;
+    }
+    const arr = await translateBirthstoneLabels(env, sourceLabels, locale);
+    if (arr) bsTranslations[locale] = arr;
+  }));
+  try {
+    await env.DB
+      .prepare(`UPDATE personalizer_settings SET birthstones_translations_json = ?, updated_at = datetime('now') WHERE id = 1`)
+      .bind(JSON.stringify(bsTranslations))
+      .run();
+  } catch (err) {
+    if (/no such column/i.test(String(err?.message || err))) {
+      await env.DB.prepare(`ALTER TABLE personalizer_settings ADD COLUMN birthstones_translations_json TEXT`).run();
+      await env.DB
+        .prepare(`UPDATE personalizer_settings SET birthstones_translations_json = ?, updated_at = datetime('now') WHERE id = 1`)
+        .bind(JSON.stringify(bsTranslations))
+        .run();
+    } else {
+      throw err;
+    }
+  }
+
+  // Shopify metafield mirror — full per-locale snapshot of the
+  // current template's field translations + the global birthstones
+  // translations. Persists in Shopify even if our app is removed.
+  let metafield = null;
+  try {
+    metafield = await pushTranslationsMetafield(env, tpl, fields || [], bsTranslations);
+  } catch (e) {
+    console.error('[publish translations] Shopify metafield push failed:', e?.message || e);
+    summary.metafield_error = String(e?.message || e);
+  }
+  if (metafield) summary.metafield = metafield;
+
+  return summary;
+}
+
+/**
+ * P26-28 — write the per-locale translation snapshot to a product
+ * metafield (`personalizer.translations_json`, type=json). This makes
+ * the data portable: even if the merchant uninstalls our app the
+ * translations still live on the product in their Shopify admin.
+ */
+async function pushTranslationsMetafield(env, tpl, fields, bsTranslations) {
+  const productId = tpl.product_id;
+  if (!productId) return null;
+  const row = await env.DB
+    .prepare(`SELECT shopify_product_id FROM products WHERE id = ?`)
+    .bind(productId)
+    .first()
+    .catch(() => null);
+  const shopifyProductId = row?.shopify_product_id;
+  if (!shopifyProductId) return { skipped: 'no shopify_product_id on product' };
+
+  // Build the full per-locale snapshot.
+  const fieldIds = fields.map((f) => f.id);
+  let trRows = [];
+  if (fieldIds.length > 0) {
+    const placeholders = fieldIds.map(() => '?').join(', ');
+    const { results } = await env.DB
+      .prepare(
+        `SELECT field_id, locale, customer_label, cart_label, info_text, placeholder
+           FROM personalizer_field_translations
+          WHERE field_id IN (${placeholders})`,
+      )
+      .bind(...fieldIds)
+      .all();
+    trRows = results || [];
+  }
+  const fieldTr = {};
+  for (const r of trRows) {
+    if (!fieldTr[r.field_id]) fieldTr[r.field_id] = {};
+    fieldTr[r.field_id][r.locale] = {
+      customer_label: r.customer_label || null,
+      cart_label: r.cart_label || null,
+      info_text: r.info_text || null,
+      placeholder: r.placeholder || null,
+    };
+  }
+
+  // Include source strings too so the metafield is self-contained.
+  const fieldSources = {};
+  for (const f of fields) {
+    fieldSources[f.id] = {
+      field_kind: f.field_kind,
+      customer_label: f.customer_label || null,
+      cart_label: f.cart_label || null,
+      info_text: f.info_text || null,
+      placeholder: f.placeholder || null,
+    };
+  }
+
+  const value = {
+    snapshot_at: new Date().toISOString(),
+    template_id: tpl.id,
+    fields: fieldSources,
+    field_translations: fieldTr,
+    birthstone_translations: bsTranslations || {},
+  };
+
+  const ownerId = `gid://shopify/Product/${shopifyProductId}`;
+  const result = await graphql(env, `
+    mutation($metafields: [MetafieldsSetInput!]!) {
+      metafieldsSet(metafields: $metafields) {
+        metafields { id namespace key }
+        userErrors { field message }
+      }
+    }
+  `, {
+    metafields: [{
+      ownerId,
+      namespace: 'personalizer',
+      key: 'translations_json',
+      type: 'json',
+      value: JSON.stringify(value),
+    }],
+  });
+  const errors = result?.metafieldsSet?.userErrors || [];
+  if (errors.length > 0) {
+    throw new Error('userErrors: ' + JSON.stringify(errors));
+  }
+  return { ok: true, metafield: 'personalizer.translations_json' };
 }
 
 async function handleDelete(context) {

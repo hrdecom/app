@@ -24,6 +24,12 @@ export async function onRequestGet(context) {
   const handle = String(params.handle || '').trim();
   if (!handle) return jsonCors({ error: 'handle required' }, 400, request);
 
+  // P26-28 — locale param drives field-string translation. Empty /
+  // "en" / unsupported locale = source strings (English).
+  const url = new URL(request.url);
+  const localeRaw = (url.searchParams.get('locale') || '').trim();
+  const locale = localeRaw && localeRaw !== 'en' ? localeRaw : null;
+
   const tpl = await env.DB
     .prepare(
       `SELECT * FROM customization_templates
@@ -39,11 +45,38 @@ export async function onRequestGet(context) {
     .bind(tpl.id)
     .all();
 
+  // P26-28 — overlay translations onto fields when a non-English
+  // locale was requested. Each translatable column is replaced ONLY
+  // if the translation row has a non-null value, so missing
+  // translations gracefully fall back to the source string.
+  if (locale && fields && fields.length > 0) {
+    const fieldIds = fields.map((f) => f.id);
+    const placeholders = fieldIds.map(() => '?').join(', ');
+    const { results: trRows } = await env.DB
+      .prepare(
+        `SELECT field_id, customer_label, cart_label, info_text, placeholder
+           FROM personalizer_field_translations
+          WHERE locale = ? AND field_id IN (${placeholders})`,
+      )
+      .bind(locale, ...fieldIds)
+      .all();
+    const byField = new Map();
+    for (const r of trRows || []) byField.set(r.field_id, r);
+    for (const f of fields) {
+      const tr = byField.get(f.id);
+      if (!tr) continue;
+      if (tr.customer_label) f.customer_label = tr.customer_label;
+      if (tr.cart_label) f.cart_label = tr.cart_label;
+      if (tr.info_text) f.info_text = tr.info_text;
+      if (tr.placeholder) f.placeholder = tr.placeholder;
+    }
+  }
+
   // P25-V2 — embed the global widget settings (padding) so the
   // storefront can apply them without a second round-trip. Defaults
   // gracefully if the row hasn't been set.
   const settings = await env.DB
-    .prepare(`SELECT widget_padding_top, widget_padding_bottom, color_option_names_json, birthstones_json FROM personalizer_settings WHERE id = 1`)
+    .prepare(`SELECT widget_padding_top, widget_padding_bottom, color_option_names_json, birthstones_json, birthstones_translations_json FROM personalizer_settings WHERE id = 1`)
     .first()
     .catch(() => null);
 
@@ -101,7 +134,33 @@ export async function onRequestGet(context) {
   // Inject the global library into the template payload under the
   // existing key so the storefront widget + renderer (which already
   // read template.birthstones_json) keep working unchanged.
-  const tplOut = { ...tpl, birthstones_json: settings?.birthstones_json ?? null };
+  //
+  // P26-28 — when a non-English locale is requested, also overlay
+  // the per-locale month label translations onto the library so the
+  // storefront selector reads "Enero / Febrero / ..." instead of
+  // "January / February / ..." for ?locale=es.
+  let birthstonesJsonOut = settings?.birthstones_json ?? null;
+  if (locale && birthstonesJsonOut && settings?.birthstones_translations_json) {
+    try {
+      const lib = JSON.parse(birthstonesJsonOut);
+      const trMap = JSON.parse(settings.birthstones_translations_json);
+      const localeLabels = trMap && trMap[locale];
+      if (Array.isArray(lib) && Array.isArray(localeLabels)) {
+        const merged = lib.map((entry) => {
+          if (!entry || typeof entry !== 'object') return entry;
+          const idx = Number(entry.month_index);
+          if (!Number.isFinite(idx) || idx < 1 || idx > 12) return entry;
+          const localized = localeLabels[idx - 1];
+          if (typeof localized === 'string' && localized.trim()) {
+            return { ...entry, label: localized };
+          }
+          return entry;
+        });
+        birthstonesJsonOut = JSON.stringify(merged);
+      }
+    } catch { /* malformed translations — fall back to source */ }
+  }
+  const tplOut = { ...tpl, birthstones_json: birthstonesJsonOut };
 
   return jsonCors({
     found: true,
