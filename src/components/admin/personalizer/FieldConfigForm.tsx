@@ -281,6 +281,53 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
           <Row label="Max size (KB)">
             <Input type="number" value={draft.image_max_size_kb || 5120} onChange={(e) => patch('image_max_size_kb', parseInt(e.target.value || '5120'))} />
           </Row>
+          {/* P26-8 — default presentation image. Stored on the
+              field as default_value (URL). Shown in the storefront
+              SVG overlay BEFORE the customer uploads their own
+              photo, so the listing image doesn't read as "broken
+              with a hole" while the customer is still browsing. */}
+          <Row label="Default presentation image">
+            {draft.default_value && (
+              <div className="mb-2 flex items-center gap-2">
+                <img
+                  src={draft.default_value}
+                  alt="default"
+                  className="h-12 w-12 object-cover rounded border border-gray-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => patch('default_value', null)}
+                  className="text-xs text-rose-600 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const fd = new FormData();
+                fd.append('file', file);
+                try {
+                  const res = await fetch('/api/personalizer/upload', { method: 'POST', body: fd });
+                  if (!res.ok) throw new Error('Upload failed');
+                  const j = (await res.json()) as { url: string };
+                  patch('default_value', j.url);
+                } catch (err) {
+                  alert('Upload failed');
+                }
+                // Reset the input so the same file can be re-picked.
+                e.target.value = '';
+              }}
+              className="text-xs"
+            />
+            <div className="text-[10px] text-muted-foreground mt-1">
+              Optional. The customer sees this image in the live preview before they upload their own.
+            </div>
+          </Row>
         </Section>
       )}
 

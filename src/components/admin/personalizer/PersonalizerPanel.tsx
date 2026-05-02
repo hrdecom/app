@@ -6,7 +6,7 @@ import { FieldList } from './FieldList';
 import { FieldConfigForm } from './FieldConfigForm';
 import { PersonalizerCanvas } from './PersonalizerCanvas';
 import {
-  getTemplate, createTemplate, updateTemplate, createField, updateField, deleteField, reorderFields,
+  getTemplate, createTemplate, updateTemplate, createField, updateField, deleteField,
   listTemplateVariants, listFieldOverrides, upsertFieldOverride, deleteFieldOverride,
   getSettings,
   type PersonalizerTemplate, type PersonalizerField,
@@ -445,18 +445,49 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
           onAddText={handleAddText}
           onAddImage={handleAddImage}
           onReorder={async (ids) => {
-            // P25-V2 — drag-to-reorder. Optimistic local re-order so
-            // the list snaps into place instantly, then persist via
-            // /personalizer/fields/0/reorder. Revert + toast on error.
+            // P26-8 — unified layer reorder. ids is the new order from
+            // top of list to bottom, including the sentinel -1 for the
+            // product image. We recompute layer_z values from list
+            // position (top of list = highest z = visually on top) so
+            // the merchant's drag literally moves things in/out of
+            // the visual stack. Each affected layer gets one update:
+            //   • field rows -> updateField(id, { layer_z, sort_order })
+            //   • product image row -> updateTemplate(id, { base_image_layer_z })
             const prevFields = baseFields;
-            const reordered = ids
-              .map((id) => prevFields.find((f) => f.id === id))
-              .filter(Boolean) as PersonalizerField[];
-            setTpl((t) => t ? { ...t, fields: reordered.map((f, i) => ({ ...f, sort_order: i })) } : t);
+            const prevImageZ = tpl?.base_image_layer_z ?? 5;
+            const N = ids.length;
+            const fieldUpdates: Array<{ id: number; layer_z: number; sort_order: number }> = [];
+            let nextImageZ = prevImageZ;
+            ids.forEach((id, i) => {
+              const newZ = N - i; // top = N, bottom = 1
+              if (id === -1) {
+                nextImageZ = newZ;
+              } else {
+                fieldUpdates.push({ id, layer_z: newZ, sort_order: i });
+              }
+            });
+            // Optimistic local update so the list snaps in place.
+            setTpl((t) => {
+              if (!t) return t;
+              const idToZ = new Map(fieldUpdates.map((u) => [u.id, u.layer_z]));
+              const idToSort = new Map(fieldUpdates.map((u) => [u.id, u.sort_order]));
+              const newFields = (t.fields || []).map((f) => ({
+                ...f,
+                layer_z: idToZ.has(f.id) ? idToZ.get(f.id)! : f.layer_z,
+                sort_order: idToSort.has(f.id) ? idToSort.get(f.id)! : f.sort_order,
+              }));
+              return { ...t, fields: newFields, base_image_layer_z: nextImageZ };
+            });
             try {
-              await reorderFields(reordered.map((f, i) => ({ id: f.id, sort_order: i })));
+              // Persist field z + sort_order in parallel + image z
+              await Promise.all([
+                ...fieldUpdates.map((u) => updateField(u.id, { layer_z: u.layer_z, sort_order: u.sort_order })),
+                nextImageZ !== prevImageZ
+                  ? updateTemplate(tpl!.id, { base_image_layer_z: nextImageZ })
+                  : Promise.resolve(undefined),
+              ]);
             } catch (e: any) {
-              setTpl((t) => t ? { ...t, fields: prevFields } : t);
+              setTpl((t) => t ? { ...t, fields: prevFields, base_image_layer_z: prevImageZ } : t);
               toast({ title: 'Failed to reorder layers', description: e?.message, variant: 'destructive' });
             }
           }}
