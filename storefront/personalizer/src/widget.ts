@@ -124,30 +124,100 @@ function rpEscapeHtml(s: string): string {
 }
 
 /**
- * P26-19 — open an in-page modal that lets the customer crop and zoom
- * their uploaded photo to fit the field's mask shape (square, circle,
- * heart). Returns a JPEG Blob sized to the field's aspect ratio plus
- * the crop parameters used (so a follow-up "re-adjust" call can
- * restore the same view).
+ * P26-21 — load the heic2any browser library on demand. HEIC/HEIF
+ * files come straight off iPhones and Android phones with HEIC
+ * support; Chrome desktop and most other browsers cannot decode
+ * them natively, so the storefront's <img> tag fires onerror and
+ * the cropper crashes. We dynamically inject heic2any only when a
+ * HEIC file is detected, then convert it to a JPEG Blob for the
+ * rest of the pipeline. Cached on window so repeated uploads in
+ * the same session reuse one fetch.
+ */
+function loadHeic2any(): Promise<any> {
+  const w = window as any;
+  if (w.heic2any) return Promise.resolve(w.heic2any);
+  if (w.__rpHeic2anyLoading) return w.__rpHeic2anyLoading;
+  w.__rpHeic2anyLoading = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+    s.async = true;
+    s.crossOrigin = 'anonymous';
+    s.onload = () => {
+      if (w.heic2any) res(w.heic2any);
+      else rej(new Error('heic2any did not register on window'));
+    };
+    s.onerror = () => rej(new Error('Failed to load heic2any from CDN'));
+    document.head.appendChild(s);
+  });
+  return w.__rpHeic2anyLoading;
+}
+
+/**
+ * P26-21 — return TRUE for HEIC/HEIF files. Detected by either MIME
+ * (image/heic, image/heif) OR file extension because mobile browsers
+ * sometimes hand HEIC over with an empty / generic MIME type.
+ */
+function isHeicFile(file: File): boolean {
+  const mime = (file.type || '').toLowerCase();
+  if (mime === 'image/heic' || mime === 'image/heif') return true;
+  return /\.heic$|\.heif$/i.test(file.name || '');
+}
+
+/**
+ * P26-21 — convert a HEIC File to a JPEG File. No-op for non-HEIC
+ * inputs. Throws if the browser environment can't load heic2any
+ * (e.g. CSP blocks the CDN); the caller catches and falls back to
+ * uploading the original (which won't render in the cropper but at
+ * least lands in R2).
+ */
+async function convertHeicIfNeeded(file: File): Promise<File> {
+  if (!isHeicFile(file)) return file;
+  const heic2any = await loadHeic2any();
+  const out = await heic2any({
+    blob: file,
+    toType: 'image/jpeg',
+    quality: 0.92,
+  });
+  // heic2any returns Blob OR Blob[] (multi-page HEIC files give an
+  // array of one frame per page; we only ever want the first).
+  const jpegBlob = (Array.isArray(out) ? out[0] : out) as Blob;
+  const newName = (file.name || 'photo').replace(/\.(heic|heif)$/i, '.jpg');
+  return new File([jpegBlob], newName, { type: 'image/jpeg' });
+}
+
+/**
+ * P26-19 / P26-21 — open an in-page modal that lets the customer
+ * crop and zoom their uploaded photo to fit the field's mask shape.
+ * Returns a JPEG Blob sized to the field's aspect ratio plus the
+ * crop parameters used (so a follow-up "re-adjust" call can restore
+ * the same view).
+ *
+ * Two display modes:
+ *  1. **In-context preview** (P26-21 default when productImageUrl +
+ *     fieldOnCanvas are provided): the modal shows the actual product
+ *     photo as the background, zoomed in on the field area, with the
+ *     customer's photo composited inside the field bounds (clipped to
+ *     the mask shape). Drag/zoom anywhere on the stage pans/scales the
+ *     PHOTO inside the field — what the customer sees is what they get.
+ *  2. **Plain crop** (fallback when no product context is available):
+ *     the photo fills a rectangular crop window of the output aspect.
  *
  * Design constraints:
- *  - Pure DOM/Canvas, no extra deps (the storefront widget is one
- *    self-contained bundle and we do NOT want to ship a cropper lib).
- *  - Touch-first: drag with one finger, pinch-zoom with two, plus
- *    a slider + +/- buttons for desktop.
- *  - The image is loaded with crossOrigin="anonymous" so canvas can
- *    drawImage it without tainting (the R2 proxy at /api/images/r2/*
- *    sends Access-Control-Allow-Origin:* — see functions/api/images/
- *    r2/[[path]].js).
- *  - "Cover" semantics: the image always fills the crop window. The
- *    minimum scale = max(boxW/imgW, boxH/imgH); the slider and pinch
+ *  - Pure DOM/Canvas, no extra deps in the static bundle. heic2any is
+ *    loaded on demand only when the customer picks a HEIC file.
+ *  - Touch-first: drag with one finger, pinch-zoom with two, plus a
+ *    slider + +/- buttons for desktop.
+ *  - All cross-origin images use crossOrigin="anonymous" so canvas
+ *    drawImage stays untainted (R2 proxy + Shopify CDN both send
+ *    Access-Control-Allow-Origin:*).
+ *  - "Cover" semantics: the photo always fills the field area. The
+ *    minimum scale = max(fieldW/imgW, fieldH/imgH); slider/pinch
  *    work as a multiplier above that floor (1×..4×).
  *  - On save the modal renders the visible crop to an offscreen
  *    canvas at the requested output resolution and returns a JPEG
- *    blob. Output aspect matches outputWidth/outputHeight which the
- *    caller derives from the field geometry, so the storefront SVG
- *    renderer's preserveAspectRatio="xMidYMid slice" is a no-op on
- *    the cropped image (no further auto-cropping at render time).
+ *    blob. Output aspect matches outputWidth/outputHeight (= field
+ *    aspect), so the storefront SVG renderer's preserveAspectRatio
+ *    "xMidYMid slice" is a no-op on the cropped image.
  */
 async function openImageCropper(opts: {
   imageUrl: string;
@@ -155,6 +225,12 @@ async function openImageCropper(opts: {
   outputHeight: number;
   maskShape: 'rect' | 'circle' | 'heart';
   initial?: { offsetX: number; offsetY: number; scale: number } | null;
+  // P26-21 — in-context preview inputs. Provide all three to enable
+  // the WYSIWYG preview; omit any to fall back to the plain cropper.
+  productImageUrl?: string | null;
+  fieldOnCanvas?: { x: number; y: number; w: number; h: number } | null;
+  canvasWidth?: number | null;
+  canvasHeight?: number | null;
   title?: string;
   hint?: string;
   saveLabel?: string;
@@ -164,33 +240,105 @@ async function openImageCropper(opts: {
   params: { offsetX: number; offsetY: number; scale: number };
 } | null> {
   return new Promise((resolve) => {
-    // Crop window aspect mirrors the output (= field) aspect so the
-    // SVG renderer doesn't crop again at paint time.
-    const aspect = opts.outputWidth / opts.outputHeight;
-    // Crop box in CSS pixels — capped so it fits comfortably above
-    // the slider+buttons on a phone.
-    const maxBox = Math.min(320, window.innerWidth * 0.82);
-    let cropDispW: number;
-    let cropDispH: number;
-    if (aspect >= 1) {
-      cropDispW = maxBox;
-      cropDispH = maxBox / aspect;
+    // Decide layout: in-context preview vs plain crop.
+    const useContext = !!(
+      opts.productImageUrl &&
+      opts.fieldOnCanvas &&
+      opts.canvasWidth &&
+      opts.canvasHeight
+    );
+
+    // Stage size in CSS pixels — fits comfortably above the slider /
+    // buttons on a phone (≤ 90vw, capped at 340px on the longer side).
+    const stageMax = Math.min(340, window.innerWidth * 0.85);
+
+    // Compute the field's display dims AND, in context mode, where on
+    // the stage the field lands.
+    let fieldDispW: number;
+    let fieldDispH: number;
+    let stageDispW: number;
+    let stageDispH: number;
+    let fieldDispLeft = 0;
+    let fieldDispTop = 0;
+    let imgDispLeft = 0;
+    let imgDispTop = 0;
+    let imgDispW = 0;
+    let imgDispH = 0;
+
+    if (useContext) {
+      const fc = opts.fieldOnCanvas as { x: number; y: number; w: number; h: number };
+      const cw = opts.canvasWidth as number;
+      const ch = opts.canvasHeight as number;
+      // Stage aspect = canvas aspect (so the product image isn't
+      // distorted). Stage covers stageMax on its longer side.
+      const stageAspect = cw / ch;
+      if (stageAspect >= 1) {
+        stageDispW = stageMax;
+        stageDispH = Math.round(stageMax / stageAspect);
+      } else {
+        stageDispH = stageMax;
+        stageDispW = Math.round(stageMax * stageAspect);
+      }
+      // Compute imageScale so the field area takes ~65% of the stage's
+      // smaller dimension. Customer sees field + a generous border of
+      // surrounding product context (the rest of the necklace).
+      const targetFieldDisp = Math.min(stageDispW, stageDispH) * 0.65;
+      const fieldLong = Math.max(fc.w, fc.h);
+      const imgScale = targetFieldDisp / fieldLong;
+      imgDispW = cw * imgScale;
+      imgDispH = ch * imgScale;
+      fieldDispW = fc.w * imgScale;
+      fieldDispH = fc.h * imgScale;
+      // Center the field area on the stage.
+      const fieldCenterOnImg = { x: fc.x + fc.w / 2, y: fc.y + fc.h / 2 };
+      imgDispLeft = stageDispW / 2 - fieldCenterOnImg.x * imgScale;
+      imgDispTop = stageDispH / 2 - fieldCenterOnImg.y * imgScale;
+      fieldDispLeft = imgDispLeft + fc.x * imgScale;
+      fieldDispTop = imgDispTop + fc.y * imgScale;
     } else {
-      cropDispH = maxBox;
-      cropDispW = maxBox * aspect;
+      // Plain crop: stage aspect = output aspect, no product image.
+      const aspect = opts.outputWidth / opts.outputHeight;
+      if (aspect >= 1) {
+        stageDispW = stageMax;
+        stageDispH = stageMax / aspect;
+      } else {
+        stageDispH = stageMax;
+        stageDispW = stageMax * aspect;
+      }
+      fieldDispW = stageDispW;
+      fieldDispH = stageDispH;
+      fieldDispLeft = 0;
+      fieldDispTop = 0;
     }
 
     const modal = document.createElement('div');
     modal.className = 'rp-pz-crop-modal';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
+    // P26-21 — body of the modal differs by mode:
+    //   in-context: stage holds <img product> + <div field-clip><img photo></div>
+    //   plain     : stage holds <img photo> + <div mask-overlay>
+    const stageBody = useContext
+      ? `
+        <img class="rp-pz-crop-bg" alt="" draggable="false" />
+        <div class="rp-pz-crop-frame rp-pz-crop-frame--${opts.maskShape}"
+             style="left:${fieldDispLeft}px;top:${fieldDispTop}px;width:${fieldDispW}px;height:${fieldDispH}px;">
+          <img class="rp-pz-crop-img" alt="" draggable="false" />
+        </div>
+        <div class="rp-pz-crop-frame-outline rp-pz-crop-frame--${opts.maskShape}"
+             style="left:${fieldDispLeft}px;top:${fieldDispTop}px;width:${fieldDispW}px;height:${fieldDispH}px;">
+        </div>
+      `
+      : `
+        <img class="rp-pz-crop-img" alt="" draggable="false" />
+        <div class="rp-pz-crop-mask rp-pz-crop-mask--${opts.maskShape}"></div>
+      `;
     modal.innerHTML = `
       <div class="rp-pz-crop-card" role="document">
         <div class="rp-pz-crop-title">${rpEscapeHtml(opts.title || 'Adjust your photo')}</div>
         <div class="rp-pz-crop-hint">${rpEscapeHtml(opts.hint || 'Drag to position. Pinch or use the slider to zoom.')}</div>
-        <div class="rp-pz-crop-stage" style="width:${cropDispW}px;height:${cropDispH}px;">
-          <img class="rp-pz-crop-img" alt="" draggable="false" />
-          <div class="rp-pz-crop-mask rp-pz-crop-mask--${opts.maskShape}"></div>
+        <div class="rp-pz-crop-stage" style="width:${stageDispW}px;height:${stageDispH}px;">
+          ${stageBody}
         </div>
         <div class="rp-pz-crop-zoom">
           <button type="button" class="rp-pz-crop-zoom-btn" data-act="zoom-out" aria-label="Zoom out">&#8722;</button>
@@ -207,6 +355,7 @@ async function openImageCropper(opts: {
 
     const stage = modal.querySelector<HTMLDivElement>('.rp-pz-crop-stage')!;
     const imgEl = modal.querySelector<HTMLImageElement>('.rp-pz-crop-img')!;
+    const bgEl = modal.querySelector<HTMLImageElement>('.rp-pz-crop-bg');
     const slider = modal.querySelector<HTMLInputElement>('.rp-pz-crop-zoom-slider')!;
     const cancelBtn = modal.querySelector<HTMLButtonElement>('[data-act="cancel"]')!;
     const saveBtn = modal.querySelector<HTMLButtonElement>('[data-act="save"]')!;
@@ -217,22 +366,38 @@ async function openImageCropper(opts: {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
+    // Position the product background image in the stage.
+    if (useContext && bgEl) {
+      bgEl.crossOrigin = 'anonymous';
+      bgEl.style.left = imgDispLeft + 'px';
+      bgEl.style.top = imgDispTop + 'px';
+      bgEl.style.width = imgDispW + 'px';
+      bgEl.style.height = imgDispH + 'px';
+      bgEl.onerror = () => {
+        // Product image failed to load (CORS, 404). Hide it but keep
+        // the cropper functional with a neutral background.
+        bgEl.style.display = 'none';
+        stage.style.background = '#1f2937';
+      };
+      bgEl.src = opts.productImageUrl as string;
+    }
+
     let imgNaturalW = 0;
     let imgNaturalH = 0;
-    let scaleMin = 1;          // image→display ratio at "cover" (= 1× on slider)
-    let scale = 1;             // current image→display ratio
-    let offsetX = 0;           // top-left of image in stage coords
+    let scaleMin = 1;          // photo→display ratio at "cover" (= 1× on slider)
+    let scale = 1;             // current photo→display ratio
+    let offsetX = 0;           // top-left of photo in field-area coords
     let offsetY = 0;
     let resolved = false;
 
     function clampOffsets() {
       const dispW = imgNaturalW * scale;
       const dispH = imgNaturalH * scale;
-      // image must always cover the stage — top-left can never go
-      // positive (would expose left/top edge), bottom-right can never
-      // go below stage bounds (would expose right/bottom edge).
-      offsetX = Math.min(0, Math.max(cropDispW - dispW, offsetX));
-      offsetY = Math.min(0, Math.max(cropDispH - dispH, offsetY));
+      // photo must always cover the field area — top-left can never
+      // go positive (would expose left/top edge), bottom-right can
+      // never go below field bounds (would expose right/bottom edge).
+      offsetX = Math.min(0, Math.max(fieldDispW - dispW, offsetX));
+      offsetY = Math.min(0, Math.max(fieldDispH - dispH, offsetY));
     }
     function applyTransform() {
       imgEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
@@ -240,10 +405,10 @@ async function openImageCropper(opts: {
     function setZoomRatio(ratio: number) {
       const clamped = Math.max(1, Math.min(4, ratio));
       const newScale = scaleMin * clamped;
-      // Keep the image-pixel currently under the crop center fixed so
-      // zoom feels natural (CapCut/Instagram-style center-anchored).
-      const cx = cropDispW / 2;
-      const cy = cropDispH / 2;
+      // Keep the photo-pixel currently under the field center fixed
+      // so zoom feels natural (CapCut/Instagram-style center-anchored).
+      const cx = fieldDispW / 2;
+      const cy = fieldDispH / 2;
       const imgCx = (cx - offsetX) / scale;
       const imgCy = (cy - offsetY) / scale;
       scale = newScale;
@@ -258,7 +423,7 @@ async function openImageCropper(opts: {
     imgEl.onload = () => {
       imgNaturalW = imgEl.naturalWidth || imgEl.width;
       imgNaturalH = imgEl.naturalHeight || imgEl.height;
-      scaleMin = Math.max(cropDispW / imgNaturalW, cropDispH / imgNaturalH);
+      scaleMin = Math.max(fieldDispW / imgNaturalW, fieldDispH / imgNaturalH);
       // Restore prior crop on re-adjust, otherwise center+cover.
       if (opts.initial) {
         scale = scaleMin * Math.max(1, Math.min(4, opts.initial.scale || 1));
@@ -266,22 +431,23 @@ async function openImageCropper(opts: {
         offsetY = opts.initial.offsetY;
       } else {
         scale = scaleMin;
-        offsetX = (cropDispW - imgNaturalW * scale) / 2;
-        offsetY = (cropDispH - imgNaturalH * scale) / 2;
+        offsetX = (fieldDispW - imgNaturalW * scale) / 2;
+        offsetY = (fieldDispH - imgNaturalH * scale) / 2;
       }
       clampOffsets();
       applyTransform();
       slider.value = String(scale / scaleMin);
     };
     imgEl.onerror = () => {
-      // Image failed to load (CORS, 404, etc) — surface to caller as
-      // null so the upload flow can fall back to using the URL as-is.
+      // Photo failed to load. Surface to caller as null so the upload
+      // flow can fall back to using the URL as-is.
       cleanup();
       if (!resolved) { resolved = true; resolve(null); }
     };
     imgEl.src = opts.imageUrl;
 
-    // ===== Pointer drag =====
+    // ===== Pointer drag (works anywhere on the stage; pans the photo
+    // inside the field area regardless of where the customer presses) =====
     let dragging = false;
     let lastX = 0;
     let lastY = 0;
@@ -289,12 +455,7 @@ async function openImageCropper(opts: {
     stage.addEventListener('pointerdown', (e) => {
       if (e.button !== undefined && e.button !== 0) return;
       // Two fingers → pinch (handled by touch listeners). Suppress drag.
-      if ((e as any).pointerType === 'touch') {
-        // touchstart (further down) tracks the second finger and sets
-        // dragging=false. We don't capture here for touch, to let the
-        // browser deliver touchmove to both fingers.
-        return;
-      }
+      if ((e as any).pointerType === 'touch') return;
       dragging = true;
       lastX = e.clientX;
       lastY = e.clientY;
@@ -341,28 +502,18 @@ async function openImageCropper(opts: {
       setZoomRatio((scale / scaleMin) / 1.2);
     });
 
-    // ===== Touch — single-finger pan (handled via pointer above) +
-    // two-finger pinch (handled here, browser delivers gestureend
-    // unreliably so we read raw touch events).
+    // ===== Touch — single-finger pan + two-finger pinch. =====
     let pinchStartDist = 0;
     let pinchStartRatio = 1;
-    let pinchStartCenter = { x: 0, y: 0 };
     let pinchStartImgPt = { x: 0, y: 0 };
+    let pinchStartFieldPt = { x: 0, y: 0 };
     stage.addEventListener('touchstart', (e) => {
       if (e.touches.length === 1) {
-        // Single-finger drag — let pointer handlers run.
         const t = e.touches[0];
-        const rect = stage.getBoundingClientRect();
-        // Mark dragging manually so subsequent touchmove pans without
-        // requiring a pointermove (Safari's pointer/touch interaction
-        // is finicky).
         dragging = true;
         lastX = t.clientX;
         lastY = t.clientY;
-        // Suppress synthetic mouse events that follow touch.
-        // (e.preventDefault() also prevents page scroll.)
         e.preventDefault();
-        rect; // (rect var kept to silence unused-warning in some toolchains)
       } else if (e.touches.length === 2) {
         dragging = false;
         const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -370,13 +521,15 @@ async function openImageCropper(opts: {
         pinchStartDist = Math.hypot(dx, dy);
         pinchStartRatio = scale / scaleMin;
         const rect = stage.getBoundingClientRect();
-        pinchStartCenter = {
-          x: ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left,
-          y: ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top,
-        };
+        // Pinch center in stage coords:
+        const stageCx = ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left;
+        const stageCy = ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top;
+        // Convert to field-area coords (relative to field's top-left):
+        pinchStartFieldPt = { x: stageCx - fieldDispLeft, y: stageCy - fieldDispTop };
+        // Photo-pixel under that gesture center:
         pinchStartImgPt = {
-          x: (pinchStartCenter.x - offsetX) / scale,
-          y: (pinchStartCenter.y - offsetY) / scale,
+          x: (pinchStartFieldPt.x - offsetX) / scale,
+          y: (pinchStartFieldPt.y - offsetY) / scale,
         };
         e.preventDefault();
       }
@@ -399,10 +552,9 @@ async function openImageCropper(opts: {
         const dist = Math.hypot(dx, dy);
         const newRatio = Math.max(1, Math.min(4, pinchStartRatio * (dist / pinchStartDist)));
         scale = scaleMin * newRatio;
-        // Anchor the gesture center to the same image pixel so the
-        // image doesn't lurch under the fingers.
-        offsetX = pinchStartCenter.x - pinchStartImgPt.x * scale;
-        offsetY = pinchStartCenter.y - pinchStartImgPt.y * scale;
+        // Anchor the gesture center to the same image pixel.
+        offsetX = pinchStartFieldPt.x - pinchStartImgPt.x * scale;
+        offsetY = pinchStartFieldPt.y - pinchStartImgPt.y * scale;
         clampOffsets();
         applyTransform();
         slider.value = String(newRatio);
@@ -459,16 +611,14 @@ async function openImageCropper(opts: {
         cv.height = opts.outputHeight;
         const ctx = cv.getContext('2d');
         if (!ctx) return rej(new Error('No 2D context'));
-        // Map crop window → source image rect.
+        // Map field area → source photo rect.
         const srcX = -offsetX / scale;
         const srcY = -offsetY / scale;
-        const srcW = cropDispW / scale;
-        const srcH = cropDispH / scale;
+        const srcW = fieldDispW / scale;
+        const srcH = fieldDispH / scale;
         // White background as a defensive default for transparent
-        // PNGs. The renderer composites this image inside an SVG with
-        // its own background, but a transparent JPEG can't exist —
-        // painting white avoids accidental black pixels in lossy
-        // browsers.
+        // PNGs (a transparent JPEG can't exist — painting white avoids
+        // accidental black pixels in lossy browsers).
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, opts.outputWidth, opts.outputHeight);
         ctx.imageSmoothingEnabled = true;
@@ -1403,7 +1553,7 @@ async function mount({ el, productHandle }: MountSpec) {
         }
         .rp-pz-crop-stage {
           position: relative;
-          background: #111;
+          background: #f3f4f6;
           border-radius: 10px;
           overflow: hidden;
           touch-action: none;        /* swallow pinch/pan from theme */
@@ -1412,6 +1562,45 @@ async function mount({ el, productHandle }: MountSpec) {
           -webkit-user-select: none;
         }
         .rp-pz-crop-stage:active { cursor: grabbing; }
+        /* P26-21 — product image as in-context background. Position
+           and size are set inline by the JS so the field area lands
+           centered inside the stage. */
+        .rp-pz-crop-bg {
+          position: absolute;
+          left: 0;
+          top: 0;
+          max-width: none;
+          pointer-events: none;
+          -webkit-user-drag: none;
+          user-select: none;
+        }
+        /* P26-21 — frame: clipping container for the customer photo.
+           Positioned and sized inline by the JS to cover exactly the
+           field area on the stage. Mask shape (rect / circle / heart)
+           is applied via the modifier class. */
+        .rp-pz-crop-frame {
+          position: absolute;
+          overflow: hidden;
+          background: rgba(0, 0, 0, 0.04);
+          pointer-events: none;
+        }
+        .rp-pz-crop-frame--circle { border-radius: 50%; }
+        /* P26-21 — outline overlay: paints a soft 2px white border
+           around the field area (and a dim 4px shadow outside) so
+           the customer can clearly see the boundary even when the
+           photo blends into the necklace. Sibling of frame so the
+           border is not clipped by overflow:hidden. */
+        .rp-pz-crop-frame-outline {
+          position: absolute;
+          pointer-events: none;
+          box-shadow:
+            inset 0 0 0 2px rgba(255, 255, 255, 0.92),
+            0 0 0 4px rgba(0, 0, 0, 0.18);
+          border-radius: inherit;
+        }
+        .rp-pz-crop-frame-outline.rp-pz-crop-frame--circle {
+          border-radius: 50%;
+        }
         .rp-pz-crop-img {
           position: absolute;
           left: 0;
@@ -1422,19 +1611,18 @@ async function mount({ el, productHandle }: MountSpec) {
           pointer-events: none;       /* let the stage receive all events */
           -webkit-user-drag: none;
         }
+        /* P26-19 — plain-mode mask (used only when no product context
+           is available). Outlines the cropped region without dimming
+           the visible photo. */
         .rp-pz-crop-mask {
           position: absolute;
           inset: 0;
           pointer-events: none;
-          /* 2px white border + soft outer shadow — outlines the
-             cropped region without dimming the visible photo. */
           box-shadow:
             inset 0 0 0 2px rgba(255, 255, 255, 0.92),
             inset 0 0 0 9999px rgba(0, 0, 0, 0.28);
         }
         .rp-pz-crop-mask--circle {
-          /* Circle mask: the inset shadow paints a dim "outside the
-             circle" overlay using a CSS mask-image radial gradient. */
           box-shadow: none;
         }
         .rp-pz-crop-mask--circle::before {
@@ -2154,6 +2342,30 @@ async function mount({ el, productHandle }: MountSpec) {
       const recropLabel = document.createElement('span');
       recropLabel.textContent = 'Re-adjust crop';
       recropBtn.appendChild(recropLabel);
+      // P26-21 — read the currently-visible product image src so the
+      // cropper can show an in-context WYSIWYG preview (the customer
+      // sees their photo composited inside the necklace / locket as
+      // they drag, not just the bare photo).
+      function currentProductImageUrl(): string | null {
+        const img = findProductImage();
+        if (!img) return null;
+        const src = img.currentSrc || img.src || '';
+        // Shopify CDN serves CORS-enabled images, but bare /assets/
+        // URLs sometimes 404 or lack CORS — we still try, the cropper
+        // falls back gracefully if loading fails.
+        return src || null;
+      }
+      function fieldRectForCropper(): { x: number; y: number; w: number; h: number } {
+        // Use the per-variant override geometry if one applies, so the
+        // preview matches the storefront render exactly.
+        const eff = effectiveField(f).field;
+        return {
+          x: eff.position_x,
+          y: eff.position_y,
+          w: eff.width,
+          h: eff.height,
+        };
+      }
       recropBtn.addEventListener('click', async () => {
         const state = cropState[String(f.id)];
         if (!state) return;
@@ -2164,6 +2376,10 @@ async function mount({ el, productHandle }: MountSpec) {
           outputHeight: dims.h,
           maskShape: (f.mask_shape as any) || 'rect',
           initial: state.params,
+          productImageUrl: currentProductImageUrl(),
+          fieldOnCanvas: fieldRectForCropper(),
+          canvasWidth: template.canvas_width,
+          canvasHeight: template.canvas_height,
           title: 'Adjust your photo',
           hint: 'Drag to position. Pinch or use the slider to zoom.',
           saveLabel: 'Use this photo',
@@ -2189,28 +2405,56 @@ async function mount({ el, productHandle }: MountSpec) {
       });
 
       file.addEventListener('change', async () => {
-        const f0 = file.files?.[0];
+        let f0 = file.files?.[0];
         if (!f0) return;
         const prevText = dropText.textContent || '';
-        dropText.textContent = 'Uploading...';
         // Hide any prior success badge while a new upload is in flight.
         checkIcon.style.display = 'none';
         recropBtn.removeAttribute('data-visible');
         if (errEl) errEl.textContent = '';
         try {
-          // Step 1 — upload the ORIGINAL file. The cropper needs a
-          // public URL it can load with crossOrigin to draw onto a
-          // canvas, and we want the original kept on the server so
-          // the customer can re-adjust later without re-uploading.
+          // P26-21 — Step 0: convert HEIC → JPEG client-side BEFORE
+          // anything else. iPhones produce HEIC by default and most
+          // non-Safari browsers can't decode HEIC, so the cropper
+          // would crash on load and the renderer would show a broken
+          // image. heic2any (loaded on demand from CDN) handles the
+          // decode. Customer sees a brief "Converting…" message.
+          if (isHeicFile(f0)) {
+            dropText.textContent = 'Converting…';
+            try {
+              f0 = await convertHeicIfNeeded(f0);
+            } catch (heicErr: any) {
+              // If conversion fails (CSP blocks CDN, very large file
+              // OOMs, …), fall through with the original file. The
+              // upload will still land in R2 but the cropper will
+              // skip the WYSIWYG preview.
+              try { console.warn('[rp] HEIC conversion failed:', heicErr); } catch { /* */ }
+            }
+          }
+
+          dropText.textContent = 'Uploading...';
+          // Step 1 — upload the (possibly-converted) file. The cropper
+          // needs a public URL it can load with crossOrigin to draw
+          // onto a canvas, and we want the original kept on the
+          // server so the customer can re-adjust later without
+          // re-uploading.
           const originalUrl = await uploadBlob(f0, f0.name);
 
           // Step 2 — open the cropper. Output dims match field aspect.
+          // P26-21 — pass the current product image + field bounds so
+          // the cropper renders an in-context WYSIWYG preview (the
+          // customer's photo composited inside the locket / window
+          // as they adjust the crop).
           const dims = computeOutputDims();
           const result = await openImageCropper({
             imageUrl: originalUrl,
             outputWidth: dims.w,
             outputHeight: dims.h,
             maskShape: (f.mask_shape as any) || 'rect',
+            productImageUrl: currentProductImageUrl(),
+            fieldOnCanvas: fieldRectForCropper(),
+            canvasWidth: template.canvas_width,
+            canvasHeight: template.canvas_height,
             title: 'Adjust your photo',
             hint: 'Drag to position. Pinch or use the slider to zoom.',
             saveLabel: 'Use this photo',

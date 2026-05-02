@@ -265,31 +265,17 @@ export function PersonalizerCanvas({
       const y1raw = Math.min(p.y, drag.anchorY);
       const x2raw = Math.max(p.x, drag.anchorX);
       const y2raw = Math.max(p.y, drag.anchorY);
-      let wRaw = Math.max(20, x2raw - x1raw);
-      let hRaw = Math.max(16, y2raw - y1raw);
-      // P26-12 — image fields lock aspect ratio during resize so the
-      // mask doesn't crop unexpectedly. Use the field's CURRENT
-      // aspect ratio as the constraint; cursor sets the larger of
-      // the two dimensions, the other follows.
-      const f = fields.find((x) => x.id === drag.fieldId);
-      let w = wRaw, h = hRaw;
-      let x1 = x1raw, y1 = y1raw;
-      if (f && f.field_kind === 'image') {
-        const refW = (draftPos[f.id]?.width ?? f.width) || 1;
-        const refH = (draftPos[f.id]?.height ?? f.height) || 1;
-        const aspect = refW / refH;
-        // Use whichever dimension grew the most as the driver.
-        if (wRaw / aspect >= hRaw) {
-          h = Math.round(wRaw / aspect);
-          w = wRaw;
-        } else {
-          w = Math.round(hRaw * aspect);
-          h = hRaw;
-        }
-        // Recompute x1/y1 so the OPPOSITE corner (anchor) stays put.
-        x1 = drag.corner === 'nw' || drag.corner === 'sw' ? drag.anchorX - w : drag.anchorX;
-        y1 = drag.corner === 'nw' || drag.corner === 'ne' ? drag.anchorY - h : drag.anchorY;
-      }
+      const w = Math.max(20, x2raw - x1raw);
+      const h = Math.max(16, y2raw - y1raw);
+      const x1 = x1raw;
+      const y1 = y1raw;
+      // P26-20 — free resize for ALL field types, image included.
+      // Earlier (P26-12) image fields were aspect-locked to keep the
+      // mask shape predictable, but the merchant wants to be able to
+      // make the field a tall rectangle (engraved bar) or a wide one
+      // (locket cuff) at will. The cropper now matches whatever
+      // aspect ratio the field has, so the photo is fitted to the
+      // box without distortion.
       setDraftPos((prev) => ({
         ...prev,
         [drag.fieldId]: {
