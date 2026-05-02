@@ -55,16 +55,30 @@ export default function IntegratorPage() {
     try { localStorage.setItem('integrator.sidebarCollapsed', sidebarCollapsed ? '1' : '0'); }
     catch { /* */ }
   }, [sidebarCollapsed]);
-  // Auto-collapse on first viewport narrower than 1280 px so the
-  // canvas isn't squeezed at typical laptop sizes. Honors a user
-  // override (if they manually expanded, don't auto-collapse again).
+  // P26-11 — auto-collapse on every resize below the threshold, not
+  // just on first load. This is the actual user-reported behaviour:
+  // when they shrink the window, the sidebar should retract FIRST so
+  // the preview / canvas stays usable. They can always manually
+  // expand even on a narrow screen via the toggle button.
   useEffect(() => {
-    const stored = (() => {
-      try { return localStorage.getItem('integrator.sidebarCollapsed.userSet') === '1'; }
-      catch { return false; }
-    })();
-    if (stored) return;
-    if (window.innerWidth < 1280) setSidebarCollapsed(true);
+    const COLLAPSE_BELOW = 1280;
+    let lastWidth = window.innerWidth;
+    const onResize = () => {
+      const w = window.innerWidth;
+      // Crossing threshold downward -> auto-collapse.
+      if (lastWidth >= COLLAPSE_BELOW && w < COLLAPSE_BELOW) {
+        setSidebarCollapsed(true);
+      }
+      // Crossing threshold upward -> auto-expand.
+      else if (lastWidth < COLLAPSE_BELOW && w >= COLLAPSE_BELOW) {
+        setSidebarCollapsed(false);
+      }
+      lastWidth = w;
+    };
+    // Initial pass so a small viewport at first load also collapses.
+    if (window.innerWidth < COLLAPSE_BELOW) setSidebarCollapsed(true);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   const isAdmin = user?.role === 'admin';

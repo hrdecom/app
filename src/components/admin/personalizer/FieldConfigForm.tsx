@@ -154,12 +154,23 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
 
           <Section title="Typography">
             <Row label="Font family">
-              <Select value={draft.font_family || ''} onValueChange={(v) => patch('font_family', v)}>
-                <SelectTrigger><SelectValue placeholder="Pick a font" /></SelectTrigger>
-                <SelectContent>
-                  {fontOptions.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {/* P26-11 — searchable font picker. The plain Select had
+                  no filter, which is awful with 30+ Google Fonts on
+                  the list. A native HTML <datalist> gives the user a
+                  search-as-you-type dropdown without a heavy combobox
+                  dependency. The text input value is the font_family;
+                  any string is accepted (so the merchant can type a
+                  custom font they uploaded). */}
+              <Input
+                list="rp-font-family-list"
+                placeholder="Search font (e.g. Lato, Pinyon Script)..."
+                value={draft.font_family || ''}
+                onChange={(e) => patch('font_family', e.target.value)}
+                style={{ fontFamily: draft.font_family || 'inherit' }}
+              />
+              <datalist id="rp-font-family-list">
+                {fontOptions.map((f) => <option key={f} value={f} />)}
+              </datalist>
             </Row>
             <Row label="Max font size (px)">
               <Input type="number" value={draft.font_size_px || ''} onChange={(e) => patch('font_size_px', e.target.value ? parseInt(e.target.value) : null)} />

@@ -120,6 +120,13 @@ export function PersonalizerCanvas({
         canvas_width: template.canvas_width,
         canvas_height: template.canvas_height,
         base_image_url: template.base_image_url,
+        // P26-11 — pass base_image_layer_z so the renderer respects
+        // the merchant's drag-to-reorder choice. Was missing before;
+        // the renderer fell back to its hardcoded default (5) which
+        // made the image always render last (visually on top) once
+        // the unified-layer recompute pushed all field z values into
+        // the 1..N range below 5.
+        base_image_layer_z: template.base_image_layer_z,
       },
       fields: fieldsWithDraft,
       values,
