@@ -879,9 +879,15 @@ async function mount({ el, productHandle }: MountSpec) {
    *   • document focus stays on the input → no iOS keyboard dismiss/zoom
    *   • Dawn's slider scrolls horizontally only → no page viewport jump
    */
-  function ensureVariantImageVisible() {
-    if (isVariantSlideActive(productHandle)) return;
-    const mediaId = getActiveVariantMediaId(productHandle);
+  // P25-V6.3 — productHandle is passed EXPLICITLY (no closure capture)
+  // so Vite's minifier can't accidentally resolve it to a different
+  // outer-scope identifier when it hoists this function out of mount's
+  // body. V6.2's `y` was being captured from module scope (init's
+  // minified name) instead of mount's productHandle param, so the
+  // function silently early-returned every call.
+  function ensureVariantImageVisible(handle: string) {
+    if (isVariantSlideActive(handle)) return;
+    const mediaId = getActiveVariantMediaId(handle);
     if (!mediaId) return;
     // Find the variant's thumbnail button.
     const sel = [
@@ -1203,10 +1209,10 @@ async function mount({ el, productHandle }: MountSpec) {
         initialValues[String(f.id)] = input.value;
         const count = wrap.querySelector<HTMLDivElement>('.rp-pz-count');
         if (count) count.textContent = `${input.value.length} / ${f.max_chars || '∞'}`;
-        // P25-V5.6 — snap gallery back to the variant image so the
-        // customer sees the live preview as they type. Idempotent /
-        // cheap when already on the right image (early-return inside).
-        ensureVariantImageVisible();
+        // P25-V6.3 — snap gallery back to the variant image so the
+        // customer sees the live preview as they type. Pass handle
+        // explicitly to defeat Vite minifier's closure-hoisting bug.
+        ensureVariantImageVisible(productHandle);
         rerender();
       });
       wrap.appendChild(input);
