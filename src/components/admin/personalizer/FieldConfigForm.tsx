@@ -98,9 +98,15 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
             onChange={(e) => patch('customer_label', e.target.value || null)}
           />
         </Row>
-        <Row label="Placeholder (gray hint)">
-          <Input value={draft.placeholder || ''} onChange={(e) => patch('placeholder', e.target.value || null)} />
-        </Row>
+        {/* P26-28 follow-up — birthstone fields render as a dropdown
+            selector on the storefront, not an input — a placeholder
+            hint would never appear, so hide the row to keep the form
+            focused on relevant settings. */}
+        {draft.field_kind !== 'birthstone' && (
+          <Row label="Placeholder (gray hint)">
+            <Input value={draft.placeholder || ''} onChange={(e) => patch('placeholder', e.target.value || null)} />
+          </Row>
+        )}
         <Row label="Default value (pre-filled, submitted if untouched)">
           <Input value={draft.default_value || ''} onChange={(e) => patch('default_value', e.target.value || null)} />
         </Row>

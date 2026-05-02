@@ -300,15 +300,21 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
   async function handleAddBirthstone() {
     if (!tpl) return;
     // P26-26 — auto-number birthstone labels (Birthstone, Birthstone 2,
-    // Birthstone 3, ...) the same way image fields do. Default value =
-    // month index "1" (January) so the canvas preview has something to
-    // render before the merchant changes the default in the form.
+    // Birthstone 3, ...) the same way image fields do.
     const existing = (tpl.fields || []).filter((f) => f.field_kind === 'birthstone').length;
     const label = existing === 0 ? 'Birthstone' : `Birthstone ${existing + 1}`;
+    // P26-28 follow-up — auto-cycle the default selected month so
+    // each new birthstone field shows a DIFFERENT preview gem out of
+    // the box. This makes the canvas readable when the merchant has
+    // multiple birthstones (no more "all 3 birthstones look identical
+    // until I manually change them"). Cycle of 3 picked by the
+    // merchant: January (1), December (12), August (8), then repeat.
+    const monthCycle = [1, 12, 8];
+    const defaultMonth = monthCycle[existing % monthCycle.length];
     const created = await createField(tpl.id, {
       field_kind: 'birthstone',
       label,
-      default_value: '1',
+      default_value: String(defaultMonth),
       // P26-26 follow-up — birthstones are round gemstones; default
       // to a circular mask so they fit naturally inside the locket
       // cutout without the corners poking out.

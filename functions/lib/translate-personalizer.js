@@ -166,11 +166,26 @@ export async function translateTemplateFields(env, fields, locale) {
   for (const f of fieldList) {
     if (!f || !f.id) continue;
     const id = f.id;
-    if (typeof f.customer_label === 'string' && f.customer_label.trim()) {
-      dict[`customer_label_${id}`] = f.customer_label;
+    // P26-28 follow-up — ALWAYS translate a customer-facing label and
+    // a cart label, even when the merchant left those columns null.
+    // The widget falls back to f.label (the internal admin name)
+    // when customer_label / cart_label are empty; without this we'd
+    // ship the English admin name to non-English visitors. We
+    // synthesize the source by preferring the explicit value, then
+    // falling back to f.label so Claude has SOMETHING to translate.
+    const customerSource =
+      (typeof f.customer_label === 'string' && f.customer_label.trim()) ||
+      (typeof f.label === 'string' && f.label.trim()) ||
+      '';
+    if (customerSource) {
+      dict[`customer_label_${id}`] = customerSource;
     }
-    if (typeof f.cart_label === 'string' && f.cart_label.trim()) {
-      dict[`cart_label_${id}`] = f.cart_label;
+    const cartSource =
+      (typeof f.cart_label === 'string' && f.cart_label.trim()) ||
+      (typeof f.label === 'string' && f.label.trim()) ||
+      '';
+    if (cartSource) {
+      dict[`cart_label_${id}`] = cartSource;
     }
     if (typeof f.info_text === 'string' && f.info_text.trim()) {
       dict[`info_text_${id}`] = f.info_text;

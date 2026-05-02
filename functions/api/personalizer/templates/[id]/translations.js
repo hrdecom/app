@@ -203,10 +203,13 @@ async function handlePostAuto(context) {
   const mode = body.mode === 'all' ? 'all' : 'missing';
   const includeBirthstones = body.includeBirthstones !== false;
 
-  // Pull every field on this template (only the translatable columns).
+  // Pull every field on this template. We also include `label` so
+  // the translator can synthesize a customer_label / cart_label
+  // translation when the merchant left those columns null (the
+  // storefront falls back to label, so it must be translated too).
   const { results: fields } = await env.DB
     .prepare(
-      `SELECT id, field_kind, customer_label, cart_label, info_text, placeholder
+      `SELECT id, field_kind, label, customer_label, cart_label, info_text, placeholder
          FROM customization_fields
         WHERE template_id = ?`,
     )
@@ -238,10 +241,13 @@ async function handlePostAuto(context) {
     let fieldsToTranslate = fields || [];
     if (mode === 'missing') {
       fieldsToTranslate = fieldsToTranslate.filter((f) => {
-        // If ANY of the four columns has a value, the field is
-        // translatable; if it's already translated for this locale,
-        // skip it.
+        // P26-28 follow-up — `label` always exists, so any field is
+        // translatable; the synthesized customer_label / cart_label
+        // fallback in translateTemplateFields covers the common case
+        // where the merchant didn't fill in explicit translatable
+        // columns. Skip only when this locale is already done.
         const hasContent =
+          (f.label && f.label.trim()) ||
           (f.customer_label && f.customer_label.trim()) ||
           (f.cart_label && f.cart_label.trim()) ||
           (f.info_text && f.info_text.trim()) ||

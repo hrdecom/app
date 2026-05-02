@@ -133,7 +133,13 @@ async function runPublishTranslations(env, templateId) {
 
   await Promise.all(localeKeys.map(async (locale) => {
     const fieldsToTranslate = (fields || []).filter((f) => {
+      // P26-28 follow-up — every field has at least a label (NOT NULL
+      // in the schema). The translator now synthesizes both
+      // customer_label and cart_label from f.label as a fallback so
+      // the storefront's `(f.cart_label || f.label)` chain never
+      // surfaces an English admin name to non-English visitors.
       const hasContent =
+        (f.label && f.label.trim()) ||
         (f.customer_label && f.customer_label.trim()) ||
         (f.cart_label && f.cart_label.trim()) ||
         (f.info_text && f.info_text.trim()) ||
