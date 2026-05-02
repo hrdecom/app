@@ -6,9 +6,10 @@
   "scripts": {
     "vite": "vite --port 5173 --strictPort",
     "dev": "wrangler pages dev --port 8788 --persist-to=.wrangler/state --compatibility-date=2025-01-15 --d1=DB=jewelry-crm-db --kv=SESSIONS --r2=IMAGES -- npm run vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "deploy": "npm run build && wrangler pages deploy ./dist --project-name=jewelry-crm",
+    "deploy": "npm run build && npm run db:migrate:remote -- --yes && wrangler pages deploy ./dist --project-name=jewelry-crm",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:exec:local": "wrangler d1 execute jewelry-crm-db --local --persist-to=.wrangler/state",
