@@ -1250,6 +1250,79 @@ interface StorefrontTemplate extends PreviewTemplate {
   updated_at?: string;
 }
 
+/**
+ * P26-26 — birthstone library entry as it lives on the storefront,
+ * AFTER URL absolutification.
+ */
+interface BirthstoneEntry {
+  month_index: number;
+  label: string;
+  image_url: string | null;
+}
+
+/**
+ * P26-26 — month names used to seed the selector UI when the
+ * merchant's library doesn't define a label yet (e.g. an entry
+ * pre-uploaded with no label tweak).
+ */
+const RP_DEFAULT_MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/**
+ * P26-26 — parse the raw birthstones JSON into 12 entries (1-12),
+ * filling missing months with empty entries so the selector UI
+ * always has something to render and the renderer always has 12
+ * slots to look up.
+ */
+function parseBirthstonesPayload(raw: string | null | undefined): BirthstoneEntry[] {
+  let parsed: any[] = [];
+  if (raw) {
+    try { const j = JSON.parse(raw); if (Array.isArray(j)) parsed = j; } catch { /* */ }
+  }
+  const byIdx = new Map<number, BirthstoneEntry>();
+  for (const e of parsed) {
+    if (!e || typeof e !== 'object') continue;
+    const idx = Number(e.month_index);
+    if (!Number.isFinite(idx) || idx < 1 || idx > 12) continue;
+    byIdx.set(idx, {
+      month_index: idx,
+      label: typeof e.label === 'string' && e.label ? e.label : RP_DEFAULT_MONTH_NAMES[idx - 1],
+      image_url: typeof e.image_url === 'string' && e.image_url ? e.image_url : null,
+    });
+  }
+  const out: BirthstoneEntry[] = [];
+  for (let i = 1; i <= 12; i++) {
+    out.push(byIdx.get(i) || {
+      month_index: i,
+      label: RP_DEFAULT_MONTH_NAMES[i - 1],
+      image_url: null,
+    });
+  }
+  return out;
+}
+
+/**
+ * P26-26 — absolutify every image_url inside the birthstones JSON
+ * blob and re-stringify, so the renderer (which consumes the JSON
+ * verbatim) ends up with cross-origin-safe URLs.
+ */
+function absolutifyBirthstonesJson(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let parsed: any[];
+  try {
+    const j = JSON.parse(raw);
+    if (!Array.isArray(j)) return raw;
+    parsed = j;
+  } catch { return raw; }
+  const next = parsed.map((e) => {
+    if (!e || typeof e !== 'object') return e;
+    return { ...e, image_url: e.image_url ? absolutifyUrl(e.image_url) : null };
+  });
+  return JSON.stringify(next);
+}
+
 interface MountSpec {
   el: HTMLElement;
   productHandle: string;
@@ -1382,12 +1455,22 @@ async function mount({ el, productHandle }: MountSpec) {
   const template: StorefrontTemplate = {
     ...payload.template,
     base_image_url: absolutifyUrl(payload.template?.base_image_url),
+    // P26-26 — birthstones_json is stored as a JSON string at the
+    // template level; absolutify each entry's image_url so the SVG
+    // renderer can <image href> them cross-origin from the merchant
+    // domain.
+    birthstones_json: absolutifyBirthstonesJson(payload.template?.birthstones_json),
   };
   const fields: StorefrontField[] = (payload.fields || []).map((f: any) =>
     f.field_kind === 'image' && f.default_value
       ? { ...f, default_value: absolutifyUrl(f.default_value) }
       : f,
   );
+
+  // P26-26 — pre-parse the birthstones library once (also used by the
+  // selector UI to look up labels and thumbnail URLs). The renderer
+  // does its own parse internally for the SVG paint path.
+  const birthstoneOptions = parseBirthstonesPayload(template.birthstones_json);
 
   // Per-variant override payloads. The backend already JSON-parses
   // these (see /api/personalizer/template/:handle), so they arrive
@@ -1595,6 +1678,119 @@ async function mount({ el, productHandle }: MountSpec) {
           font-weight: bold;
           font-size: 12px;
           cursor: help;
+        }
+
+        /* P26-26 — Birthstone compact selector. Trigger looks like a
+           native variant picker (border, padding, hover); clicking
+           opens a vertically-scrolling dropdown of 12 month rows
+           (icon left, label right). Anchored absolutely to the
+           wrapper so theme overflow doesn't clip it. */
+        .rp-pz-birth { position: relative; }
+        .rp-pz-birth-trigger {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          padding: 9px 12px;
+          background: transparent;
+          border: 1px solid rgba(0, 0, 0, 0.18);
+          border-radius: inherit;
+          font-family: inherit;
+          font-size: 14px;
+          color: inherit;
+          line-height: 1.3;
+          cursor: pointer;
+          text-align: left;
+          transition: border-color .15s, background-color .15s;
+          box-sizing: border-box;
+        }
+        .rp-pz-birth-trigger:hover { border-color: rgba(0, 0, 0, 0.45); }
+        .rp-pz-birth-trigger:focus { outline: none; border-color: rgba(0, 0, 0, 0.6); }
+        .rp-pz-birth-trigger-icon {
+          flex: 0 0 auto;
+          width: 22px;
+          height: 22px;
+          border-radius: 4px;
+          background: rgba(0, 0, 0, 0.04);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+        }
+        .rp-pz-birth-trigger-icon img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          display: block;
+        }
+        .rp-pz-birth-trigger-label {
+          flex: 1;
+          font-family: inherit;
+          font-size: inherit;
+          color: inherit;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .rp-pz-birth-trigger-caret {
+          flex: 0 0 auto;
+          opacity: 0.55;
+          display: inline-flex;
+          align-items: center;
+        }
+        .rp-pz-birth-menu {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: calc(100% + 4px);
+          z-index: 1000;
+          max-height: 280px;
+          overflow-y: auto;
+          background: #fff;
+          color: #111;
+          border: 1px solid rgba(0, 0, 0, 0.16);
+          border-radius: 8px;
+          box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+          padding: 4px;
+        }
+        .rp-pz-birth-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          padding: 6px 8px;
+          background: transparent;
+          border: 0;
+          border-radius: 5px;
+          font-family: inherit;
+          font-size: 14px;
+          color: inherit;
+          text-align: left;
+          cursor: pointer;
+          transition: background-color .12s;
+        }
+        .rp-pz-birth-item:hover { background: rgba(0, 0, 0, 0.04); }
+        .rp-pz-birth-item-icon {
+          flex: 0 0 auto;
+          width: 26px;
+          height: 26px;
+          border-radius: 4px;
+          background: rgba(0, 0, 0, 0.04);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+        }
+        .rp-pz-birth-item-icon img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          display: block;
+        }
+        .rp-pz-birth-item-label {
+          flex: 1;
+          font-family: inherit;
+          font-size: inherit;
         }
 
         /* P26-19 — re-adjust crop button. Slim secondary control under
@@ -2652,6 +2848,156 @@ async function mount({ el, productHandle }: MountSpec) {
       row.appendChild(dropZone);
       row.appendChild(recropBtn);
       row.appendChild(errEl);
+    } else if (f.field_kind === 'birthstone') {
+      // P26-26 — Birthstone selector. Compact dropdown that opens to
+      // a 1-row-per-month list with a thumbnail icon on the left and
+      // the month label on the right. The customer's pick is stored
+      // in initialValues[fieldId] as the month index (string "1".."12")
+      // — the renderer uses this to look up the image URL from
+      // template.birthstones_json. The cart hidden input gets the
+      // resolved label (e.g. "January") via cartValueForBirthstone()
+      // when the per-field hidden mirror is synced below.
+      //
+      // Default selection: f.default_value seeded by handleAddBirthstone
+      // ("1") OR whatever the merchant set in the admin form.
+      const initialMonth = String(f.default_value || '1');
+      const initialEntry =
+        birthstoneOptions.find((b) => String(b.month_index) === initialMonth) ||
+        birthstoneOptions[0];
+      // Write initial value into both maps so the SVG paints something
+      // on first render and the cart receives the default label even
+      // if the customer never opens the dropdown.
+      initialValues[String(f.id)] = String(initialEntry.month_index);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'rp-pz-birth';
+
+      const trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.className = 'rp-pz-birth-trigger';
+      trigger.setAttribute('aria-haspopup', 'listbox');
+      trigger.setAttribute('aria-expanded', 'false');
+
+      const triggerIcon = document.createElement('div');
+      triggerIcon.className = 'rp-pz-birth-trigger-icon';
+      const triggerLabel = document.createElement('span');
+      triggerLabel.className = 'rp-pz-birth-trigger-label';
+      const triggerCaret = document.createElement('span');
+      triggerCaret.className = 'rp-pz-birth-trigger-caret';
+      triggerCaret.innerHTML = '<svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4.5l3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      trigger.appendChild(triggerIcon);
+      trigger.appendChild(triggerLabel);
+      trigger.appendChild(triggerCaret);
+      wrap.appendChild(trigger);
+
+      const menu = document.createElement('div');
+      menu.className = 'rp-pz-birth-menu';
+      menu.setAttribute('role', 'listbox');
+      menu.style.display = 'none';
+      wrap.appendChild(menu);
+
+      // Render one button per option. Each row: [icon] [label].
+      for (const opt of birthstoneOptions) {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'rp-pz-birth-item';
+        item.setAttribute('role', 'option');
+        item.dataset.month = String(opt.month_index);
+
+        const ic = document.createElement('div');
+        ic.className = 'rp-pz-birth-item-icon';
+        if (opt.image_url) {
+          const img = document.createElement('img');
+          img.src = opt.image_url;
+          img.alt = '';
+          ic.appendChild(img);
+        }
+        item.appendChild(ic);
+
+        const lab = document.createElement('span');
+        lab.className = 'rp-pz-birth-item-label';
+        lab.textContent = opt.label;
+        item.appendChild(lab);
+
+        item.addEventListener('click', () => {
+          selectMonth(opt.month_index);
+          closeMenu();
+        });
+        menu.appendChild(item);
+      }
+
+      // Initial trigger paint:
+      paintTrigger(initialEntry);
+
+      // Open / close the dropdown.
+      function openMenu() {
+        menu.style.display = 'block';
+        trigger.setAttribute('aria-expanded', 'true');
+        // Close on outside click. Use capture phase + 1-tick delay so
+        // the click that opened the menu doesn't immediately close it.
+        setTimeout(() => document.addEventListener('mousedown', onDocClick, true), 0);
+      }
+      function closeMenu() {
+        menu.style.display = 'none';
+        trigger.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('mousedown', onDocClick, true);
+      }
+      function onDocClick(e: MouseEvent) {
+        if (!wrap.contains(e.target as Node)) closeMenu();
+      }
+      trigger.addEventListener('click', () => {
+        if (menu.style.display === 'none') openMenu();
+        else closeMenu();
+      });
+
+      function selectMonth(monthIdx: number) {
+        const entry = birthstoneOptions.find((b) => b.month_index === monthIdx);
+        if (!entry) return;
+        initialValues[String(f.id)] = String(monthIdx);
+        paintTrigger(entry);
+        // Update the per-row hidden cart input with the LABEL.
+        const propName = `properties[${cartName}]`;
+        let hidden = row.querySelector<HTMLInputElement>(
+          `input[type=hidden][name="${propName.replace(/"/g, '\\"')}"]`,
+        );
+        if (!hidden) {
+          hidden = document.createElement('input');
+          hidden.type = 'hidden';
+          hidden.name = propName;
+          row.appendChild(hidden);
+        }
+        hidden.value = entry.label;
+        // Snap the gallery back to the variant image so the live
+        // overlay updates against the right slide (same nudge as text
+        // and photo fields use).
+        ensureVariantImageVisible(productHandle);
+        rerender();
+        syncCartMirrorsRef();
+      }
+
+      function paintTrigger(entry: BirthstoneEntry) {
+        triggerIcon.innerHTML = '';
+        if (entry.image_url) {
+          const img = document.createElement('img');
+          img.src = entry.image_url;
+          img.alt = '';
+          triggerIcon.appendChild(img);
+        }
+        triggerLabel.textContent = entry.label;
+      }
+
+      // Seed the per-row hidden cart mirror NOW so the cart receives
+      // the default selection even if the customer never touches the
+      // dropdown. syncCartMirrors at the bottom of mount also handles
+      // this, but doing it inline avoids a race on rapid add-to-cart.
+      const propName = `properties[${cartName}]`;
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = propName;
+      hidden.value = initialEntry.label;
+      row.appendChild(hidden);
+
+      row.appendChild(wrap);
     }
 
     fieldsEl.appendChild(row);
@@ -2701,6 +3047,20 @@ async function mount({ el, productHandle }: MountSpec) {
     cartMirrors[name] = inp;
     return inp;
   }
+  // P26-26 — translate a field's raw value (in initialValues) into
+  // the string the cart should actually receive. Text and image are
+  // 1:1 (text content / image URL). Birthstone stores the month
+  // INDEX in initialValues so the renderer can look up the icon URL,
+  // but the cart wants the month LABEL ("January", "Janvier", etc).
+  function cartValueForField(f: StorefrontField, raw: string): string {
+    if (!raw) return '';
+    if (f.field_kind === 'birthstone') {
+      const idx = parseInt(raw, 10);
+      const entry = birthstoneOptions.find((b) => b.month_index === idx);
+      return entry ? entry.label : raw;
+    }
+    return raw;
+  }
   function syncCartMirrors() {
     for (const f of fields) {
       // P25-V4 — info-only fields never make it into the cart. They
@@ -2708,7 +3068,8 @@ async function mount({ el, productHandle }: MountSpec) {
       // would just clutter the line item. Skip outright.
       if (Number(f.is_info || 0) === 1) continue;
       const cartName = (f.cart_label && f.cart_label.trim()) || f.label;
-      const v = initialValues[String(f.id)] || '';
+      const raw = initialValues[String(f.id)] || '';
+      const v = cartValueForField(f, raw);
       const row = fieldsEl.querySelector<HTMLElement>(`[data-rp-field-id="${f.id}"]`);
       const visible = !row || row.style.display !== 'none';
       // effectiveHidden = P25-6 row hide OR per-variant override.hidden=1.
@@ -2768,7 +3129,8 @@ async function mount({ el, productHandle }: MountSpec) {
       // path too, mirroring the syncCartMirrors() exclusion above.
       if (Number(f.is_info || 0) === 1) continue;
       const cartName = (f.cart_label && f.cart_label.trim()) || f.label;
-      const v = initialValues[String(f.id)] || '';
+      const raw = initialValues[String(f.id)] || '';
+      const v = cartValueForField(f, raw);
       const row = fieldsEl.querySelector<HTMLElement>(`[data-rp-field-id="${f.id}"]`);
       const visible = !row || row.style.display !== 'none';
       const overrideHidden = effectiveField(f).hidden;
