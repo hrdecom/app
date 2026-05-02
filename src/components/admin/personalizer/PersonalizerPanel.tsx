@@ -222,9 +222,15 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
   }
   async function handleAddImage() {
     if (!tpl) return;
+    // P26-12 — auto-number image labels so the cart line item reads
+    // "Photo 1: <url>", "Photo 2: <url>" etc. when the merchant adds
+    // multiple image fields. Single image stays "Photo". Counts only
+    // existing image fields.
+    const existingImageCount = (tpl.fields || []).filter((f) => f.field_kind === 'image').length;
+    const label = existingImageCount === 0 ? 'Photo' : `Photo ${existingImageCount + 1}`;
     const created = await createField(tpl.id, {
       field_kind: 'image',
-      label: 'Photo',
+      label,
       mask_shape: 'rect',
       position_x: 100, position_y: 100, width: 200, height: 200,
       layer_z: 5,

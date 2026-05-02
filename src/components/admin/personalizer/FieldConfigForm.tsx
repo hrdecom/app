@@ -212,7 +212,20 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
               />
             </Row>
             <Row label="Curve">
-              <Select value={draft.curve_mode || 'linear'} onValueChange={(v) => patch('curve_mode', v as any)}>
+              <Select
+                value={draft.curve_mode || 'linear'}
+                onValueChange={(v) => {
+                  patch('curve_mode', v as any);
+                  // P26-12 — when switching to arc/circle for the first
+                  // time, give the field a generous default radius
+                  // (3x its width) so the initial curve looks gentle
+                  // and natural instead of a tight semi-circle. The
+                  // merchant can fine-tune via the apex handle after.
+                  if ((v === 'arc' || v === 'circle') && (!draft.curve_radius_px || draft.curve_radius_px === 0)) {
+                    patch('curve_radius_px', Math.round((draft.width || 200) * 3));
+                  }
+                }}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {CURVES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
