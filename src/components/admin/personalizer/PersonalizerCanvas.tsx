@@ -33,7 +33,6 @@ type DragMode =
   | { kind: 'rotate'; fieldId: number; pivotX: number; pivotY: number; startAngleDeg: number; startRotationDeg: number };
 
 const HANDLE_SIZE_PX = 12;
-const MIN_CURVE_RADIUS = 20;
 // P26 — radius can grow up to 50× the bbox dimension so the user can
 // dial in nearly-flat curves that match real jewelry shapes (slightly
 // curved necklaces, gentle pendant arcs). With factor 4 you couldn't
@@ -260,24 +259,39 @@ export function PersonalizerCanvas({
         },
       }));
     } else if (drag.kind === 'curve_radius') {
-      // P26 — signed radius. The handle's vertical position relative to
-      // the pivot determines BOTH the magnitude and the direction:
-      //   handle ABOVE pivot → positive radius → text bulges upward
-      //   handle BELOW pivot → negative radius → text rolls underneath
-      // Magnitude is the radial distance (sqrt(dx²+dy²)) so horizontal
-      // motion still affects how flat the curve looks; vertical motion
-      // determines sign.
-      const dx = p.x - drag.pivotX;
+      // P26-2 — sagitta-based radius. The arc is anchored to the
+      // bbox horizontally (chord = bbox width at vertical center).
+      // Curvature only changes the "rise" (sagitta) of the apex
+      // above or below the chord — the text endpoints stay where
+      // they are. This matches the customer's intuition: "drag the
+      // handle to bend the text more or less, not to move it."
+      //   sagitta s = -dy (above pivot ⇒ positive ⇒ curve up)
+      //   For chord half-width c and sagitta s, radius is:
+      //     r = (c² + s²) / (2|s|)
+      //   r → ∞ as s → 0 (straight line). Clamp s away from zero
+      //   so we don't get NaN; cap |r| at MAX × bbox so the slider
+      //   doesn't go absurdly flat (interpreted as "no curve").
       const dy = p.y - drag.pivotY;
       const f = fields.find((x) => x.id === drag.fieldId);
       const b = f ? fieldBbox(f) : null;
-      const maxR = b
-        ? Math.max(b.w, b.h) * MAX_CURVE_RADIUS_FACTOR
-        : Math.max(template.canvas_width, template.canvas_height);
-      const magnitude = Math.sqrt(dx * dx + dy * dy);
-      // Above pivot (dy<0) → positive r (curve up). Below → negative.
-      const sign = dy <= 0 ? 1 : -1;
-      const r = Math.round(sign * clamp(magnitude, MIN_CURVE_RADIUS, maxR));
+      if (!b) return;
+      const halfChord = b.w / 2;
+      const sagitta = -dy; // positive = apex above pivot
+      const absSag = Math.abs(sagitta);
+      const minSag = 0.5; // less than this is treated as straight
+      let r: number;
+      if (absSag < minSag) {
+        r = halfChord * MAX_CURVE_RADIUS_FACTOR; // effectively flat
+      } else {
+        r = (halfChord * halfChord + sagitta * sagitta) / (2 * absSag);
+        // Sign follows sagitta direction.
+        if (sagitta < 0) r = -r;
+      }
+      const maxR = halfChord * MAX_CURVE_RADIUS_FACTOR;
+      r = Math.round(clamp(r, -maxR, maxR));
+      // Floor magnitude at halfChord (smaller would not allow the
+      // chord to fit in the circle — semicircle is the tightest).
+      if (Math.abs(r) < halfChord) r = halfChord * Math.sign(r || 1);
       setDraftCurve((prev) => ({ ...prev, [drag.fieldId]: { curve_radius_px: r } }));
     } else if (drag.kind === 'rotate') {
       // P25-V4 — relative rotation. New angle = startRot + (currentMouseAngle - startMouseAngle).
@@ -412,19 +426,29 @@ export function PersonalizerCanvas({
               (f.curve_mode === 'arc' || f.curve_mode === 'circle');
             const showCurveAffordance = showChrome && isCurved;
             const curveR = showCurveAffordance ? fieldCurveRadius(f) : 0;
-            // P26 — signed radius support. |curveR| is the visual size;
-            // sign decides whether the apex is above (positive) or below
-            // (negative) the bbox center. The handle naturally tracks
-            // because we add cy - curveR (so negative curveR places the
-            // handle BELOW cy by |curveR|).
+            // P26-2 — chord-through-bbox geometry. The arc spans the
+            // bbox horizontally at vertical center; sagitta (rise of
+            // apex above/below chord) is what the curve handle drags.
             const absCurveR = Math.abs(curveR);
             const curveSweep = curveR < 0 ? 0 : 1;
             const cx = b.x + Math.floor(b.w / 2);
             const cy = b.y + Math.floor(b.h / 2);
-            // Apex of the arc (above for positive radius, below for
-            // negative) — always opposite the bbox center.
+            // Sagitta from radius and chord:
+            //   if |r| ≥ chord/2: s = |r| - sqrt(r² - (chord/2)²)
+            //   if |r| < chord/2 (semicircle case): s = |r|
+            const halfChord = b.w / 2;
+            let sagitta = 0;
+            if (showCurveAffordance && absCurveR > 0) {
+              if (absCurveR >= halfChord) {
+                sagitta = absCurveR - Math.sqrt(absCurveR * absCurveR - halfChord * halfChord);
+              } else {
+                sagitta = absCurveR;
+              }
+            }
+            // Apex coordinates: x stays at chord midpoint, y offset by
+            // sagitta (above for r>0, below for r<0).
             const handleX = cx;
-            const handleY = cy - curveR;
+            const handleY = curveR >= 0 ? cy - sagitta : cy + sagitta;
 
             // P25-V4 — apply the field's rotation to the entire chrome
             // group (bbox + handles + curve guide + rotation handle).
@@ -470,8 +494,12 @@ export function PersonalizerCanvas({
                         vectorEffect="non-scaling-stroke"
                       />
                     ) : (
+                      // P26-2 — guide arc spans bbox horizontally; the
+                      // sagitta-based geometry matches what the renderer
+                      // emits, so this dashed line literally traces the
+                      // text path.
                       <path
-                        d={`M ${cx - absCurveR} ${cy} A ${absCurveR} ${absCurveR} 0 0 ${curveSweep} ${cx + absCurveR} ${cy}`}
+                        d={`M ${b.x} ${cy} A ${Math.max(absCurveR, halfChord)} ${Math.max(absCurveR, halfChord)} 0 0 ${curveSweep} ${b.x + b.w} ${cy}`}
                         fill="none"
                         stroke="#185FA5"
                         strokeWidth={1.5}
@@ -504,7 +532,7 @@ export function PersonalizerCanvas({
                   <path
                     d={f.curve_mode === 'circle'
                       ? `M ${cx - absCurveR} ${cy} A ${absCurveR} ${absCurveR} 0 1 1 ${cx + absCurveR} ${cy} A ${absCurveR} ${absCurveR} 0 1 1 ${cx - absCurveR} ${cy} Z`
-                      : `M ${cx - absCurveR} ${cy} A ${absCurveR} ${absCurveR} 0 0 ${curveSweep} ${cx + absCurveR} ${cy}`}
+                      : `M ${b.x} ${cy} A ${Math.max(absCurveR, halfChord)} ${Math.max(absCurveR, halfChord)} 0 0 ${curveSweep} ${b.x + b.w} ${cy}`}
                     fill="none"
                     stroke={showChrome ? 'rgba(24,95,165,0.25)' : 'transparent'}
                     strokeWidth={Math.max(b.h, 36)}

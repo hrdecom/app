@@ -165,13 +165,39 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
       : '';
 
   if (f.curve_mode === 'circle' || f.curve_mode === 'arc') {
-    const radius = f.curve_radius_px || Math.floor(f.width / 2);
     const pathId = `pp-${f.id}`;
-    const pathD =
-      f.curve_path_d ||
-      (f.curve_mode === 'circle'
-        ? circlePath(cx, cy, radius)
-        : arcPath(cx, cy, radius));
+    let pathD: string;
+    if (f.curve_path_d) {
+      pathD = f.curve_path_d;
+    } else if (f.curve_mode === 'circle') {
+      const radius = Math.abs(f.curve_radius_px || Math.floor(f.width / 2));
+      pathD = circlePath(cx, cy, radius);
+    } else {
+      // P26-2 — arc as a CHORD through the bbox horizontally. The
+      // chord runs along the bbox vertical center from x=position_x
+      // to x=position_x+width. The radius controls only how much the
+      // arc bulges above (positive) or below (negative) that chord.
+      // This is the natural "the text is where the bbox is, curvature
+      // is independent" mental model the customer expects.
+      // Sagitta s = r - sqrt(r² - (w/2)²) when r ≥ w/2; clamp r
+      // upward when too small (chord wouldn't fit in the circle).
+      const halfChord = f.width / 2;
+      const requested = f.curve_radius_px;
+      let r: number;
+      if (requested == null || requested === 0) {
+        // No curvature → make the radius huge so the arc looks straight.
+        r = halfChord * 100;
+      } else {
+        const minR = halfChord;
+        const a = Math.abs(requested);
+        r = (a < minR ? minR : a) * (requested < 0 ? -1 : 1);
+      }
+      const a = Math.abs(r);
+      const sweep = r < 0 ? 0 : 1;
+      const startX = f.position_x;
+      const endX = f.position_x + f.width;
+      pathD = `M ${startX} ${cy} A ${a} ${a} 0 0 ${sweep} ${endX} ${cy}`;
+    }
     return (
       `<defs><path id="${pathId}" d="${pathD}" /></defs>` +
       `<text font-family="${family}" font-size="${fontSize}" fill="${fill}"${lsAttr}>` +
@@ -211,20 +237,9 @@ function circlePath(cx: number, cy: number, r: number): string {
   return `M ${cx - a} ${cy} A ${a} ${a} 0 1 1 ${cx + a} ${cy} A ${a} ${a} 0 1 1 ${cx - a} ${cy} Z`;
 }
 
-/**
- * P26 — signed radius. Positive r = arc curves UP (text reads on top
- * of the arc). Negative r = arc curves DOWN (text rolls underneath,
- * useful for the bottom rim of round pendants). Magnitude controls
- * how tight: small |r| = tight curl, large |r| = nearly flat.
- */
-function arcPath(cx: number, cy: number, r: number): string {
-  const a = Math.abs(r);
-  // SVG sweep-flag with default Y-down: 1 = clockwise from start to end.
-  // From left (cx-a, cy) to right (cx+a, cy) clockwise = arc bulges UP.
-  // sweep=0 = counter-clockwise = arc bulges DOWN.
-  const sweep = r < 0 ? 0 : 1;
-  return `M ${cx - a} ${cy} A ${a} ${a} 0 0 ${sweep} ${cx + a} ${cy}`;
-}
+// P26-2 — arcPath helper removed; arc geometry is now inlined inside
+// renderTextField and uses chord-through-bbox positioning instead of
+// the old "arc apex offset from bbox center" model.
 
 function escapeAttr(s: string): string {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
