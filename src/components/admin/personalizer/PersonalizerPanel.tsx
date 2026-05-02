@@ -303,7 +303,10 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
       field_kind: 'birthstone',
       label,
       default_value: '1',
-      mask_shape: 'rect',
+      // P26-26 follow-up — birthstones are round gemstones; default
+      // to a circular mask so they fit naturally inside the locket
+      // cutout without the corners poking out.
+      mask_shape: 'circle',
       position_x: 100, position_y: 100, width: 160, height: 160,
       layer_z: 5,
     });
@@ -507,7 +510,18 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
     (activeSignature && variantImageOverrides[activeSignature]) ||
     (activeSignature && repVariantBySignature[activeSignature]?.featured_image_url) ||
     tpl.base_image_url;
-  const effectiveTemplate: PersonalizerTemplate = { ...tpl, base_image_url: effectiveBaseImage };
+  // P26-26 follow-up — inject the GLOBAL birthstones library into
+  // the template the admin canvas sees so the preview renderer can
+  // look up the icon URL for birthstone fields. The per-template
+  // birthstones_json column is now LEGACY (the storefront API does
+  // the same join from settings); without this injection the canvas
+  // would see template.birthstones_json = null and render birthstone
+  // fields as empty boxes even after the merchant uploads icons.
+  const effectiveTemplate: PersonalizerTemplate = {
+    ...tpl,
+    base_image_url: effectiveBaseImage,
+    birthstones_json: JSON.stringify(birthstoneLibrary),
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -526,6 +540,12 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
             and passed down to FieldConfigForm so the "Default
             selected month" dropdown still shows the merchant's
             custom labels. */}
+        {/* P26-27 — keep the layer list narrow so the canvas /
+            preview gets the bulk of the horizontal space. The
+            FieldList already self-sizes to ~220px; this wrapper
+            just bounds the column so a long layer label can't
+            push it past 240px. */}
+        <div className="flex flex-col w-[220px] flex-shrink-0">
         <FieldList
           fields={baseFields}
           selectedId={selectedFieldId}
@@ -642,7 +662,8 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
             }
           }}
         />
-        <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3">
+        </div>
+        <div className="flex-1 min-w-0 p-4 overflow-y-auto flex flex-col gap-3">
           {/* P25-V3 — variant picker. Always shows "Default" + one pill
               per non-color signature. Clicking a pill swaps the canvas
               into "edit overrides for this variant" mode. */}

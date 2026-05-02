@@ -91,6 +91,15 @@ export function PersonalizerCanvas({
   // The selected field stays selected (right-side config form stays open).
   const [chromeHidden, setChromeHidden] = useState(false);
 
+  // P26-26 follow-up — re-show chrome whenever the merchant selects a
+  // different field from the layer list. Without this, clicking the
+  // empty canvas (chromeHidden=true) hides the handles, then picking
+  // a field in FieldList silently leaves them hidden — so the
+  // merchant can't see selection feedback or drag the new field.
+  useEffect(() => {
+    if (selectedFieldId != null) setChromeHidden(false);
+  }, [selectedFieldId]);
+
   const previewHtml = useMemo(() => {
     const values: Record<number, string> = {};
     for (const f of fields) {

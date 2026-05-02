@@ -86,7 +86,7 @@ export function FieldList({
   ].sort((a, b) => b.z - a.z);
 
   return (
-    <div className="border-r border-gray-200 bg-white p-3 space-y-2 min-w-[220px]">
+    <div className="border-r border-gray-200 bg-white p-3 space-y-2 w-full min-w-0 overflow-hidden">
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Layers</div>
       <ul className="space-y-1">
         {/* P26-8 — unified layer list. Fields AND the product image are
