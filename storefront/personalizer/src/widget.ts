@@ -113,6 +113,395 @@ function parseFontColorMapWidget(raw: string | null | undefined): Record<string,
 }
 
 /**
+ * P26-19 — escape user/admin strings before injecting them into HTML
+ * (modal titles, button labels, hint text). Local helper so the widget
+ * stays dependency-free.
+ */
+function rpEscapeHtml(s: string): string {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c),
+  );
+}
+
+/**
+ * P26-19 — open an in-page modal that lets the customer crop and zoom
+ * their uploaded photo to fit the field's mask shape (square, circle,
+ * heart). Returns a JPEG Blob sized to the field's aspect ratio plus
+ * the crop parameters used (so a follow-up "re-adjust" call can
+ * restore the same view).
+ *
+ * Design constraints:
+ *  - Pure DOM/Canvas, no extra deps (the storefront widget is one
+ *    self-contained bundle and we do NOT want to ship a cropper lib).
+ *  - Touch-first: drag with one finger, pinch-zoom with two, plus
+ *    a slider + +/- buttons for desktop.
+ *  - The image is loaded with crossOrigin="anonymous" so canvas can
+ *    drawImage it without tainting (the R2 proxy at /api/images/r2/*
+ *    sends Access-Control-Allow-Origin:* — see functions/api/images/
+ *    r2/[[path]].js).
+ *  - "Cover" semantics: the image always fills the crop window. The
+ *    minimum scale = max(boxW/imgW, boxH/imgH); the slider and pinch
+ *    work as a multiplier above that floor (1×..4×).
+ *  - On save the modal renders the visible crop to an offscreen
+ *    canvas at the requested output resolution and returns a JPEG
+ *    blob. Output aspect matches outputWidth/outputHeight which the
+ *    caller derives from the field geometry, so the storefront SVG
+ *    renderer's preserveAspectRatio="xMidYMid slice" is a no-op on
+ *    the cropped image (no further auto-cropping at render time).
+ */
+async function openImageCropper(opts: {
+  imageUrl: string;
+  outputWidth: number;
+  outputHeight: number;
+  maskShape: 'rect' | 'circle' | 'heart';
+  initial?: { offsetX: number; offsetY: number; scale: number } | null;
+  title?: string;
+  hint?: string;
+  saveLabel?: string;
+  cancelLabel?: string;
+}): Promise<{
+  blob: Blob;
+  params: { offsetX: number; offsetY: number; scale: number };
+} | null> {
+  return new Promise((resolve) => {
+    // Crop window aspect mirrors the output (= field) aspect so the
+    // SVG renderer doesn't crop again at paint time.
+    const aspect = opts.outputWidth / opts.outputHeight;
+    // Crop box in CSS pixels — capped so it fits comfortably above
+    // the slider+buttons on a phone.
+    const maxBox = Math.min(320, window.innerWidth * 0.82);
+    let cropDispW: number;
+    let cropDispH: number;
+    if (aspect >= 1) {
+      cropDispW = maxBox;
+      cropDispH = maxBox / aspect;
+    } else {
+      cropDispH = maxBox;
+      cropDispW = maxBox * aspect;
+    }
+
+    const modal = document.createElement('div');
+    modal.className = 'rp-pz-crop-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.innerHTML = `
+      <div class="rp-pz-crop-card" role="document">
+        <div class="rp-pz-crop-title">${rpEscapeHtml(opts.title || 'Adjust your photo')}</div>
+        <div class="rp-pz-crop-hint">${rpEscapeHtml(opts.hint || 'Drag to position. Pinch or use the slider to zoom.')}</div>
+        <div class="rp-pz-crop-stage" style="width:${cropDispW}px;height:${cropDispH}px;">
+          <img class="rp-pz-crop-img" alt="" draggable="false" />
+          <div class="rp-pz-crop-mask rp-pz-crop-mask--${opts.maskShape}"></div>
+        </div>
+        <div class="rp-pz-crop-zoom">
+          <button type="button" class="rp-pz-crop-zoom-btn" data-act="zoom-out" aria-label="Zoom out">&#8722;</button>
+          <input type="range" class="rp-pz-crop-zoom-slider" min="1" max="4" step="0.01" value="1" aria-label="Zoom" />
+          <button type="button" class="rp-pz-crop-zoom-btn" data-act="zoom-in" aria-label="Zoom in">+</button>
+        </div>
+        <div class="rp-pz-crop-actions">
+          <button type="button" class="rp-pz-crop-btn rp-pz-crop-btn--cancel" data-act="cancel">${rpEscapeHtml(opts.cancelLabel || 'Cancel')}</button>
+          <button type="button" class="rp-pz-crop-btn rp-pz-crop-btn--save" data-act="save">${rpEscapeHtml(opts.saveLabel || 'Use this photo')}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const stage = modal.querySelector<HTMLDivElement>('.rp-pz-crop-stage')!;
+    const imgEl = modal.querySelector<HTMLImageElement>('.rp-pz-crop-img')!;
+    const slider = modal.querySelector<HTMLInputElement>('.rp-pz-crop-zoom-slider')!;
+    const cancelBtn = modal.querySelector<HTMLButtonElement>('[data-act="cancel"]')!;
+    const saveBtn = modal.querySelector<HTMLButtonElement>('[data-act="save"]')!;
+    const zoomOutBtn = modal.querySelector<HTMLButtonElement>('[data-act="zoom-out"]')!;
+    const zoomInBtn = modal.querySelector<HTMLButtonElement>('[data-act="zoom-in"]')!;
+
+    // Lock body scroll so background doesn't slide while dragging.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    let imgNaturalW = 0;
+    let imgNaturalH = 0;
+    let scaleMin = 1;          // image→display ratio at "cover" (= 1× on slider)
+    let scale = 1;             // current image→display ratio
+    let offsetX = 0;           // top-left of image in stage coords
+    let offsetY = 0;
+    let resolved = false;
+
+    function clampOffsets() {
+      const dispW = imgNaturalW * scale;
+      const dispH = imgNaturalH * scale;
+      // image must always cover the stage — top-left can never go
+      // positive (would expose left/top edge), bottom-right can never
+      // go below stage bounds (would expose right/bottom edge).
+      offsetX = Math.min(0, Math.max(cropDispW - dispW, offsetX));
+      offsetY = Math.min(0, Math.max(cropDispH - dispH, offsetY));
+    }
+    function applyTransform() {
+      imgEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+    }
+    function setZoomRatio(ratio: number) {
+      const clamped = Math.max(1, Math.min(4, ratio));
+      const newScale = scaleMin * clamped;
+      // Keep the image-pixel currently under the crop center fixed so
+      // zoom feels natural (CapCut/Instagram-style center-anchored).
+      const cx = cropDispW / 2;
+      const cy = cropDispH / 2;
+      const imgCx = (cx - offsetX) / scale;
+      const imgCy = (cy - offsetY) / scale;
+      scale = newScale;
+      offsetX = cx - imgCx * scale;
+      offsetY = cy - imgCy * scale;
+      clampOffsets();
+      applyTransform();
+      slider.value = String(clamped);
+    }
+
+    imgEl.crossOrigin = 'anonymous';
+    imgEl.onload = () => {
+      imgNaturalW = imgEl.naturalWidth || imgEl.width;
+      imgNaturalH = imgEl.naturalHeight || imgEl.height;
+      scaleMin = Math.max(cropDispW / imgNaturalW, cropDispH / imgNaturalH);
+      // Restore prior crop on re-adjust, otherwise center+cover.
+      if (opts.initial) {
+        scale = scaleMin * Math.max(1, Math.min(4, opts.initial.scale || 1));
+        offsetX = opts.initial.offsetX;
+        offsetY = opts.initial.offsetY;
+      } else {
+        scale = scaleMin;
+        offsetX = (cropDispW - imgNaturalW * scale) / 2;
+        offsetY = (cropDispH - imgNaturalH * scale) / 2;
+      }
+      clampOffsets();
+      applyTransform();
+      slider.value = String(scale / scaleMin);
+    };
+    imgEl.onerror = () => {
+      // Image failed to load (CORS, 404, etc) — surface to caller as
+      // null so the upload flow can fall back to using the URL as-is.
+      cleanup();
+      if (!resolved) { resolved = true; resolve(null); }
+    };
+    imgEl.src = opts.imageUrl;
+
+    // ===== Pointer drag =====
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    let activePointerId: number | null = null;
+    stage.addEventListener('pointerdown', (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      // Two fingers → pinch (handled by touch listeners). Suppress drag.
+      if ((e as any).pointerType === 'touch') {
+        // touchstart (further down) tracks the second finger and sets
+        // dragging=false. We don't capture here for touch, to let the
+        // browser deliver touchmove to both fingers.
+        return;
+      }
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      activePointerId = e.pointerId;
+      try { stage.setPointerCapture(e.pointerId); } catch { /* */ }
+      e.preventDefault();
+    });
+    stage.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      if (activePointerId !== null && e.pointerId !== activePointerId) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      offsetX += dx;
+      offsetY += dy;
+      clampOffsets();
+      applyTransform();
+    });
+    function endDrag(e: PointerEvent) {
+      if (activePointerId !== null && e.pointerId !== activePointerId) return;
+      dragging = false;
+      activePointerId = null;
+      try { stage.releasePointerCapture(e.pointerId); } catch { /* */ }
+    }
+    stage.addEventListener('pointerup', endDrag);
+    stage.addEventListener('pointercancel', endDrag);
+
+    // ===== Wheel zoom (desktop) =====
+    stage.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const factor = Math.exp(-e.deltaY / 400);
+      setZoomRatio((scale / scaleMin) * factor);
+    }, { passive: false });
+
+    // ===== Slider + +/- buttons =====
+    slider.addEventListener('input', () => {
+      setZoomRatio(parseFloat(slider.value));
+    });
+    zoomInBtn.addEventListener('click', () => {
+      setZoomRatio((scale / scaleMin) * 1.2);
+    });
+    zoomOutBtn.addEventListener('click', () => {
+      setZoomRatio((scale / scaleMin) / 1.2);
+    });
+
+    // ===== Touch — single-finger pan (handled via pointer above) +
+    // two-finger pinch (handled here, browser delivers gestureend
+    // unreliably so we read raw touch events).
+    let pinchStartDist = 0;
+    let pinchStartRatio = 1;
+    let pinchStartCenter = { x: 0, y: 0 };
+    let pinchStartImgPt = { x: 0, y: 0 };
+    stage.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        // Single-finger drag — let pointer handlers run.
+        const t = e.touches[0];
+        const rect = stage.getBoundingClientRect();
+        // Mark dragging manually so subsequent touchmove pans without
+        // requiring a pointermove (Safari's pointer/touch interaction
+        // is finicky).
+        dragging = true;
+        lastX = t.clientX;
+        lastY = t.clientY;
+        // Suppress synthetic mouse events that follow touch.
+        // (e.preventDefault() also prevents page scroll.)
+        e.preventDefault();
+        rect; // (rect var kept to silence unused-warning in some toolchains)
+      } else if (e.touches.length === 2) {
+        dragging = false;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        pinchStartDist = Math.hypot(dx, dy);
+        pinchStartRatio = scale / scaleMin;
+        const rect = stage.getBoundingClientRect();
+        pinchStartCenter = {
+          x: ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left,
+          y: ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top,
+        };
+        pinchStartImgPt = {
+          x: (pinchStartCenter.x - offsetX) / scale,
+          y: (pinchStartCenter.y - offsetY) / scale,
+        };
+        e.preventDefault();
+      }
+    }, { passive: false });
+    stage.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1 && dragging) {
+        const t = e.touches[0];
+        const dx = t.clientX - lastX;
+        const dy = t.clientY - lastY;
+        lastX = t.clientX;
+        lastY = t.clientY;
+        offsetX += dx;
+        offsetY += dy;
+        clampOffsets();
+        applyTransform();
+        e.preventDefault();
+      } else if (e.touches.length === 2 && pinchStartDist > 0) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        const newRatio = Math.max(1, Math.min(4, pinchStartRatio * (dist / pinchStartDist)));
+        scale = scaleMin * newRatio;
+        // Anchor the gesture center to the same image pixel so the
+        // image doesn't lurch under the fingers.
+        offsetX = pinchStartCenter.x - pinchStartImgPt.x * scale;
+        offsetY = pinchStartCenter.y - pinchStartImgPt.y * scale;
+        clampOffsets();
+        applyTransform();
+        slider.value = String(newRatio);
+        e.preventDefault();
+      }
+    }, { passive: false });
+    function endTouch() {
+      pinchStartDist = 0;
+      dragging = false;
+    }
+    stage.addEventListener('touchend', endTouch);
+    stage.addEventListener('touchcancel', endTouch);
+
+    // ===== Backdrop click + ESC cancel =====
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        cleanup();
+        if (!resolved) { resolved = true; resolve(null); }
+      }
+    });
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        cleanup();
+        if (!resolved) { resolved = true; resolve(null); }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+
+    cancelBtn.addEventListener('click', () => {
+      cleanup();
+      if (!resolved) { resolved = true; resolve(null); }
+    });
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      cancelBtn.disabled = true;
+      const prevText = saveBtn.textContent;
+      saveBtn.textContent = 'Processing…';
+      try {
+        const blob = await renderCrop();
+        const params = { offsetX, offsetY, scale: scale / scaleMin };
+        cleanup();
+        if (!resolved) { resolved = true; resolve({ blob, params }); }
+      } catch {
+        saveBtn.disabled = false;
+        cancelBtn.disabled = false;
+        saveBtn.textContent = prevText || (opts.saveLabel || 'Use this photo');
+      }
+    });
+
+    function renderCrop(): Promise<Blob> {
+      return new Promise((res, rej) => {
+        const cv = document.createElement('canvas');
+        cv.width = opts.outputWidth;
+        cv.height = opts.outputHeight;
+        const ctx = cv.getContext('2d');
+        if (!ctx) return rej(new Error('No 2D context'));
+        // Map crop window → source image rect.
+        const srcX = -offsetX / scale;
+        const srcY = -offsetY / scale;
+        const srcW = cropDispW / scale;
+        const srcH = cropDispH / scale;
+        // White background as a defensive default for transparent
+        // PNGs. The renderer composites this image inside an SVG with
+        // its own background, but a transparent JPEG can't exist —
+        // painting white avoids accidental black pixels in lossy
+        // browsers.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, opts.outputWidth, opts.outputHeight);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        try {
+          ctx.drawImage(
+            imgEl,
+            srcX, srcY, srcW, srcH,
+            0, 0, opts.outputWidth, opts.outputHeight,
+          );
+        } catch (err) {
+          return rej(err);
+        }
+        cv.toBlob(
+          (blob) => {
+            if (!blob) return rej(new Error('toBlob returned null'));
+            res(blob);
+          },
+          'image/jpeg',
+          0.92,
+        );
+      });
+    }
+
+    function cleanup() {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+      modal.remove();
+    }
+  });
+}
+
+/**
  * P25-6 — return TRUE if this field should be visible given the
  * customer's currently selected variant. We match by checking if ANY
  * of the variant's `option1/option2/option3` values appears in the
@@ -765,6 +1154,17 @@ async function mount({ el, productHandle }: MountSpec) {
   const initialValues: Record<string, string> = {};
   for (const f of fields) initialValues[String(f.id)] = f.default_value || '';
 
+  // P26-19 — per-field crop state. We keep the ORIGINAL uncropped URL
+  // separate from the cropped URL written into the cart so the
+  // "Re-adjust crop" button can reopen the cropper with the same
+  // source image AND restore the previous offset/scale. Cleared
+  // whenever the customer picks a brand-new file.
+  const cropState: Record<string, {
+    originalUrl: string;
+    filename: string;
+    params: { offsetX: number; offsetY: number; scale: number };
+  }> = {};
+
   // P25-V2 — admin-controlled vertical padding. Falls back to 10px
   // each side if settings absent (older API responses).
   const padTop = Math.max(0, Number(payload?.settings?.widget_padding_top ?? 10));
@@ -930,6 +1330,214 @@ async function mount({ el, productHandle }: MountSpec) {
           font-size: 12px;
           cursor: help;
         }
+
+        /* P26-19 — re-adjust crop button. Slim secondary control under
+           the upload affordance, only revealed once a photo has been
+           uploaded. Kept text-only / underlined so it never competes
+           visually with the primary "Upload your photo" button. */
+        .rp-pz-recrop {
+          display: none;
+          background: none;
+          border: 0;
+          padding: 6px 0 0;
+          margin: 0;
+          font-family: inherit;
+          font-size: 13px;
+          color: inherit;
+          opacity: 0.65;
+          cursor: pointer;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+        .rp-pz-recrop:hover { opacity: 1; }
+        .rp-pz-recrop[data-visible="1"] { display: inline-flex; align-items: center; gap: 4px; }
+        .rp-pz-recrop svg { width: 12px; height: 12px; }
+      </style>
+
+      <!-- P26-19 — crop modal styles live OUTSIDE .rp-pz so they apply
+           when the modal is portaled to <body> (so it sits above any
+           theme overlays). They are scoped under .rp-pz-crop-* classes
+           to avoid leaking into the host theme. -->
+      <style data-rp-crop-modal-styles>
+        .rp-pz-crop-modal {
+          position: fixed;
+          inset: 0;
+          z-index: 999999;
+          background: rgba(15, 15, 15, 0.78);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+          animation: rp-crop-fade .15s ease-out;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          color: #111;
+          box-sizing: border-box;
+        }
+        @keyframes rp-crop-fade { from { opacity: 0; } to { opacity: 1; } }
+        .rp-pz-crop-card {
+          background: #fff;
+          border-radius: 14px;
+          padding: 20px;
+          width: 100%;
+          max-width: 380px;
+          box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
+        }
+        .rp-pz-crop-title {
+          font-size: 16px;
+          font-weight: 600;
+          letter-spacing: -0.01em;
+          color: #111;
+          text-align: center;
+        }
+        .rp-pz-crop-hint {
+          font-size: 12px;
+          color: #6b7280;
+          text-align: center;
+          line-height: 1.4;
+          max-width: 320px;
+        }
+        .rp-pz-crop-stage {
+          position: relative;
+          background: #111;
+          border-radius: 10px;
+          overflow: hidden;
+          touch-action: none;        /* swallow pinch/pan from theme */
+          cursor: grab;
+          user-select: none;
+          -webkit-user-select: none;
+        }
+        .rp-pz-crop-stage:active { cursor: grabbing; }
+        .rp-pz-crop-img {
+          position: absolute;
+          left: 0;
+          top: 0;
+          transform-origin: 0 0;     /* JS math assumes top-left origin */
+          max-width: none;            /* defeat theme img { max-width: 100% } */
+          will-change: transform;
+          pointer-events: none;       /* let the stage receive all events */
+          -webkit-user-drag: none;
+        }
+        .rp-pz-crop-mask {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          /* 2px white border + soft outer shadow — outlines the
+             cropped region without dimming the visible photo. */
+          box-shadow:
+            inset 0 0 0 2px rgba(255, 255, 255, 0.92),
+            inset 0 0 0 9999px rgba(0, 0, 0, 0.28);
+        }
+        .rp-pz-crop-mask--circle {
+          /* Circle mask: the inset shadow paints a dim "outside the
+             circle" overlay using a CSS mask-image radial gradient. */
+          box-shadow: none;
+        }
+        .rp-pz-crop-mask--circle::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.55);
+          -webkit-mask-image: radial-gradient(circle at center, transparent 49.5%, black 50%);
+                  mask-image: radial-gradient(circle at center, transparent 49.5%, black 50%);
+        }
+        .rp-pz-crop-mask--circle::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.92);
+        }
+        .rp-pz-crop-zoom {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          padding: 0 4px;
+          box-sizing: border-box;
+        }
+        .rp-pz-crop-zoom-slider {
+          flex: 1;
+          -webkit-appearance: none;
+          appearance: none;
+          height: 4px;
+          background: #e5e7eb;
+          border-radius: 4px;
+          outline: none;
+          margin: 0;
+        }
+        .rp-pz-crop-zoom-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 18px;
+          height: 18px;
+          background: #111;
+          border-radius: 50%;
+          cursor: pointer;
+          border: 2px solid #fff;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+        .rp-pz-crop-zoom-slider::-moz-range-thumb {
+          width: 18px;
+          height: 18px;
+          background: #111;
+          border-radius: 50%;
+          cursor: pointer;
+          border: 2px solid #fff;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+        .rp-pz-crop-zoom-btn {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          border: 1px solid #d1d5db;
+          background: #fff;
+          color: #111;
+          font-size: 16px;
+          font-weight: 600;
+          line-height: 1;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          flex-shrink: 0;
+          transition: background-color .12s, border-color .12s;
+        }
+        .rp-pz-crop-zoom-btn:hover { background: #f3f4f6; border-color: #9ca3af; }
+        .rp-pz-crop-actions {
+          display: flex;
+          gap: 8px;
+          width: 100%;
+          margin-top: 4px;
+        }
+        .rp-pz-crop-btn {
+          flex: 1;
+          padding: 11px 14px;
+          border-radius: 9px;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          border: 1px solid transparent;
+          transition: background-color .12s, border-color .12s, opacity .12s;
+        }
+        .rp-pz-crop-btn:disabled { opacity: 0.6; cursor: progress; }
+        .rp-pz-crop-btn--cancel {
+          background: #fff;
+          color: #111;
+          border-color: #d1d5db;
+        }
+        .rp-pz-crop-btn--cancel:hover { background: #f3f4f6; }
+        .rp-pz-crop-btn--save {
+          background: #111;
+          color: #fff;
+        }
+        .rp-pz-crop-btn--save:hover { background: #000; }
       </style>
       <div class="rp-pz-fields" data-fields></div>
     </div>
@@ -1476,6 +2084,110 @@ async function mount({ el, productHandle }: MountSpec) {
         '.heic', '.heif', '.avif', '.bmp', '.tif', '.tiff',
       ].join(',');
       file.style.display = 'none';
+      // P26-19 — helpers shared between first-upload and re-adjust:
+      //  - uploadBlob() POSTs to /api/personalizer/upload and returns
+      //    the absolute R2 URL.
+      //  - commitCartValue() updates initialValues + the per-row hidden
+      //    input + the cart mirror so the storefront and the cart all
+      //    see the latest URL.
+      //  - computeOutputDims() picks an output resolution that matches
+      //    the field's aspect ratio (so the SVG renderer's slice mode
+      //    is a no-op) and is high enough for retina displays.
+      const errEl = document.createElement('div');
+      errEl.className = 'rp-pz-error';
+      async function uploadBlob(blob: Blob, filename: string): Promise<string> {
+        const fd = new FormData();
+        fd.append('file', blob, filename);
+        const r = await fetch(`${API_BASE}/api/personalizer/upload`, {
+          method: 'POST',
+          body: fd,
+        });
+        if (!r.ok) throw new Error('Upload HTTP ' + r.status);
+        const j = (await r.json()) as { url: string };
+        return j.url.startsWith('http') ? j.url : `${API_BASE}${j.url}`;
+      }
+      function commitCartValue(url: string) {
+        initialValues[String(f.id)] = url;
+        const propName = `properties[${cartName}]`;
+        let hidden = row.querySelector<HTMLInputElement>(
+          `input[type=hidden][name="${propName.replace(/"/g, '\\"')}"]`,
+        );
+        if (!hidden) {
+          hidden = document.createElement('input');
+          hidden.type = 'hidden';
+          hidden.name = propName;
+          row.appendChild(hidden);
+        }
+        hidden.value = url;
+      }
+      function computeOutputDims(): { w: number; h: number } {
+        // Field design dims define the aspect ratio. The renderer
+        // displays the image at <image width=f.width height=f.height>
+        // inside a 1080-px design canvas, then scales down to the
+        // storefront's product image width (typically ~600 css px),
+        // then up by devicePixelRatio (~2-3 on phones). We aim for
+        // ~4× the design dim, capped between 600 and 1800 px on the
+        // longer side, so detail looks crisp on retina without
+        // generating multi-megabyte JPEGs.
+        const fw = Math.max(1, f.width || 1);
+        const fh = Math.max(1, f.height || 1);
+        const longer = Math.max(fw, fh);
+        const targetLonger = Math.min(1800, Math.max(600, longer * 4));
+        const k = targetLonger / longer;
+        return { w: Math.round(fw * k), h: Math.round(fh * k) };
+      }
+
+      // P26-19 — Re-adjust button: only visible after a successful
+      // upload, reopens the cropper with the original (uncropped) URL
+      // and the last-saved offset/scale so the customer can fine-tune
+      // without re-uploading.
+      const recropBtn = document.createElement('button');
+      recropBtn.type = 'button';
+      recropBtn.className = 'rp-pz-recrop';
+      // Crop / overlapping-rectangles icon — universally read as "frame
+      // / crop", matching the apps customers already know.
+      recropBtn.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M6 2v14a2 2 0 0 0 2 2h14"/>' +
+        '<path d="M2 6h14a2 2 0 0 1 2 2v14"/>' +
+        '</svg>';
+      const recropLabel = document.createElement('span');
+      recropLabel.textContent = 'Re-adjust crop';
+      recropBtn.appendChild(recropLabel);
+      recropBtn.addEventListener('click', async () => {
+        const state = cropState[String(f.id)];
+        if (!state) return;
+        const dims = computeOutputDims();
+        const result = await openImageCropper({
+          imageUrl: state.originalUrl,
+          outputWidth: dims.w,
+          outputHeight: dims.h,
+          maskShape: (f.mask_shape as any) || 'rect',
+          initial: state.params,
+          title: 'Adjust your photo',
+          hint: 'Drag to position. Pinch or use the slider to zoom.',
+          saveLabel: 'Use this photo',
+          cancelLabel: 'Cancel',
+        });
+        if (!result) return;
+        // Re-upload cropped version, swap the cart URL.
+        if (errEl) errEl.textContent = '';
+        const prevText = dropText.textContent || '';
+        dropText.textContent = 'Saving…';
+        try {
+          const url = await uploadBlob(result.blob, state.filename);
+          commitCartValue(url);
+          cropState[String(f.id)].params = result.params;
+          dropText.textContent = state.filename;
+          checkIcon.style.display = 'inline-block';
+          rerender();
+          syncCartMirrorsRef();
+        } catch (e: any) {
+          dropText.textContent = prevText || state.filename;
+          errEl.textContent = e?.message || 'Save failed';
+        }
+      });
+
       file.addEventListener('change', async () => {
         const f0 = file.files?.[0];
         if (!f0) return;
@@ -1483,40 +2195,59 @@ async function mount({ el, productHandle }: MountSpec) {
         dropText.textContent = 'Uploading...';
         // Hide any prior success badge while a new upload is in flight.
         checkIcon.style.display = 'none';
-        const errEl = row.querySelector<HTMLDivElement>('.rp-pz-error');
+        recropBtn.removeAttribute('data-visible');
         if (errEl) errEl.textContent = '';
         try {
-          const fd = new FormData();
-          fd.append('file', f0);
-          const r = await fetch(`${API_BASE}/api/personalizer/upload`, {
-            method: 'POST',
-            body: fd,
+          // Step 1 — upload the ORIGINAL file. The cropper needs a
+          // public URL it can load with crossOrigin to draw onto a
+          // canvas, and we want the original kept on the server so
+          // the customer can re-adjust later without re-uploading.
+          const originalUrl = await uploadBlob(f0, f0.name);
+
+          // Step 2 — open the cropper. Output dims match field aspect.
+          const dims = computeOutputDims();
+          const result = await openImageCropper({
+            imageUrl: originalUrl,
+            outputWidth: dims.w,
+            outputHeight: dims.h,
+            maskShape: (f.mask_shape as any) || 'rect',
+            title: 'Adjust your photo',
+            hint: 'Drag to position. Pinch or use the slider to zoom.',
+            saveLabel: 'Use this photo',
+            cancelLabel: 'Cancel',
           });
-          if (!r.ok) throw new Error('Upload HTTP ' + r.status);
-          const j: { url: string } = await r.json();
-          const fullUrl = j.url.startsWith('http') ? j.url : `${API_BASE}${j.url}`;
-          // P26-14 — REPLACE the default value in initialValues so
-          // the SVG overlay re-renders with the customer's photo
-          // (was a real bug — the rerender ran but used cached
-          // value because we only set it once at mount).
-          initialValues[String(f.id)] = fullUrl;
-          // Replace existing hidden mirror or create one. Avoid
-          // appending duplicates if the user uploads a second time.
-          const propName = `properties[${cartName}]`;
-          let hidden = row.querySelector<HTMLInputElement>(
-            `input[type=hidden][name="${propName.replace(/"/g, '\\"')}"]`,
-          );
-          if (!hidden) {
-            hidden = document.createElement('input');
-            hidden.type = 'hidden';
-            hidden.name = propName;
-            row.appendChild(hidden);
+
+          // Step 3 — pick the URL that goes into the cart.
+          //   • Save  → upload cropped JPEG, use that URL.
+          //   • Cancel → fall back to the original URL (renderer will
+          //              center-crop via preserveAspectRatio="slice"),
+          //              and remember NO crop params so re-adjust
+          //              starts fresh-centered.
+          let finalUrl: string;
+          let finalParams: { offsetX: number; offsetY: number; scale: number };
+          if (result) {
+            dropText.textContent = 'Saving…';
+            finalUrl = await uploadBlob(result.blob, f0.name);
+            finalParams = result.params;
+          } else {
+            finalUrl = originalUrl;
+            finalParams = { offsetX: 0, offsetY: 0, scale: 1 };
           }
-          hidden.value = fullUrl;
+
+          // Step 4 — commit to initialValues + hidden input + record
+          // crop state for the re-adjust button.
+          commitCartValue(finalUrl);
+          cropState[String(f.id)] = {
+            originalUrl,
+            filename: f0.name,
+            params: finalParams,
+          };
           // Show filename so the customer knows the upload landed.
           dropText.textContent = f0.name;
           // P26-16 — reveal the green check on success.
           checkIcon.style.display = 'inline-block';
+          // P26-19 — reveal the re-adjust button.
+          recropBtn.setAttribute('data-visible', '1');
           rerender();
           // Also sync cart mirrors immediately (file dispatched no
           // 'input' event on the personalizer wrapper, so the
@@ -1529,9 +2260,8 @@ async function mount({ el, productHandle }: MountSpec) {
       });
       dropZone.appendChild(file);
       row.appendChild(dropZone);
-      const err = document.createElement('div');
-      err.className = 'rp-pz-error';
-      row.appendChild(err);
+      row.appendChild(recropBtn);
+      row.appendChild(errEl);
     }
 
     fieldsEl.appendChild(row);
