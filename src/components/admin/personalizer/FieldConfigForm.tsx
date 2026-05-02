@@ -50,7 +50,7 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
   return (
     <div className="bg-white border-l border-gray-200 p-4 space-y-5 min-w-[320px] overflow-y-auto">
 
-      <Section title="Identity">
+      <Section title="Identity" defaultOpen>
         <Row label="Label (internal admin name)">
           <Input value={draft.label} onChange={(e) => patch('label', e.target.value)} />
         </Row>
@@ -328,11 +328,40 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// P26-7 — collapsible accordion section. The form had a long flat
+// list of every property on every field; the merchant asked for
+// sections that fold so they can focus on one concern at a time.
+// Identity stays open by default (most-edited block); others start
+// collapsed and remember their open state for the duration of the
+// session via component state.
+function Section({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div>
-      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">{title}</div>
-      <div className="space-y-3">{children}</div>
+    <div className="border border-gray-200 rounded-md overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+      >
+        <span className="text-xs font-medium uppercase tracking-wide text-gray-700">
+          {title}
+        </span>
+        <span
+          className="text-gray-400 text-[10px] transition-transform"
+          style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}
+        >
+          {'>'}
+        </span>
+      </button>
+      {open && <div className="space-y-3 px-3 py-3 bg-white">{children}</div>}
     </div>
   );
 }
