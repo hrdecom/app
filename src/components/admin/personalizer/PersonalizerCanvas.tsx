@@ -136,6 +136,12 @@ export function PersonalizerCanvas({
         // the unified-layer recompute pushed all field z values into
         // the 1..N range below 5.
         base_image_layer_z: template.base_image_layer_z,
+        // P26-27 — forward the birthstones library so birthstone
+        // fields can resolve their icon URL by month_index. Without
+        // this, the renderer sees birthstones_json=undefined and
+        // skips birthstone fields entirely (the SVG paints nothing
+        // at the field's bbox even though the merchant placed it).
+        birthstones_json: template.birthstones_json,
       },
       fields: fieldsWithDraft,
       values,
