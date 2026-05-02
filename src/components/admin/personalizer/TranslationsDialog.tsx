@@ -381,12 +381,19 @@ export function TranslationsDialog({
         </div>
 
         {/* Footer hint */}
-        <div className="border-t border-gray-200 px-5 py-2 text-[11px] text-muted-foreground bg-gray-50/50 flex-shrink-0">
-          Translations apply to the storefront automatically when the visitor's
-          Shopify locale matches. Empty fields fall back to the English source.
-          Publish from the main panel pushes everything to the Shopify metafield
-          <code className="font-mono mx-1 text-[10px] bg-white px-1 rounded">personalizer.translations_json</code>
-          for permanent backup.
+        <div className="border-t border-gray-200 px-5 py-2 text-[11px] text-muted-foreground bg-gray-50/50 flex-shrink-0 space-y-1">
+          <div>
+            Translations apply to the storefront automatically when the visitor's
+            Shopify locale matches. Empty fields fall back to the English source.
+            Publish pushes everything to the Shopify metafield
+            <code className="font-mono mx-1 text-[10px] bg-white px-1 rounded">personalizer.translations_json</code>
+            for permanent backup.
+          </div>
+          <div className="text-amber-700">
+            ⚠ Manual edits made here are <strong>overwritten on the next Publish</strong>.
+            Publishing always re-translates from the current source labels with Claude
+            so new layers and label edits propagate. Save manual edits AFTER publishing.
+          </div>
         </div>
       </div>
     </div>

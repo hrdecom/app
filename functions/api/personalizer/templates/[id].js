@@ -105,89 +105,66 @@ async function runPublishTranslations(env, templateId) {
     .first();
   if (!tpl) throw new Error('template not found');
 
+  // Include `label` (the merchant's internal admin name) because
+  // translateTemplateFields uses it as the fallback source when
+  // customer_label / cart_label are null. Without it, the storefront
+  // falls back to the English admin name on non-English locales.
   const { results: fields } = await env.DB
     .prepare(
-      `SELECT id, field_kind, customer_label, cart_label, info_text, placeholder
+      `SELECT id, field_kind, label, customer_label, cart_label, info_text, placeholder
          FROM customization_fields
         WHERE template_id = ?`,
     )
     .bind(templateId)
     .all();
 
-  // P26-28 follow-up — pull existing translation rows AND build a
-  // per-(field, locale) "is this row complete?" set. A row counts as
-  // complete only when every column the SOURCE has content for is
-  // populated in the translation. Stale rows generated before the
-  // f.label fallback synthesis landed (cart_label=null even though
-  // the field has a label) are now correctly flagged as incomplete
-  // and get refreshed on the next publish, instead of being skipped
-  // by a naive "row exists -> skip" check.
-  const { results: existingRows } = await env.DB
-    .prepare(
-      `SELECT t.field_id, t.locale, t.customer_label, t.cart_label, t.info_text, t.placeholder
-         FROM personalizer_field_translations t
-         JOIN customization_fields f ON f.id = t.field_id
-        WHERE f.template_id = ?`,
-    )
-    .bind(templateId)
-    .all();
-  const fieldById = new Map();
-  for (const f of fields || []) fieldById.set(f.id, f);
-  const completeByFL = new Set();
-  for (const r of existingRows || []) {
-    const f = fieldById.get(r.field_id);
-    if (!f) continue;
-    const wantsCustomer = !!((f.customer_label && f.customer_label.trim()) || (f.label && f.label.trim()));
-    const wantsCart = !!((f.cart_label && f.cart_label.trim()) || (f.label && f.label.trim()));
-    const wantsInfo = !!(f.info_text && f.info_text.trim());
-    const wantsPlaceholder = f.field_kind === 'image' && !!(f.placeholder && f.placeholder.trim());
-    const isComplete =
-      (!wantsCustomer || !!r.customer_label) &&
-      (!wantsCart || !!r.cart_label) &&
-      (!wantsInfo || !!r.info_text) &&
-      (!wantsPlaceholder || !!r.placeholder);
-    if (isComplete) completeByFL.add(`${r.field_id}|${r.locale}`);
-  }
-
+  // P26-28 final — Publish is a FULL refresh: every field × locale
+  // with source content is re-translated, no skip on existing rows.
+  // The merchant's mental model is "click Publish → translations
+  // update", so any change to source labels (or new fields added
+  // since the last publish) propagates to all 8 non-English locales
+  // in one shot. Manual edits made via the Translations dialog
+  // BEFORE the next publish are overwritten — the dialog footer
+  // explains this so the merchant knows when to expect it.
   const localeKeys = Object.keys(SUPPORTED_LOCALES);
   const summary = { locales_translated: 0, fields_inserted: 0 };
 
   await Promise.all(localeKeys.map(async (locale) => {
+    // Send EVERY field with translatable content to Claude. No skip
+    // filter — Publish must propagate label edits and pick up newly
+    // added layers, so we re-translate the full set every time.
     const fieldsToTranslate = (fields || []).filter((f) => {
-      const hasContent =
+      return (
         (f.label && f.label.trim()) ||
         (f.customer_label && f.customer_label.trim()) ||
         (f.cart_label && f.cart_label.trim()) ||
         (f.info_text && f.info_text.trim()) ||
-        (f.field_kind === 'image' && f.placeholder && f.placeholder.trim());
-      if (!hasContent) return false;
-      // P26-28 follow-up — re-translate when the row is missing OR
-      // incomplete (some translatable column is null while the source
-      // has content). The COALESCE upsert below preserves any
-      // manually-edited cells that are already populated.
-      return !completeByFL.has(`${f.id}|${locale}`);
+        (f.field_kind === 'image' && f.placeholder && f.placeholder.trim())
+      );
     });
     if (fieldsToTranslate.length === 0) return;
     const { fields: translated } = await translateTemplateFields(env, fieldsToTranslate, locale);
     for (const [fid, vals] of Object.entries(translated)) {
       const fieldId = parseInt(fid);
       if (!Number.isFinite(fieldId)) continue;
-      // P26-28 follow-up — COALESCE upsert: only fill columns that
-      // are currently null. Any value the merchant manually edited
-      // (or that an earlier auto-translate run already set) survives
-      // the publish without being overwritten by a fresh Claude run.
-      // Side benefit: if Claude returns null for a column we asked
-      // about, we don't blank a previously-translated value.
+      // P26-28 final — direct OVERWRITE upsert. Publish is the
+      // canonical "refresh translations from current source" action,
+      // so any manual edits made via the Translations dialog before
+      // the next publish are intentionally replaced by fresh Claude
+      // output. The dialog footer warns the merchant about this so
+      // they can choose to publish AFTER manual edits if they want
+      // those preserved (publish from the dialog re-runs translations,
+      // then they can re-edit).
       await env.DB
         .prepare(
           `INSERT INTO personalizer_field_translations
               (field_id, locale, customer_label, cart_label, info_text, placeholder, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
            ON CONFLICT(field_id, locale) DO UPDATE SET
-              customer_label = COALESCE(customer_label, excluded.customer_label),
-              cart_label     = COALESCE(cart_label,     excluded.cart_label),
-              info_text      = COALESCE(info_text,      excluded.info_text),
-              placeholder    = COALESCE(placeholder,    excluded.placeholder),
+              customer_label = excluded.customer_label,
+              cart_label     = excluded.cart_label,
+              info_text      = excluded.info_text,
+              placeholder    = excluded.placeholder,
               updated_at     = datetime('now')`,
         )
         .bind(fieldId, locale, vals.customer_label, vals.cart_label, vals.info_text, vals.placeholder)

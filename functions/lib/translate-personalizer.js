@@ -58,7 +58,27 @@ export async function translateBatch(env, strings, locale) {
     return out;
   }
 
-  const sourceJson = JSON.stringify(Object.fromEntries(entries), null, 2);
+  // P26-28 follow-up — dedupe source values BEFORE sending to Claude.
+  // When two keys carry the same source string (typical when
+  // customer_label and cart_label both fall back to f.label),
+  // Claude tends to merge them in its output and we end up with
+  // one of the two keys missing from the response - which leaves
+  // the corresponding column null in the DB and the storefront cart
+  // showing the English admin label. Sending uniques only and then
+  // mapping the response back to every key that shared the source
+  // guarantees coverage AND saves tokens.
+  const uniqueSources = [];
+  const sourceToShortKey = new Map();
+  const keyToShortKey = new Map();
+  for (const [k, v] of entries) {
+    if (!sourceToShortKey.has(v)) {
+      const shortKey = `s${uniqueSources.length}`;
+      sourceToShortKey.set(v, shortKey);
+      uniqueSources.push([shortKey, v]);
+    }
+    keyToShortKey.set(k, sourceToShortKey.get(v));
+  }
+  const sourceJson = JSON.stringify(Object.fromEntries(uniqueSources), null, 2);
 
   // System prompt tuned for personalizer / e-commerce option labels.
   // A few non-negotiables baked in:
@@ -130,13 +150,16 @@ export async function translateBatch(env, strings, locale) {
       .trim();
     const parsed = JSON.parse(stripped);
     if (!parsed || typeof parsed !== 'object') return null;
-    // Normalize: only keep keys we sent, coerce values to strings,
-    // drop empty values so the caller treats them as "no translation"
+    // Normalize: map dedup'd shortKey responses back to the ORIGINAL
+    // keys the caller asked for. Coerce values to strings, drop
+    // empty values so callers treat them as "no translation"
     // (which falls back to source).
     const out = {};
-    for (const [k] of entries) {
-      const v = parsed[k];
-      if (typeof v === 'string' && v.trim().length > 0) out[k] = v.trim();
+    for (const [origKey] of entries) {
+      const shortKey = keyToShortKey.get(origKey);
+      if (!shortKey) continue;
+      const v = parsed[shortKey];
+      if (typeof v === 'string' && v.trim().length > 0) out[origKey] = v.trim();
     }
     return out;
   } catch (err) {
