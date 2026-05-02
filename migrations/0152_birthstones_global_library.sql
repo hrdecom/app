@@ -1,16 +1,27 @@
--- P26-26 follow-up — birthstones library moves from per-template to
+-- P26-26 follow-up — birthstones library moved from per-template to
 -- per-shop (global). The merchant uploads the 12 PNG icons ONCE in
 -- the admin Personalizer Settings panel, and every birthstone field
 -- on every product reuses them. Integrator role keeps the ability
 -- to add birthstone fields and pick the default month, but cannot
 -- modify the library (admin-only).
 --
--- Schema change:
---   • personalizer_settings.birthstones_json (NEW) — JSON array of 12
---     entries [{ month_index, label, image_url }, ...]. Same shape as
---     the previous per-template column.
---   • customization_templates.birthstones_json — kept in place for
---     backward compatibility; storefront API now ignores it. A future
---     migration can drop it once we are sure no rows hold useful data.
+-- ───────────────────────────────────────────────────────────────────
+-- This migration is now a NO-OP. The personalizer_settings.birthstones_json
+-- column gets added either:
+--   • by the API self-heal in functions/api/personalizer/settings.js
+--     the first time an admin tries to upload an icon (an ALTER TABLE
+--     ADD COLUMN runs inline, then the UPDATE retries), OR
+--   • on a fresh D1 instance, the same self-heal kicks in on the
+--     first PATCH /api/personalizer/settings with birthstones_json.
+--
+-- The original SQL here was:
+--   ALTER TABLE personalizer_settings ADD COLUMN birthstones_json TEXT;
+-- but that is not idempotent — SQLite has no `ADD COLUMN IF NOT
+-- EXISTS`, so re-running it on a database where the self-heal has
+-- already added the column fails with "duplicate column name". To
+-- keep `wrangler d1 migrations apply` happy across both fresh and
+-- already-self-healed shops, we leave it empty and let the API do
+-- the work.
+-- ───────────────────────────────────────────────────────────────────
 
-ALTER TABLE personalizer_settings ADD COLUMN birthstones_json TEXT;
+SELECT 1;
