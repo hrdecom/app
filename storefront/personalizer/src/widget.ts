@@ -844,7 +844,10 @@ async function mount({ el, productHandle }: MountSpec) {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
+          /* P26-16 — gap reset; per-element margin gives tighter
+             control over icon/text/check spacing than a single gap.
+             "center" alignment vertically centers all children. */
+          gap: 0;
           width: 100%;
           padding: 14px 18px;
           border: 1.5px dashed rgba(0,0,0,0.22);
@@ -876,7 +879,20 @@ async function mount({ el, productHandle }: MountSpec) {
         }
         .rp-pz-upload-icon {
           flex: 0 0 auto;
-          opacity: 0.55;
+          opacity: 0.6;
+          /* Nudge down 1 px so the SVG strokes line up with the
+             text x-height instead of the cap-height (default flex
+             centers the box, which leaves the icon visually high
+             relative to the lowercase letters). */
+          position: relative;
+          top: 1px;
+          margin-right: 8px;
+        }
+        .rp-pz-upload-check {
+          flex: 0 0 auto;
+          margin-left: 8px;
+          position: relative;
+          top: 1px;
         }
 
         .rp-pz-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 5; transition: opacity .15s; }
@@ -1349,8 +1365,8 @@ async function mount({ el, productHandle }: MountSpec) {
       // to miss). Inline SVG = no extra request.
       const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       icon.setAttribute('class', 'rp-pz-upload-icon');
-      icon.setAttribute('width', '18');
-      icon.setAttribute('height', '18');
+      icon.setAttribute('width', '16');
+      icon.setAttribute('height', '16');
       icon.setAttribute('viewBox', '0 0 24 24');
       icon.setAttribute('fill', 'none');
       icon.setAttribute('stroke', 'currentColor');
@@ -1363,6 +1379,24 @@ async function mount({ el, productHandle }: MountSpec) {
       dropText.className = 'rp-pz-upload-text';
       dropText.textContent = f.placeholder || 'Upload your photo';
       dropZone.appendChild(dropText);
+      // P26-16 — minimalist green checkmark shown only AFTER a
+      // successful upload, on the right side, vertically aligned
+      // with the text. Pre-created here (display:none) so the
+      // upload handler can just toggle visibility — no DOM thrashing
+      // and no risk of duplicate icons after re-uploads.
+      const checkIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      checkIcon.setAttribute('class', 'rp-pz-upload-check');
+      checkIcon.setAttribute('width', '16');
+      checkIcon.setAttribute('height', '16');
+      checkIcon.setAttribute('viewBox', '0 0 24 24');
+      checkIcon.setAttribute('fill', 'none');
+      checkIcon.setAttribute('stroke', '#16a34a');
+      checkIcon.setAttribute('stroke-width', '2.5');
+      checkIcon.setAttribute('stroke-linecap', 'round');
+      checkIcon.setAttribute('stroke-linejoin', 'round');
+      checkIcon.innerHTML = '<polyline points="20 6 9 17 4 12"/>';
+      checkIcon.style.display = 'none';
+      dropZone.appendChild(checkIcon);
 
       const file = document.createElement('input');
       file.type = 'file';
@@ -1382,6 +1416,8 @@ async function mount({ el, productHandle }: MountSpec) {
         if (!f0) return;
         const prevText = dropText.textContent || '';
         dropText.textContent = 'Uploading...';
+        // Hide any prior success badge while a new upload is in flight.
+        checkIcon.style.display = 'none';
         const errEl = row.querySelector<HTMLDivElement>('.rp-pz-error');
         if (errEl) errEl.textContent = '';
         try {
@@ -1414,6 +1450,8 @@ async function mount({ el, productHandle }: MountSpec) {
           hidden.value = fullUrl;
           // Show filename so the customer knows the upload landed.
           dropText.textContent = f0.name;
+          // P26-16 — reveal the green check on success.
+          checkIcon.style.display = 'inline-block';
           rerender();
           // Also sync cart mirrors immediately (file dispatched no
           // 'input' event on the personalizer wrapper, so the
