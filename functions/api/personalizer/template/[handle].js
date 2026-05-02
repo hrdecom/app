@@ -40,8 +40,24 @@ export async function onRequestGet(context) {
     .first();
   if (!tpl) return jsonCors({ found: false }, 404, request);
 
+  // P26-29 — order fields by layer_z DESC (then sort_order, then id)
+  // so the storefront form order matches the admin layer list. Admin
+  // shows the layer list top-to-bottom = highest z to lowest (top of
+  // list is visually on top), and the merchant expects the form on
+  // the product page to follow the same ordering. Previously we used
+  // sort_order ASC, which drifts from layer_z whenever a field is
+  // created LATER than fields that sit visually below it (e.g. a name
+  // field added after birthstones still appears above the birthstones
+  // in the layer list because it has a higher z-index, but used to
+  // render at the bottom of the storefront form). sort_order +
+  // id are kept as deterministic tiebreakers when two layers share
+  // the same z (matches the admin's stable-sort behaviour).
   const { results: fields } = await env.DB
-    .prepare(`SELECT * FROM customization_fields WHERE template_id = ? ORDER BY sort_order ASC`)
+    .prepare(
+      `SELECT * FROM customization_fields
+        WHERE template_id = ?
+        ORDER BY layer_z DESC, sort_order ASC, id ASC`,
+    )
     .bind(tpl.id)
     .all();
 
