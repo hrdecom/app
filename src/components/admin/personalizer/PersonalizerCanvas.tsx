@@ -380,8 +380,13 @@ export function PersonalizerCanvas({
   return (
     <div className="bg-gray-50 border border-gray-200 rounded p-4 min-h-[400px] flex items-center justify-center">
       <div
+        // P26-9 — let the canvas breathe responsively. Max width was
+        // hardcoded to 480 px, which made the preview useless on a
+        // narrowed laptop. Now it expands to fill its column up to a
+        // sensible cap that still leaves room for the right-side
+        // FieldConfigForm.
         className="relative w-full"
-        style={{ maxWidth: 480, aspectRatio: `${w} / ${h}` }}
+        style={{ maxWidth: 720, aspectRatio: `${w} / ${h}` }}
       >
         <div
           className="absolute inset-0 select-none pointer-events-none"
