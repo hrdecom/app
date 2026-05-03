@@ -160,10 +160,11 @@ export function WorkspaceView({ productId, onUpdated, onBack }: WorkspaceViewPro
 
   const tabsLocked = product?.status === 'validated_todo';
 
-  // Build tab list: include Personalizer tab only when product supports personalization
-  const TABS = product?.supports_personalization
-    ? [...BASE_TABS, { key: 'personalizer' as TabKey, label: 'Personalizer', icon: Layers }]
-    : BASE_TABS;
+  // P25-V2 — the Personalizer tab is ALWAYS visible. If the integrator
+  // doesn't publish a template, the storefront widget's GET /template/:handle
+  // returns 404 and the widget no-ops — nothing shows on the customer page.
+  // So gating the tab adds friction without adding safety.
+  const TABS = [...BASE_TABS, { key: 'personalizer' as TabKey, label: 'Personalizer', icon: Layers }];
 
   async function handleWorkOnIt() {
     if (!product) return;
@@ -392,7 +393,13 @@ export function WorkspaceView({ productId, onUpdated, onBack }: WorkspaceViewPro
         />
       )}
 
-      {tab === 'personalizer' && product.supports_personalization && (
+      {/* P25-V3 — Personalizer is ALWAYS available. The
+          PersonalizerPanel auto-creates a draft template on first load
+          (idempotent), so the integrator can configure fields with
+          zero ceremony. Until they hit "Publish", nothing reaches the
+          storefront — the public /api/personalizer/template/:handle
+          endpoint only returns published rows. */}
+      {tab === 'personalizer' && (
         <PersonalizerPanel
           productId={product.id}
           baseImageUrl={product.first_image_url ?? null}
@@ -623,6 +630,13 @@ function ClaudePanel({
   const [descEditValue, setDescEditValue] = useState(product.description ?? '');
   const [maxChars, setMaxChars] = useState(180);
 
+  // FIX 26c — per-request integrator guidance ("Additional context").
+  // Sent with both title AND description generation calls. Stays in
+  // local state so it persists between regenerations within the same
+  // session but isn't saved to the product (it's per-request, not
+  // per-product). Cleared explicitly with the "Clear" button.
+  const [extraPrompt, setExtraPrompt] = useState('');
+
   // Editable description fields
   // para1/para2/bullets are LIFTED to parent — use props directly.
   const para1 = liftedPara1;
@@ -702,7 +716,11 @@ function ClaudePanel({
     setTitleSuggestions([]);
     setSelectedSuggestion(null);
     try {
-      const response = await generateTitle(product.id, selectedProductType || undefined);
+      const response = await generateTitle(
+        product.id,
+        selectedProductType || undefined,
+        extraPrompt,
+      );
       setTitleSuggestions(response.suggestions);
       if (response.product_type_options?.length > 0) {
         setProductTypes(response.product_type_options);
@@ -763,7 +781,11 @@ function ClaudePanel({
     setGeneratingDesc(true);
     setDescResult(null);
     try {
-      const response = await generateDescription(product.id, selectedProductType || undefined);
+      const response = await generateDescription(
+        product.id,
+        selectedProductType || undefined,
+        extraPrompt,
+      );
       console.log('[ClaudePanel] description response:', JSON.stringify(response));
       console.log('[ClaudePanel] bullets raw value:', response.bullets);
       console.log('[ClaudePanel] bullets type:', typeof response.bullets);
@@ -890,6 +912,40 @@ function ClaudePanel({
           </Select>
         </div>
       </div>
+
+      {/* SECTION 2.5 — FIX 26c — Per-request prompt that the integrator
+          can use to steer Claude (e.g. "this is a ring with 2
+          customizable initials"). Sent on EVERY title or description
+          generation while it's non-empty; cleared with the Clear
+          button or by emptying the textarea. */}
+      {hasImage && (
+        <div className="space-y-1.5 p-3 bg-blue-50/50 border border-blue-200 rounded-xl">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs uppercase tracking-wide text-blue-900">
+              Additional context for Claude (optional)
+            </Label>
+            {extraPrompt && (
+              <button
+                type="button"
+                onClick={() => setExtraPrompt('')}
+                className="text-[11px] text-blue-700 hover:text-blue-900 underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <Textarea
+            value={extraPrompt}
+            onChange={(e) => setExtraPrompt(e.target.value)}
+            placeholder='e.g. "Ring with 2 customizable initials, available in gold and silver"'
+            rows={2}
+            className="text-sm bg-white"
+          />
+          <p className="text-[10px] text-blue-700/70">
+            Sent with the next title and description generation. Use it to flag specifics Claude can't see in the image.
+          </p>
+        </div>
+      )}
 
       {/* SECTION 3 — One-click Generate (first run only) */}
       {showCombinedGenerate && (
