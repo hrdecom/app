@@ -62,6 +62,7 @@ import {
   listBlacklist,
   deleteBlacklistItem,
   importShopifyTitlesIntoBlacklist,
+  clearAllBlacklist,
   type ProductType,
   type ProductCollection,
   type ClaudeSettings,
@@ -252,6 +253,37 @@ export function ClaudeTools() {
   // under the sentinel slug `__shopify__`, so Claude never re-suggests
   // a name that's already in use.
   const [importingShopify, setImportingShopify] = useState(false);
+  // FIX 26d v3 — clear-all state for the nuclear "wipe entire blacklist"
+  // action. Two-step confirm because it deletes everything (including
+  // human-curated entries from the integrator's accept-title flow).
+  const [clearingAll, setClearingAll] = useState(false);
+
+  async function handleClearAllBlacklist() {
+    if (clearingAll) return;
+    if (!confirm(
+      'Delete EVERY blacklist entry? This wipes both Shopify-imported names ' +
+      'AND names blocked by the integrator workflow. Cannot be undone.'
+    )) return;
+    if (!confirm('Last chance — really wipe the entire title blacklist?')) return;
+    setClearingAll(true);
+    try {
+      const res = await clearAllBlacklist();
+      toast({
+        title: 'Blacklist cleared',
+        description: `Removed ${res.deleted} entr${res.deleted === 1 ? 'y' : 'ies'}.`,
+      });
+      setBlacklistOffset(0);
+      loadBlacklist();
+    } catch (e: any) {
+      toast({
+        title: 'Clear failed',
+        description: e?.message || 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setClearingAll(false);
+    }
+  }
 
   async function handleImportShopify() {
     if (importingShopify) return;
@@ -804,20 +836,39 @@ export function ClaudeTools() {
               title from the storefront and adds it to the blacklist
               so Claude never re-suggests an existing name. Idempotent
               — re-running just tops up with new titles. */}
-          <Button
-            size="sm"
-            variant="outline"
-            type="button"
-            onClick={handleImportShopify}
-            disabled={importingShopify}
-            className="ml-auto"
-            title="Add every Shopify product title to the blacklist"
-          >
-            {importingShopify
-              ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-              : <Download className="h-3.5 w-3.5 mr-1.5" />}
-            Import from Shopify
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            {/* FIX 26d v3 — Clear-all wipes EVERY blacklist row, including
+                human-curated entries. Two-step confirm gates the action;
+                the destructive styling makes it visually distinct from
+                the safe Import button. */}
+            <Button
+              size="sm"
+              variant="outline"
+              type="button"
+              onClick={handleClearAllBlacklist}
+              disabled={clearingAll || blacklistTotal === 0}
+              className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200"
+              title="Permanently delete every blacklist entry"
+            >
+              {clearingAll
+                ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
+              Clear all
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              type="button"
+              onClick={handleImportShopify}
+              disabled={importingShopify}
+              title="Add every Shopify product title to the blacklist"
+            >
+              {importingShopify
+                ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                : <Download className="h-3.5 w-3.5 mr-1.5" />}
+              Import from Shopify
+            </Button>
+          </div>
         </div>
 
         <div className="flex gap-2 mb-4">

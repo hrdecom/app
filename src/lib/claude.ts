@@ -213,3 +213,10 @@ export interface ImportShopifyResponse {
 export async function importShopifyTitlesIntoBlacklist(): Promise<ImportShopifyResponse> {
   return api.post('/claude/blacklist/import-shopify', {});
 }
+
+// FIX 26d v3 — wipe every blacklist row in one server-side DELETE.
+// Admin-only on the backend. Used by the "Clear all" button in the
+// admin Title Blacklist section.
+export async function clearAllBlacklist(): Promise<{ ok: boolean; deleted: number }> {
+  return api.post('/claude/blacklist/clear-all', {});
+}
