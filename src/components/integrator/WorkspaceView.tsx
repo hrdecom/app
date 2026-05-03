@@ -914,7 +914,7 @@ function ClaudePanel({
       </div>
 
       {/* SECTION 2.5 — FIX 26c — Per-request prompt that the integrator
-          can use to steer Claude (e.g. "this is a ring with 2
+          can use to steer the IA model (e.g. "this is a ring with 2
           customizable initials"). Sent on EVERY title or description
           generation while it's non-empty; cleared with the Clear
           button or by emptying the textarea. */}
@@ -922,7 +922,7 @@ function ClaudePanel({
         <div className="space-y-1.5 p-3 bg-blue-50/50 border border-blue-200 rounded-xl">
           <div className="flex items-center justify-between">
             <Label className="text-xs uppercase tracking-wide text-blue-900">
-              Additional context for Claude (optional)
+              Additional context for IA Model (optional)
             </Label>
             {extraPrompt && (
               <button
@@ -942,7 +942,7 @@ function ClaudePanel({
             className="text-sm bg-white"
           />
           <p className="text-[10px] text-blue-700/70">
-            Sent with the next title and description generation. Use it to flag specifics Claude can't see in the image.
+            Sent with the next title and description generation. Use it to flag specifics the IA model can't see in the image.
           </p>
         </div>
       )}

@@ -80,11 +80,25 @@ async function handlePost(context) {
 
   const product = await env.DB.prepare('SELECT product_type_slug, collection FROM products WHERE id = ?').bind(productId).first();
 
-  // Load blacklist
+  // Load blacklist for the prompt context (names IA must avoid).
+  // FIX 26d (v2) — include both the product type's own blacklist AND
+  // the defensive __shopify_unmatched__ bucket (titles imported from
+  // Shopify where we couldn't infer the product type — blocked
+  // everywhere by design). The safety filter at the bottom of this
+  // file uses the same scope, so what we tell IA matches what we
+  // actually enforce.
   if (product?.product_type_slug) {
     const { results: bl = [] } = await env.DB
-      .prepare('SELECT name FROM title_blacklist WHERE product_type_slug = ?')
+      .prepare(
+        `SELECT name FROM title_blacklist
+          WHERE product_type_slug = ? OR product_type_slug = '__shopify_unmatched__'`,
+      )
       .bind(product.product_type_slug).all();
+    bl.forEach((b) => previousNames.add(String(b.name).toLowerCase()));
+  } else {
+    // No product type yet → still warn IA off the unmatched bucket.
+    const { results: bl = [] } = await env.DB
+      .prepare("SELECT name FROM title_blacklist WHERE product_type_slug = '__shopify_unmatched__'").all();
     bl.forEach((b) => previousNames.add(String(b.name).toLowerCase()));
   }
 
@@ -220,14 +234,39 @@ async function handlePost(context) {
     }));
   }
 
-  // Filter blacklisted — only filter against the GLOBAL blacklist (accepted titles),
-  // NOT against previous generation history (which would eliminate Claude's fresh suggestions).
-  const { results: globalBl = [] } = await env.DB
-    .prepare('SELECT name FROM title_blacklist').all();
-  const globalBlSet = new Set(globalBl.map((b) => String(b.name).toLowerCase()));
+  // FIX 26d (v2) — per-type blacklist filter. Was global, which made
+  // every name reused on a single product type silently block the same
+  // name on EVERY type forever ("Sparkle Gold" on a bracelet
+  // shouldn't prevent the same "Sparkle Gold" on a necklace).
+  // We now filter against:
+  //   - the current product type's blacklist (the merchant's intent)
+  //   - the unmatched-Shopify bucket (defensive: titles where we
+  //     couldn't infer the product type are blocked everywhere so
+  //     they're never accidentally reused).
+  // The legacy `__shopify__` slug from v1 imports is intentionally
+  // NOT in this scope — those rows are full-title strings that can
+  // never match a name_part anyway, and import-shopify v2 deletes
+  // them at the start of every run.
+  const blacklistSlug = productTypeRow?.slug || selectedTypeSlug || null;
+  let blacklistRows = [];
+  if (blacklistSlug) {
+    const { results = [] } = await env.DB
+      .prepare(
+        `SELECT name FROM title_blacklist
+          WHERE product_type_slug = ? OR product_type_slug = '__shopify_unmatched__'`,
+      )
+      .bind(blacklistSlug).all();
+    blacklistRows = results;
+  } else {
+    // No type selected (rare) → only the defensive unmatched bucket.
+    const { results = [] } = await env.DB
+      .prepare("SELECT name FROM title_blacklist WHERE product_type_slug = '__shopify_unmatched__'").all();
+    blacklistRows = results;
+  }
+  const globalBlSet = new Set(blacklistRows.map((b) => String(b.name).toLowerCase()));
   const beforeFilter = suggestions.length;
   suggestions = suggestions.filter((s) => !globalBlSet.has(String(s.name_part).toLowerCase()));
-  console.log('[gen-title] blacklist filtered:', beforeFilter, '→', suggestions.length, '(global blacklist size:', globalBlSet.size, ')');
+  console.log('[gen-title] blacklist filtered:', beforeFilter, '→', suggestions.length, '(scope:', blacklistSlug || 'unmatched-only', 'size:', globalBlSet.size, ')');
 
   // Pad if needed — but don't use "Gem" names, just allow shorter list
   if (suggestions.length === 0 && beforeFilter > 0) {
