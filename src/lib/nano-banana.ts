@@ -280,6 +280,21 @@ export async function reorderGroups(
   return api.post('/nano-banana/groups/reorder', { category_id, ids });
 }
 
+// FIX 27b — unified reorder of groups + ungrouped prompts within a
+// category. Items must be in the desired order; the backend writes the
+// array index to BOTH ai_prompts.sort_order and nano_banana_groups.sort_order
+// so the integrator render can merge them correctly.
+export interface MixedReorderItem {
+  type: 'group' | 'prompt';
+  id: number;
+}
+export async function reorderMixed(
+  category_id: number,
+  items: MixedReorderItem[]
+): Promise<void> {
+  return api.post('/nano-banana/reorder-mixed', { category_id, items });
+}
+
 export async function assignPromptGroup(
   prompt_id: number,
   group_id: number | null

@@ -178,37 +178,54 @@ function CategoryNavItem({
         </div>
       )}
 
-      {/* Groups + ungrouped prompts — visible when this cat or a descendant is selected */}
+      {/* Groups + ungrouped prompts — visible when this cat or a descendant is selected.
+          FIX 27b — unified rendering by sort_order so a solo prompt can sit
+          between two groups. Both NBGroup and NBPrompt carry a sort_order
+          field; we merge into one list and sort once. The backend's
+          reorder-mixed endpoint keeps the two tables' sort_orders in
+          lockstep. */}
       {isExpanded && (catUngrouped.length > 0 || catGroups.length > 0) && (
         <div className="space-y-1 mt-1.5 ml-2">
-          {catGroups.map((group: NBGroup) => {
-            const collapsed = collapsedGroups.has(group.id);
-            const activePrompts = group.prompts.filter((p: NBPrompt) => p.active);
-            return (
-              <div key={group.id} className="space-y-1">
-                <button
-                  onClick={() => toggleGroupCollapsed(group.id)}
-                  className="w-full px-2 py-1.5 rounded-md text-left text-xs font-semibold flex items-center gap-2 hover:bg-muted transition-colors"
-                >
-                  {collapsed ? (
-                    <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          {(() => {
+            type Mixed =
+              | { kind: 'group'; data: NBGroup; sort: number }
+              | { kind: 'prompt'; data: NBPrompt; sort: number };
+            const mixed: Mixed[] = [
+              ...catGroups.map((g): Mixed => ({ kind: 'group', data: g, sort: g.sort_order ?? 0 })),
+              ...catUngrouped.map((p): Mixed => ({ kind: 'prompt', data: p, sort: p.sort_order ?? 0 })),
+            ].sort((a, b) => a.sort - b.sort);
+            return mixed.map((it) => {
+              if (it.kind === 'prompt') {
+                return <div key={`p-${it.data.id}`}>{renderPromptButton(it.data)}</div>;
+              }
+              const group = it.data;
+              const collapsed = collapsedGroups.has(group.id);
+              const activePrompts = group.prompts.filter((p: NBPrompt) => p.active);
+              return (
+                <div key={`g-${group.id}`} className="space-y-1">
+                  <button
+                    onClick={() => toggleGroupCollapsed(group.id)}
+                    className="w-full px-2 py-1.5 rounded-md text-left text-xs font-semibold flex items-center gap-2 hover:bg-muted transition-colors"
+                  >
+                    {collapsed ? (
+                      <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                    )}
+                    <span className="flex-1">{group.name}</span>
+                    <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                      {activePrompts.length}
+                    </Badge>
+                  </button>
+                  {!collapsed && (
+                    <div className="space-y-1 pl-3">
+                      {activePrompts.map(renderPromptButton)}
+                    </div>
                   )}
-                  <span className="flex-1">{group.name}</span>
-                  <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                    {activePrompts.length}
-                  </Badge>
-                </button>
-                {!collapsed && (
-                  <div className="space-y-1 pl-3">
-                    {activePrompts.map(renderPromptButton)}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {catUngrouped.map(renderPromptButton)}
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
     </div>
@@ -369,11 +386,23 @@ export function NanoBananaStudio({
   const ungroupedPrompts =
     selectedCategory?.prompts?.filter?.((p) => p.active && !p.group_id) ?? [];
 
-  // Fire a single generation request (non-blocking — runs concurrently)
-  function fireGeneration(prompt: string, label: string, extraImages?: string[], promptId?: number) {
+  // Fire a single generation request (non-blocking — runs concurrently).
+  // FIX 27c — `baseImages` snapshot is passed in by callers that
+  // already cleared the attached selection (so the closure's
+  // attachedImageUrls is empty by the time the request actually
+  // fires). Defaults to the live state for callers that don't care
+  // (e.g. the textarea-only fast path).
+  function fireGeneration(
+    prompt: string,
+    label: string,
+    extraImages?: string[],
+    promptId?: number,
+    baseImages?: string[],
+  ) {
+    const base = baseImages ?? attachedImageUrls;
     const allImages = [
-      ...attachedImageUrls,
-      ...(extraImages ?? []).filter((u) => !attachedImageUrls.includes(u)),
+      ...base,
+      ...(extraImages ?? []).filter((u) => !base.includes(u)),
     ];
 
     const req: NBGenerateRequest & { scope?: StudioScope } = {
@@ -479,37 +508,56 @@ export function NanoBananaStudio({
   }
 
   // Send button handler — fires all selected direct prompts + chat prompt
-  function handleSend() {
+  // FIX 27c — staggered fires (700ms apart) instead of one synchronous
+  // burst. Without staggering, 6 selected prompts hit Nano Banana
+  // /generate in the same tick which fans out to 6×N parallel Gemini
+  // calls; Gemini rate-limits the burst and silently returns 0 items
+  // for some of them, so the integrator sees 4 batches when they
+  // expected 6. The 700ms gap gives Gemini's per-key budget time to
+  // refill between calls. Snapshots prompt/attached state up front
+  // and clears the UI immediately so the integrator can start prepping
+  // the next request without waiting for the stagger to finish.
+  async function handleSend() {
     const allPrompts = getAllDirectPrompts();
     const selectedDirect = allPrompts.filter((p) => selectedDirectPrompts.has(p.id));
+    const promptTextSnap = promptText.trim();
+    const attachedSnap = [...attachedImageUrls];
+    const STAGGER_MS = 700;
 
-    // Fire each selected direct prompt as a separate parallel request
+    // Wipe UI selections first so the merchant can immediately keep
+    // working. The fireGeneration calls below capture the snapshot
+    // explicitly via baseImages so they don't race against this.
+    setSelectedDirectPrompts(new Set());
+    setPromptText('');
+    clearSelections();
+
+    let firstFired = false;
+    const fireWithDelay = async (
+      content: string,
+      label: string,
+      extraImages: string[] | undefined,
+      promptId: number | undefined,
+    ) => {
+      if (firstFired) await new Promise((r) => setTimeout(r, STAGGER_MS));
+      firstFired = true;
+      fireGeneration(content, label, extraImages, promptId, attachedSnap);
+    };
+
+    // Fire each selected direct prompt
     for (const p of selectedDirect) {
-      const extraImages = p.attached_image_url ? [p.attached_image_url] : [];
-      fireGeneration(p.content, p.button_label, extraImages, p.id);
+      const extra = p.attached_image_url ? [p.attached_image_url] : undefined;
+      await fireWithDelay(p.content, p.button_label, extra, p.id);
     }
 
     // Fire the manual chat prompt if present
-    if (promptText.trim()) {
-      fireGeneration(promptText.trim(), promptText.trim().slice(0, 40));
-      setPromptText('');
+    if (promptTextSnap) {
+      await fireWithDelay(promptTextSnap, promptTextSnap.slice(0, 40), undefined, undefined);
     }
 
     // If nothing was queued (no prompts selected, no text), fire with just images
-    if (selectedDirect.length === 0 && !promptText.trim() && attachedImageUrls.length > 0) {
-      fireGeneration('', 'Image only');
+    if (selectedDirect.length === 0 && !promptTextSnap && attachedSnap.length > 0) {
+      await fireWithDelay('', 'Image only', undefined, undefined);
     }
-
-    // Clear direct prompt selections after send
-    setSelectedDirectPrompts(new Set());
-    // FIX 25d — also clear selected reference images so the next prompt
-    // starts with a fresh slate. The previous behaviour kept attached
-    // images checked across multiple sends, which made it easy to
-    // accidentally re-attach an unwanted reference to a brand new
-    // request. clearSelections() handles both selectedUrls (gallery
-    // checkmarks) and attachedImageUrls (the chip row above the
-    // textarea).
-    clearSelections();
   }
 
   // Gather all direct prompts across all categories (including sub-categories)
@@ -543,6 +591,11 @@ export function NanoBananaStudio({
   }
 
   // Selection handlers
+  // FIX 27a — selecting an image in the gallery ALSO attaches it to
+  // the next request (and deselecting removes the attachment). The
+  // separate "Attach to prompt" button still works for power users
+  // but is no longer required for the common case. Auto-deselect
+  // after send is wired in handleSend → clearSelections() (FIX 25d).
   function toggleSelection(url: string) {
     setSelectedUrls((prev) => {
       const next = new Set(prev);
@@ -551,6 +604,7 @@ export function NanoBananaStudio({
         setAttachedImageUrls((a) => a.filter((u) => u !== url));
       } else {
         next.add(url);
+        setAttachedImageUrls((a) => (a.includes(url) ? a : [...a, url]));
       }
       return next;
     });
