@@ -10,6 +10,10 @@ import {
   useDroppable,
   DragOverlay,
   pointerWithin,
+  rectIntersection,
+  closestCenter,
+  getFirstCollision,
+  type CollisionDetection,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -84,6 +88,63 @@ function getDragLabel(id: string | number | null, root: NBCategory): string {
   }
   return s;
 }
+
+/**
+ * FIX 27 follow-up — custom collision strategy for the mixed
+ * groups+prompts list. The previous `pointerWithin` strategy failed
+ * to find a target when the cursor sat in the GAP between two
+ * stacked items (e.g. between group 4 and prompt 6) because no
+ * droppable's bounding box contained the pointer. The user could
+ * see the drop preview overlay floating in the gap but the drop
+ * silently snapped elsewhere or did nothing.
+ *
+ * The fix walks three strategies in priority order:
+ *   1. pointerWithin — exact hit (handles drop INTO group containers
+ *      and sub-cat headers, which both rely on cursor-inside semantics)
+ *   2. rectIntersection — when the dragged overlay overlaps any
+ *      droppable, pick the most-overlapped one
+ *   3. closestCenter — last-resort fallback when the cursor is in a
+ *      gap; finds the nearest sortable to the pointer so we always
+ *      land somewhere predictable
+ *
+ * This pattern is what the dnd-kit team recommends in the "Multiple
+ * containers" example for nested sortables — pointerWithin alone
+ * doesn't handle the gap case.
+ */
+const mixedCollision: CollisionDetection = (args) => {
+  const pointerHits = pointerWithin(args);
+  if (pointerHits.length > 0) return pointerHits;
+  const rectHits = rectIntersection(args);
+  if (rectHits.length > 0) return rectHits;
+  const closest = closestCenter(args);
+  // Re-rank: prefer collisions that share a "type prefix" with the
+  // active draggable (group-/prompt-/subcat-). This keeps a dragged
+  // group from snapping onto an inner-prompt droppable that happens
+  // to be the geometric closest, which would cause silent drop
+  // failures (the drop handler can't process group→prompt-context
+  // moves).
+  const activeId = String(args.active?.id || '');
+  const activeKind = activeId.startsWith('group-')
+    ? 'group'
+    : activeId.startsWith('prompt-')
+    ? 'prompt'
+    : activeId.startsWith('subcat-')
+    ? 'subcat'
+    : null;
+  if (!activeKind) return closest;
+  const sameKind = closest.filter((c) => {
+    const cid = String(c.id || '');
+    if (activeKind === 'group') return cid.startsWith('group-') || cid.startsWith('prompt-') || cid.startsWith('drop-ungrouped-') || cid.startsWith('drop-subcat-');
+    if (activeKind === 'prompt') return cid.startsWith('prompt-') || cid.startsWith('group-') || cid.startsWith('drop-group-') || cid.startsWith('drop-ungrouped-') || cid.startsWith('drop-subcat-');
+    if (activeKind === 'subcat') return cid.startsWith('subcat-') || cid.startsWith('drop-subcat-');
+    return true;
+  });
+  if (sameKind.length > 0) return sameKind;
+  // Last resort — return the unfiltered closest so we never strand
+  // the drag with no target at all.
+  const first = getFirstCollision(closest);
+  return first ? [closest[0]] : closest;
+};
 
 /* ─── droppable zones ─── */
 
@@ -580,7 +641,13 @@ export function CategoryBlock({ category, allCategories, onEdit, onDeleted, onPr
         )}
 
         {!collapsed && (
-          <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={(e) => setActiveDragId(e.active.id)} onDragCancel={() => setActiveDragId(null)} onDragEnd={handleDragEnd}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={mixedCollision}
+            onDragStart={(e) => setActiveDragId(e.active.id)}
+            onDragCancel={() => setActiveDragId(null)}
+            onDragEnd={handleDragEnd}
+          >
             <CategoryContent cat={category} allCategories={allCategories} onPromptUpdated={onPromptUpdated} onEdit={onEdit} />
             <DragOverlay dropAnimation={null}>
               {activeDragId && (

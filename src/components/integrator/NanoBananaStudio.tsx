@@ -59,6 +59,14 @@ export interface NBBatch {
   items: NBGeneratedImage[];
   ar: string;
   submittedAt: Date;
+  // FIX 27 follow-up — keep the prompt label and the source-image
+  // thumbnail with each batch so the merchant can tell at a glance
+  // which request produced which result. `label` mirrors the
+  // pendingGens label, `sourceImage` is the FIRST attached reference
+  // for the request (when the request fanned out to one-per-image
+  // each batch carries a different sourceImage).
+  label?: string;
+  sourceImage?: string | null;
 }
 
 interface NanoBananaStudioProps {
@@ -270,7 +278,16 @@ export function NanoBananaStudio({
   const [selectedDirectPrompts, setSelectedDirectPrompts] = useState<Set<number>>(new Set());
 
   // Concurrent generation tracking — each entry is one in-flight request
-  const [pendingGens, setPendingGens] = useState<{ id: string; label: string; count: number; ar: string }[]>([]);
+  // FIX 27 follow-up — pending requests now carry a sourceImage so we
+  // can render its thumbnail alongside the spinner (same affordance
+  // as on completed batches).
+  const [pendingGens, setPendingGens] = useState<{
+    id: string;
+    label: string;
+    count: number;
+    ar: string;
+    sourceImage?: string | null;
+  }[]>([]);
   const generating = pendingGens.length > 0;
 
   // batches, selectedUrls, attachedImageUrl are lifted to the parent so they
@@ -404,6 +421,13 @@ export function NanoBananaStudio({
       ...base,
       ...(extraImages ?? []).filter((u) => !base.includes(u)),
     ];
+    // FIX 27 follow-up — the request's primary "source image" is the
+    // first reference image attached to it (typically a selected
+    // gallery image like the rose-gold ring). We render this as a
+    // small thumbnail next to the label so the merchant can tell at
+    // a glance which reference produced which result. When no
+    // reference is attached this stays null.
+    const sourceImage: string | null = base[0] ?? null;
 
     const req: NBGenerateRequest & { scope?: StudioScope } = {
       prompt,
@@ -419,7 +443,7 @@ export function NanoBananaStudio({
     };
 
     const pendingId = crypto.randomUUID();
-    const pending = { id: pendingId, label, count, ar: aspectRatio };
+    const pending = { id: pendingId, label, count, ar: aspectRatio, sourceImage };
     setPendingGens((prev) => [...prev, pending]);
 
     generate(req)
@@ -441,7 +465,14 @@ export function NanoBananaStudio({
               variant: 'destructive',
             });
           }
-          const batch: NBBatch = { id: crypto.randomUUID(), items: res.items, ar: aspectRatio, submittedAt: new Date() };
+          const batch: NBBatch = {
+            id: crypto.randomUUID(),
+            items: res.items,
+            ar: aspectRatio,
+            submittedAt: new Date(),
+            label,
+            sourceImage,
+          };
           setBatches((prev) => [...prev, batch]);
         } else {
           toast({ title: 'No images returned', description: `"${label}" — try a different prompt.`, variant: 'destructive' });
@@ -507,16 +538,19 @@ export function NanoBananaStudio({
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  // Send button handler — fires all selected direct prompts + chat prompt
-  // FIX 27c — staggered fires (700ms apart) instead of one synchronous
-  // burst. Without staggering, 6 selected prompts hit Nano Banana
-  // /generate in the same tick which fans out to 6×N parallel Gemini
-  // calls; Gemini rate-limits the burst and silently returns 0 items
-  // for some of them, so the integrator sees 4 batches when they
-  // expected 6. The 700ms gap gives Gemini's per-key budget time to
-  // refill between calls. Snapshots prompt/attached state up front
-  // and clears the UI immediately so the integrator can start prepping
-  // the next request without waiting for the stagger to finish.
+  // Send button handler — fires selected direct prompts × attached
+  // images, plus the chat prompt.
+  // FIX 27c — stagger between requests (700ms) to dodge Gemini rate
+  // limiting that silently dropped some of a 6-request burst.
+  // FIX 27 follow-up — DIRECT prompts now fan out one request per
+  // attached image (previously: one request with all images merged
+  // in). So selecting 2 reference images + a "Create worn photo"
+  // direct prompt now produces 2 separate batches, each with its
+  // own source image — exactly what the merchant expects when they
+  // pick a gold ring AND a rose-gold ring side by side.
+  // Manual chat prompts keep the legacy multi-image-in-one-request
+  // behaviour because that's how "combine these references" use
+  // cases want it.
   async function handleSend() {
     const allPrompts = getAllDirectPrompts();
     const selectedDirect = allPrompts.filter((p) => selectedDirectPrompts.has(p.id));
@@ -537,26 +571,45 @@ export function NanoBananaStudio({
       label: string,
       extraImages: string[] | undefined,
       promptId: number | undefined,
+      perRequestBase: string[],
     ) => {
       if (firstFired) await new Promise((r) => setTimeout(r, STAGGER_MS));
       firstFired = true;
-      fireGeneration(content, label, extraImages, promptId, attachedSnap);
+      fireGeneration(content, label, extraImages, promptId, perRequestBase);
     };
 
-    // Fire each selected direct prompt
+    // Direct prompts × attached images (fan-out). When NO reference is
+    // attached we still fire one request per direct prompt (using only
+    // the prompt's own attached image, if any).
     for (const p of selectedDirect) {
       const extra = p.attached_image_url ? [p.attached_image_url] : undefined;
-      await fireWithDelay(p.content, p.button_label, extra, p.id);
+      if (attachedSnap.length === 0) {
+        await fireWithDelay(p.content, p.button_label, extra, p.id, []);
+      } else {
+        for (const img of attachedSnap) {
+          await fireWithDelay(p.content, p.button_label, extra, p.id, [img]);
+        }
+      }
     }
 
-    // Fire the manual chat prompt if present
+    // Manual chat prompt — single request, all attached images combined
+    // (legacy "use these as joint references" behaviour).
     if (promptTextSnap) {
-      await fireWithDelay(promptTextSnap, promptTextSnap.slice(0, 40), undefined, undefined);
+      await fireWithDelay(
+        promptTextSnap,
+        promptTextSnap.slice(0, 40),
+        undefined,
+        undefined,
+        attachedSnap,
+      );
     }
 
-    // If nothing was queued (no prompts selected, no text), fire with just images
+    // Nothing prompted at all but images attached → one "Image only"
+    // request per image (consistent with the per-image fan-out above).
     if (selectedDirect.length === 0 && !promptTextSnap && attachedSnap.length > 0) {
-      await fireWithDelay('', 'Image only', undefined, undefined);
+      for (const img of attachedSnap) {
+        await fireWithDelay('', 'Image only', undefined, undefined, [img]);
+      }
     }
   }
 
@@ -944,7 +997,29 @@ export function NanoBananaStudio({
           {batches.map((batch, batchIdx) => {
             const priorCount = batches.slice(0, batchIdx).reduce((n, b) => n + b.items.length, 0);
             return (
-              <div key={batch.id} className="space-y-2">
+              <div key={batch.id} className="space-y-1.5">
+                {/* FIX 27 follow-up — label + source-image thumbnail
+                    so the merchant can tell which prompt + which
+                    reference produced this batch. Hidden when neither
+                    is set (legacy batches loaded from D1 history that
+                    don't have either field). */}
+                {(batch.label || batch.sourceImage) && (
+                  <div className="flex items-center gap-2 px-1">
+                    {batch.sourceImage && (
+                      <img
+                        src={batch.sourceImage}
+                        alt=""
+                        className="h-6 w-6 rounded object-cover ring-1 ring-black/10 shrink-0"
+                        loading="lazy"
+                      />
+                    )}
+                    {batch.label && (
+                      <p className="text-[11px] font-medium text-muted-foreground truncate">
+                        {batch.label.length > 60 ? batch.label.slice(0, 60) + '…' : batch.label}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 overflow-visible p-1">
                   {batch.items.map((item, idx) => {
                     const isSelected = selectedUrls.has(item.url);
@@ -990,10 +1065,23 @@ export function NanoBananaStudio({
 
           {pendingGens.map((pg) => (
             <div key={pg.id} className="space-y-1.5">
-              <p className="text-[11px] text-muted-foreground truncate max-w-[280px] px-1">
-                <Loader2 className="h-3 w-3 animate-spin inline mr-1 align-text-bottom" />
-                {pg.label.length > 50 ? pg.label.slice(0, 50) + '…' : pg.label}
-              </p>
+              {/* FIX 27 follow-up — match the batch header: source-image
+                  thumbnail (if any) + label, so spinners look identical
+                  to their finished counterparts. */}
+              <div className="flex items-center gap-2 px-1">
+                {pg.sourceImage && (
+                  <img
+                    src={pg.sourceImage}
+                    alt=""
+                    className="h-6 w-6 rounded object-cover ring-1 ring-black/10 shrink-0 opacity-70"
+                    loading="lazy"
+                  />
+                )}
+                <p className="text-[11px] text-muted-foreground truncate max-w-[280px]">
+                  <Loader2 className="h-3 w-3 animate-spin inline mr-1 align-text-bottom" />
+                  {pg.label.length > 50 ? pg.label.slice(0, 50) + '…' : pg.label}
+                </p>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {Array.from({ length: pg.count }).map((_, i) => (
                   <div
