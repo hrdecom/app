@@ -365,28 +365,58 @@ async function handlePush(context) {
   console.log('[variants] unified optionNames:', JSON.stringify(optionNames));
   console.log('[variants] uniqueColors (legacy):', JSON.stringify(uniqueColors));
 
-  // Build images — resolve R2 and data URLs to base64 for Shopify attachment upload
+  // FIX 29 — resolve images for Shopify with PREFERENCE for src URLs over
+  // base64 attachments. The previous code base64-encoded every R2 image
+  // into the create-product payload; with 10+ generated images this
+  // easily blew past Shopify's ~20MB request cap and the API responded
+  // 413 Payload Too Large (HTTP 502 from our worker because we wrap
+  // upstream errors).
+  //
+  // Strategy: for R2 images, build the absolute public URL of our own
+  // /api/images/r2/<key> proxy (it's unauthenticated — see r2/[[path]].js)
+  // and hand THAT to Shopify as `src`. Shopify pulls the image from our
+  // CDN-fronted Pages domain on its own time, no payload cost. Falls
+  // back to base64 only if we somehow can't compute a public origin
+  // (shouldn't happen in production).
   const warnings = [];
+  // Compute the absolute origin of THIS request so Shopify can call
+  // back into us. Cloudflare Pages always serves over https, so even
+  // if request.url sneaks in http we coerce it.
+  let publicOrigin = '';
+  try {
+    const u = new URL(request.url);
+    publicOrigin = `https://${u.host}`;
+  } catch { /* leave blank — we'll fall back to base64 */ }
 
   async function resolveImageForShopify(url) {
     if (!url || typeof url !== 'string') return null;
     const u = url.trim();
 
-    // R2 URL — fetch from bucket, convert to base64
-    if (u.startsWith('/api/images/r2/') && env.IMAGES) {
-      const key = u.replace('/api/images/r2/', '');
-      const obj = await env.IMAGES.get(key);
-      if (obj) {
-        const buf = await obj.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-        return { attachment: btoa(binary), filename: key.split('/').pop() || 'image.jpg' };
+    // R2 URL — prefer public proxy URL (avoids base64 payload bloat).
+    if (u.startsWith('/api/images/r2/')) {
+      if (publicOrigin) {
+        return { src: `${publicOrigin}${u}` };
+      }
+      // Fallback: base64 attachment (only if we couldn't determine
+      // our own origin, which should never happen in production).
+      if (env.IMAGES) {
+        const key = u.replace('/api/images/r2/', '');
+        const obj = await env.IMAGES.get(key);
+        if (obj) {
+          const buf = await obj.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          return { attachment: btoa(binary), filename: key.split('/').pop() || 'image.jpg' };
+        }
       }
       return null;
     }
 
-    // Data URL — extract base64
+    // Data URL — extract base64. There's no public src equivalent so
+    // we have to embed it; if the merchant has many of these the
+    // 413 risk comes back, but uploaded images normally land in R2
+    // so this branch is rare.
     if (u.startsWith('data:image/')) {
       const [, b64] = u.split(',');
       if (b64) return { attachment: b64, filename: 'image.jpg' };
