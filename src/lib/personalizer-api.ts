@@ -90,7 +90,9 @@ export interface CustomFont {
   uploaded_by: number | null;
   created_at: string;
 }
-export type CurveMode = 'linear' | 'arc' | 'circle';
+// FIX 30 v2 — `embrace` is a new curve mode dedicated to chord-rotation
+// (curve_tilt_deg). arc itself stays vanilla / unaffected by tilt.
+export type CurveMode = 'linear' | 'arc' | 'circle' | 'embrace';
 export type MaskShape = 'rect' | 'circle' | 'heart';
 export type ProductionStatus = 'pending' | 'in_production' | 'shipped' | 'cancelled';
 

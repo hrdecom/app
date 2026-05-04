@@ -40,13 +40,16 @@ export interface PreviewField {
   font_color?: string | null;
   text_align?: string | null;
   letter_spacing?: number | null;
-  curve_mode?: 'linear' | 'arc' | 'circle' | null;
+  // FIX 30 v2 — `embrace` is a NEW dedicated curve mode that behaves
+  // like arc but ALSO accepts a `curve_tilt_deg` rotation. arc itself
+  // is left untouched (no tilt) so the legacy behaviour the merchant
+  // already calibrated stays exactly as it was.
+  curve_mode?: 'linear' | 'arc' | 'circle' | 'embrace' | null;
   curve_radius_px?: number | null;
   curve_path_d?: string | null;
-  // FIX 30 — degrees to rotate the entire arc path around the field's
-  // bbox center. Lets the chord be diagonal instead of always
-  // horizontal, so text "wraps" the perspective of rings shown at
-  // an angle. 0 = straight horizontal arc (legacy behaviour).
+  // FIX 30 v2 — degrees to rotate the chord around the bbox center.
+  // Only honoured when curve_mode === 'embrace'; ignored for arc /
+  // circle / linear. Range expected -90..+90 in the UI.
   curve_tilt_deg?: number | null;
   position_x: number;
   position_y: number;
@@ -188,7 +191,7 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
       ? ` letter-spacing="${lsRaw}"`
       : '';
 
-  if (f.curve_mode === 'circle' || f.curve_mode === 'arc') {
+  if (f.curve_mode === 'circle' || f.curve_mode === 'arc' || f.curve_mode === 'embrace') {
     const pathId = `pp-${f.id}`;
     let pathD: string;
     if (f.curve_path_d) {
@@ -222,12 +225,11 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
       const endX = f.position_x + f.width;
       pathD = `M ${startX} ${cy} A ${a} ${a} 0 0 ${sweep} ${endX} ${cy}`;
     }
-    // FIX 30 — apply curve tilt by rotating the entire <g> wrapper
-    // around the bbox center. We rotate the group rather than baking
-    // the rotation into the path string so the textPath rendering
-    // (font metrics, baseline, letter spacing) stays exactly the
-    // same — the rotation only affects the final visual placement.
-    const tilt = Number(f.curve_tilt_deg || 0);
+    // FIX 30 v2 — tilt is exclusive to the new `embrace` mode. Arc
+    // stays exactly as the merchant calibrated it (no rotation, no
+    // visible behaviour change). Embrace = arc + chord rotation.
+    const tilt =
+      f.curve_mode === 'embrace' ? Number(f.curve_tilt_deg || 0) : 0;
     const tiltAttr = tilt
       ? ` transform="rotate(${tilt} ${cx} ${cy})"`
       : '';

@@ -31,7 +31,9 @@ const CURATED_FONTS = [
   // Display (statement)
   'Bebas Neue', 'Oswald', 'Abril Fatface', 'Comfortaa',
 ];
-const CURVES = ['linear', 'arc', 'circle'] as const;
+// FIX 30 v2 — `embrace` is the new dedicated curve mode that supports
+// the chord-rotation parameter (curve_tilt_deg). arc stays vanilla.
+const CURVES = ['linear', 'arc', 'circle', 'embrace'] as const;
 const MASKS = ['rect', 'circle', 'heart'] as const;
 
 interface Props {
@@ -243,7 +245,7 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
                   // (3x its width) so the initial curve looks gentle
                   // and natural instead of a tight semi-circle. The
                   // merchant can fine-tune via the apex handle after.
-                  if ((v === 'arc' || v === 'circle') && (!draft.curve_radius_px || draft.curve_radius_px === 0)) {
+                  if ((v === 'arc' || v === 'circle' || v === 'embrace') && (!draft.curve_radius_px || draft.curve_radius_px === 0)) {
                     patch('curve_radius_px', Math.round((draft.width || 200) * 3));
                   }
                 }}
@@ -254,17 +256,18 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
                 </SelectContent>
               </Select>
             </Row>
-            {(draft.curve_mode === 'arc' || draft.curve_mode === 'circle') && (
+            {(draft.curve_mode === 'arc' || draft.curve_mode === 'circle' || draft.curve_mode === 'embrace') && (
               <Row label="Curve radius (px)">
                 <Input type="number" value={draft.curve_radius_px || ''} onChange={(e) => patch('curve_radius_px', e.target.value ? parseInt(e.target.value) : null)} />
               </Row>
             )}
-            {/* FIX 30 — Curve tilt: rotates the chord (and the arc with
-                it) in degrees so the text wraps around tilted ring tips
-                seen in 3/4-view product photos. -90..+90 covers every
-                useful angle; 0 = legacy horizontal arc. Only meaningful
-                for arc mode (circle is symmetric and doesn't benefit). */}
-            {draft.curve_mode === 'arc' && (
+            {/* FIX 30 v2 — Curve tilt is EXCLUSIVE to the new `embrace`
+                mode. Legacy arc stays untouched (no tilt parameter
+                visible). Embrace = arc geometry + chord rotation, so
+                the text follows a curve that's diagonal — perfect for
+                wrapping around tilted ring tips in 3/4-view product
+                photos. Range -90..+90, 0 = same as plain arc. */}
+            {draft.curve_mode === 'embrace' && (
               <Row label="Curve tilt (°)">
                 <Input
                   type="number"

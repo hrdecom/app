@@ -468,9 +468,12 @@ export function PersonalizerCanvas({
 
             // P25-5 — show the curve guide + apex handle for arc/circle
             // text fields when selected AND chrome is visible.
+            // FIX 30 v2 — `embrace` shares the arc geometry/handle path
+            // (the only difference is the post-render chord rotation,
+            // which doesn't affect the apex handle in design space).
             const isCurved =
               f.field_kind === 'text' &&
-              (f.curve_mode === 'arc' || f.curve_mode === 'circle');
+              (f.curve_mode === 'arc' || f.curve_mode === 'circle' || f.curve_mode === 'embrace');
             const showCurveAffordance = showChrome && isCurved;
             const curveR = showCurveAffordance ? fieldCurveRadius(f) : 0;
             // P26-2 — chord-through-bbox geometry. The arc spans the

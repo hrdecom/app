@@ -5,7 +5,10 @@ import { requireRole, json, errorJson } from '../../../../lib/auth-middleware.js
 // see migration 0151_personalizer_birthstones.sql for the matching
 // CHECK constraint relaxation.
 const VALID_KIND = new Set(['text', 'image', 'birthstone']);
-const VALID_CURVE = new Set(['linear', 'arc', 'circle']);
+// FIX 30 v2 — `embrace` joins the valid set. It renders like arc but
+// supports curve_tilt_deg (chord rotation) for wrapping perspective-
+// tilted ring tips. Arc itself stays vanilla / untouched.
+const VALID_CURVE = new Set(['linear', 'arc', 'circle', 'embrace']);
 const VALID_MASK = new Set(['rect', 'circle', 'heart']);
 
 export async function onRequestPost(context) {
