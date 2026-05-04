@@ -2489,8 +2489,31 @@ async function mount({ el, productHandle }: MountSpec) {
       if (Number(f.is_info || 0) === 1) continue;
       const eff = effectiveField(f);
       if (eff.hidden) continue;
-      const row = fieldsEl.querySelector<HTMLElement>(`[data-rp-field-id="${f.id}"]`);
-      if (row && row.style.display === 'none') continue;
+      // FIX 36a — look at EVERY DOM copy of the field row, not just
+      // the one inside our `fieldsEl`. Some Shopify themes mount the
+      // personalizer form inside a collapsible drawer / sticky bar /
+      // tabs panel on mobile, where the form-local row may have an
+      // inline `display:none` even though another visible copy of the
+      // field exists elsewhere on the page. Render the field as long
+      // as AT LEAST one copy is visible. This also handles themes
+      // that hide our form and surface only the inputs through a
+      // theme block, leaving the original `fieldsEl` rows hidden.
+      const rows = document.querySelectorAll<HTMLElement>(`[data-rp-field-id="${f.id}"]`);
+      let anyVisible = rows.length === 0; // no rows = trust that field renders
+      for (const r of Array.from(rows)) {
+        if (r.style.display !== 'none') { anyVisible = true; break; }
+      }
+      if (!anyVisible) {
+        if (!(f as any).__rpOverlaySkipLogged) {
+          console.warn(
+            '[rp-personalizer] skipping SVG render for field',
+            f.id, f.label,
+            '— all DOM rows have inline display:none. Rows found:', rows.length,
+          );
+          (f as any).__rpOverlaySkipLogged = true;
+        }
+        continue;
+      }
       visibleFields.push(eff.field);
     }
     // P26-18 — split fields by layer_z relative to base_image_layer_z.

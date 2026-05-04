@@ -373,7 +373,12 @@ export interface ShopifyVariantInfo {
 
 export async function listTemplateVariants(
   templateId: number,
-): Promise<{ items: ShopifyVariantInfo[]; option_names: string[]; color_values?: string[] }> {
+): Promise<{
+  items: ShopifyVariantInfo[];
+  option_names: string[];
+  color_values?: string[];
+  color_images?: Record<string, string>;
+}> {
   return api.get(`/personalizer/templates/${templateId}/variants`) as Promise<{
     items: ShopifyVariantInfo[];
     option_names: string[];
@@ -382,6 +387,10 @@ export async function listTemplateVariants(
     // section even when Shopify's option name doesn't match the
     // color heuristic (e.g. "Plating", "Finish").
     color_values?: string[];
+    // FIX 36 — { color: imageUrl } map. CRM-assigned images first,
+    // Shopify featured_image as fallback. Drives the canvas image
+    // swap when the integrator switches the "Preview color" pill.
+    color_images?: Record<string, string>;
   }>;
 }
 

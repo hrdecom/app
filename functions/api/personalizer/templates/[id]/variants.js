@@ -59,13 +59,20 @@ export async function onRequestGet(context) {
     // Shopify product uses a non-standard option name like "Plating"
     // or "Finish" that our color-option-names heuristic doesn't catch.
     // Used as a fallback when Shopify variants don't expose colors.
-    const crmColorValues = await collectCrmColors(env.DB, tpl.product_id);
+    // FIX 36 — also collect the per-color image map so the admin
+    // canvas can swap the base image when the integrator switches
+    // the preview color pill.
+    const [crmColorValues, crmColorImages] = await Promise.all([
+      collectCrmColors(env.DB, tpl.product_id),
+      collectCrmColorImages(env.DB, tpl.product_id),
+    ]);
 
     if (!handle) {
       return json({
         items: [],
         option_names: [],
         color_values: crmColorValues,
+        color_images: crmColorImages,
         error: 'Template has no shopify_product_handle',
       });
     }
@@ -101,6 +108,7 @@ export async function onRequestGet(context) {
         items: [],
         option_names: [],
         color_values: crmColorValues,
+        color_images: crmColorImages,
         error: 'Product not found on Shopify',
       }, 200);
     }
@@ -138,7 +146,14 @@ export async function onRequestGet(context) {
     const shopifyColors = extractShopifyColors(items, colorOptionNames);
     const colorValues = mergeColorValues(shopifyColors, crmColorValues);
 
-    return json({ items, option_names, color_values: colorValues });
+    // FIX 36 — also build a Shopify-side per-color image map so we
+    // can fall back to the variant's featured_image when the CRM
+    // didn't have one assigned. Merge with the CRM map (CRM wins
+    // because the integrator picks those images intentionally).
+    const shopifyColorImages = extractShopifyColorImages(items, colorOptionNames);
+    const colorImages = { ...shopifyColorImages, ...crmColorImages };
+
+    return json({ items, option_names, color_values: colorValues, color_images: colorImages });
   } catch (e) {
     if (e instanceof Response) return e;
     console.error('Personalizer variants API error:', e);
@@ -176,6 +191,53 @@ async function collectCrmColors(db, productId) {
   } catch (e) {
     console.error('[personalizer/variants] CRM colors lookup failed:', e?.message || e);
     return [];
+  }
+}
+
+/**
+ * FIX 36 — build a `{ color: imageUrl }` map from the CRM's
+ * product_variants joined with product_images. The integrator
+ * assigns one image per color via the Variants tab; we surface that
+ * mapping so the admin canvas can swap the base image when the
+ * integrator clicks a different "Preview color" pill.
+ *
+ * Picks the first image found per color (multiple variants can share
+ * the same color/image combo). Empty object when no rows / no
+ * images attached.
+ */
+async function collectCrmColorImages(db, productId) {
+  if (!productId) return {};
+  try {
+    const { results } = await db
+      .prepare(
+        `SELECT pv.color, pi.url_or_key AS image_url
+         FROM product_variants pv
+         LEFT JOIN product_images pi ON pv.image_id = pi.id
+         WHERE pv.product_id = ?
+           AND pv.color IS NOT NULL AND TRIM(pv.color) != ''
+           AND pi.url_or_key IS NOT NULL AND TRIM(pi.url_or_key) != ''
+         ORDER BY pv.id ASC`,
+      )
+      .bind(productId)
+      .all();
+    const out = {};
+    for (const row of results || []) {
+      const color = String(row.color || '').trim();
+      const url = String(row.image_url || '').trim();
+      if (!color || !url) continue;
+      const key = color.toLowerCase();
+      // First-write wins so the integrator's first-configured image
+      // for a given color is the canonical preview.
+      if (!out[key]) out[key] = { color, url };
+    }
+    // Return as { "Gold": "https://...", "Silver": "...", ... }
+    // (preserve original casing of color in the key).
+    const finalMap = {};
+    for (const v of Object.values(out)) finalMap[v.color] = v.url;
+    return finalMap;
+  } catch (e) {
+    console.error('[personalizer/variants] CRM color images lookup failed:', e?.message || e);
+    return {};
   }
 }
 
@@ -222,6 +284,27 @@ function extractShopifyColors(items, colorOptionNames) {
       if (seen.has(key)) continue;
       seen.add(key);
       out.push(value);
+    }
+  }
+  return out;
+}
+
+/** FIX 36 — pick the first Shopify variant image for each color
+ * value. Used as a fallback when the CRM's product_variants didn't
+ * have an image_id assigned for the color but Shopify does. */
+function extractShopifyColorImages(items, colorOptionNames) {
+  const skip = new Set(colorOptionNames.map((s) => String(s).toLowerCase()));
+  const out = {};
+  for (const v of items || []) {
+    if (!v.featured_image_url) continue;
+    for (let i = 0; i < (v.option_names || []).length; i++) {
+      const name = String(v.option_names[i] || '');
+      const value = String(v.options[i] || '');
+      if (!name || !value) continue;
+      if (!skip.has(name.toLowerCase())) continue;
+      // First-write wins — preserve the canonical casing of color.
+      if (!out[value]) out[value] = v.featured_image_url;
+      break;
     }
   }
   return out;

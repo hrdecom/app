@@ -474,19 +474,40 @@ export function PersonalizerCanvas({
   const w = template.canvas_width;
   const h = template.canvas_height;
 
+  // FIX 36c — defend against bad canvas dimensions (0/null/NaN) that
+  // would make `aspectRatio: 0 / X` invalid → CSS ignores it → the
+  // inner SVG renders at intrinsic pixel size (potentially thousands
+  // of px wide for products whose stored canvas dims got corrupted),
+  // overflowing the column and pushing the right Identity panel off
+  // the screen. Fall back to a square 1080×1080 when either value is
+  // missing or non-positive.
+  const safeW = Number.isFinite(w) && Number(w) > 0 ? Number(w) : 1080;
+  const safeH = Number.isFinite(h) && Number(h) > 0 ? Number(h) : 1080;
+
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded p-4 min-h-[400px] flex items-center justify-center">
+    <div className="bg-gray-50 border border-gray-200 rounded p-4 min-h-[400px] flex items-center justify-center overflow-hidden">
       <div
         // P26-9 — let the canvas breathe responsively. Max width was
         // hardcoded to 480 px, which made the preview useless on a
         // narrowed laptop. Now it expands to fill its column up to a
         // sensible cap that still leaves room for the right-side
         // FieldConfigForm.
-        className="relative w-full"
-        style={{ maxWidth: 720, aspectRatio: `${w} / ${h}` }}
+        // FIX 36c — overflow-hidden so even if the inner SVG ever
+        // escapes (browsers occasionally render a viewBox-only SVG at
+        // intrinsic pixel size when no width/height attributes are
+        // present), the column layout stays intact.
+        className="relative w-full overflow-hidden"
+        style={{ maxWidth: 720, aspectRatio: `${safeW} / ${safeH}` }}
       >
         <div
-          className="absolute inset-0 select-none pointer-events-none"
+          // FIX 36c — force the inner SVG to fill its absolute-position
+          // wrapper. dangerouslySetInnerHTML inserts a `<svg>` with only
+          // `viewBox` and no width/height attributes; without CSS the
+          // browser may pick an intrinsic size proportional to the
+          // viewBox in CSS pixels (1080px+), overflowing the column.
+          // The inline svg style guarantees 100% × 100% of the
+          // positioned parent.
+          className="absolute inset-0 select-none pointer-events-none [&>svg]:block [&>svg]:w-full [&>svg]:h-full"
           dangerouslySetInnerHTML={{ __html: previewHtml }}
         />
         <svg

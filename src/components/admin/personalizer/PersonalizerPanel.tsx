@@ -118,6 +118,12 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
   // heuristic (e.g. "Plating", "Finish") or when variants haven't
   // been pushed to Shopify yet but ARE configured in the Variants tab.
   const [colorValues, setColorValues] = useState<string[]>([]);
+  // FIX 36 — { color: imageUrl } map. CRM-assigned product_variants
+  // images first, Shopify featured_image as fallback. Drives the
+  // canvas base image swap when the integrator clicks a "Preview
+  // color" pill so they can SEE the gold/silver/rose-gold variant
+  // image with the field overlays applied to the matching color.
+  const [colorImages, setColorImages] = useState<Record<string, string>>({});
   // FIX 35 — which color the canvas should preview right now. Drives
   // the per-color font_color override in the SVG render so the
   // integrator can SEE each color's override take effect. Defaults to
@@ -205,6 +211,11 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
       const cv = (variantsResp as { color_values?: string[] }).color_values || [];
       setColorValues(cv);
       setPreviewColorValue((prev) => prev || (cv[0] ?? null));
+      // FIX 36 — per-color image map for canvas image swap. CRM
+      // product_variants.image_id wins; Shopify featured_image fills
+      // gaps. Empty when no images attached.
+      const ci = (variantsResp as { color_images?: Record<string, string> }).color_images || {};
+      setColorImages(ci);
       const map: Record<number, Record<string, VariantOverride>> = {};
       for (const [fid, list] of fieldOverridesResults) {
         const sigMap: Record<string, VariantOverride> = {};
@@ -539,9 +550,27 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
   // P25-V4 — effective base image: explicit override > Shopify variant's
   // featured_image_url > template base. This makes "use Shopify variant
   // image" the DEFAULT behaviour without requiring a save per variant.
+  // FIX 36 — when the integrator clicks a "Preview color" pill, swap
+  // the canvas image to that color's variant image (sourced from the
+  // CRM's product_variants.image_id, with Shopify featured_image as
+  // fallback). Lookup is case-insensitive. Color-image override takes
+  // priority over signature-image override only when no signature
+  // override is in play (signatures are color-stripped, so they're
+  // orthogonal to color in concept; in practice signature overrides
+  // are rare, so the color image will win the vast majority of the
+  // time on color-only products).
+  const colorImageForPreview = (() => {
+    if (!previewColorValue) return null;
+    const needle = previewColorValue.toLowerCase();
+    for (const [k, v] of Object.entries(colorImages)) {
+      if (k.toLowerCase() === needle) return v;
+    }
+    return null;
+  })();
   const effectiveBaseImage =
     (activeSignature && variantImageOverrides[activeSignature]) ||
     (activeSignature && repVariantBySignature[activeSignature]?.featured_image_url) ||
+    colorImageForPreview ||
     tpl.base_image_url;
   // P26-26 follow-up — inject the GLOBAL birthstones library into
   // the template the admin canvas sees so the preview renderer can
