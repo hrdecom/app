@@ -68,6 +68,10 @@ interface StorefrontField extends PreviewField {
    * tooltip instead of an input. Excluded from cart properties. */
   is_info?: number;
   info_text?: string | null;
+  /** FIX 34 — when 1, force the customer's text input to UPPERCASE.
+   * Applied live as they type AND on the value sent to the cart line
+   * item, so what the engraver sees matches the visible engraving. */
+  uppercase_only?: number | null;
 }
 
 /**
@@ -1723,7 +1727,16 @@ async function mount({ el, productHandle }: MountSpec) {
   let originalImageEl: HTMLImageElement | null = null;
 
   const initialValues: Record<string, string> = {};
-  for (const f of fields) initialValues[String(f.id)] = f.default_value || '';
+  for (const f of fields) {
+    let v = f.default_value || '';
+    // FIX 34 — apply uppercase_only to the seed value too so the
+    // first SVG render and the cart mirror match what the customer
+    // visually sees in the input (which is force-uppercased below).
+    if (v && f.field_kind === 'text' && Number((f as StorefrontField).uppercase_only || 0) === 1) {
+      v = v.toUpperCase();
+    }
+    initialValues[String(f.id)] = v;
+  }
 
   // P26-19 — per-field crop state. We keep the ORIGINAL uncropped URL
   // separate from the cropped URL written into the cart so the
@@ -2745,9 +2758,31 @@ async function mount({ el, productHandle }: MountSpec) {
       input.type = 'text';
       input.name = `properties[${cartName}]`;
       if (f.placeholder) input.placeholder = f.placeholder;
-      if (f.default_value) input.value = f.default_value;
+      // FIX 34 — apply uppercase to default value too so the
+      // first paint already reflects the constraint (otherwise
+      // a "damien" default value would only become "DAMIEN" once
+      // the customer touches the input).
+      const upperOnly = Number(f.uppercase_only || 0) === 1;
+      if (f.default_value) input.value = upperOnly ? f.default_value.toUpperCase() : f.default_value;
       if (f.max_chars) input.maxLength = f.max_chars;
+      // FIX 34 — visual hint: CSS text-transform makes the typed
+      // letters look uppercase even between the keystroke and the
+      // value-uppercase below. Belt-and-suspenders so the customer
+      // never sees a flicker from lowercase to uppercase.
+      if (upperOnly) input.style.textTransform = 'uppercase';
       input.addEventListener('input', () => {
+        // FIX 34 — uppercase the actual VALUE (not just the
+        // visual representation) and preserve caret position so
+        // the customer can keep typing without the cursor
+        // bouncing to the end on every keystroke.
+        if (upperOnly && input.value !== input.value.toUpperCase()) {
+          const start = input.selectionStart;
+          const end = input.selectionEnd;
+          input.value = input.value.toUpperCase();
+          if (start != null && end != null) {
+            try { input.setSelectionRange(start, end); } catch { /* ignore */ }
+          }
+        }
         initialValues[String(f.id)] = input.value;
         const count = wrap.querySelector<HTMLDivElement>('.rp-pz-count');
         if (count) count.textContent = `${input.value.length} / ${f.max_chars || '∞'}`;
@@ -3287,6 +3322,14 @@ async function mount({ el, productHandle }: MountSpec) {
       const idx = parseInt(raw, 10);
       const entry = birthstoneOptions.find((b) => b.month_index === idx);
       return entry ? entry.label : raw;
+    }
+    // FIX 34 — last-line-of-defense uppercase for text fields. The
+    // input handler already force-uppercases as the customer types,
+    // but a paste outside our handler or a third-party autofill
+    // could slip lowercase past us; this guarantees the engraver
+    // sees what the storefront preview shows.
+    if (f.field_kind === 'text' && Number(f.uppercase_only || 0) === 1) {
+      return raw.toUpperCase();
     }
     return raw;
   }

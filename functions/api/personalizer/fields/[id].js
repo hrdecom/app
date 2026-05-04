@@ -17,6 +17,9 @@ const ALLOWED = [
   // P25-V4 — per-color text color overrides + customer-facing label +
   // info-only field flag.
   'font_color_by_value_json', 'customer_label', 'is_info', 'info_text',
+  // FIX 34 — when 1, storefront uppercases customer input (display
+  // and cart). Only meaningful for text fields.
+  'uppercase_only',
 ];
 
 export async function onRequest(context) {

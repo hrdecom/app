@@ -172,6 +172,23 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
             <Row label="Max characters">
               <Input type="number" value={draft.max_chars || ''} onChange={(e) => patch('max_chars', e.target.value ? parseInt(e.target.value) : null)} />
             </Row>
+            {/* FIX 34 — force-uppercase customer input. Only meaningful
+                for text fields. When enabled the storefront widget
+                uppercases the value as the customer types AND when
+                posting to the cart, so what the engraver receives
+                matches the visible engraving. */}
+            <Row label="Uppercase only">
+              <Select
+                value={draft.uppercase_only ? 'yes' : 'no'}
+                onValueChange={(v) => patch('uppercase_only', v === 'yes' ? 1 : 0)}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no">As typed</SelectItem>
+                  <SelectItem value="yes">Force UPPERCASE</SelectItem>
+                </SelectContent>
+              </Select>
+            </Row>
             <Row label="Allow empty (skip on preview)">
               <Select value={draft.allow_empty ? 'yes' : 'no'} onValueChange={(v) => patch('allow_empty', v === 'yes' ? 1 : 0)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -289,68 +306,123 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
 
           {/* P25-V4 — per-color text color overrides. One row per
               distinct color value the product offers; empty hex =
-              fall back to the global font_color above. The map is
-              persisted as `font_color_by_value_json` ({ "Gold":
-              "#FAEEDA", ... }) and looked up case-insensitively at
-              render time on the storefront. */}
-          {availableColorValues.length > 0 && (
-            <Section title="Text color per variant value">
-              {availableColorValues.map((colorVal) => {
-                const colorMap = parseColorMap(draft.font_color_by_value_json);
-                const hex = colorMap[colorVal] || '';
-                return (
-                  <Row key={colorVal} label={`Color when "${colorVal}" is selected`}>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={hex}
-                        onChange={(e) => {
-                          const next = { ...parseColorMap(draft.font_color_by_value_json) };
-                          const v = e.target.value;
-                          if (v) next[colorVal] = v;
-                          else delete next[colorVal];
-                          patch(
-                            'font_color_by_value_json',
-                            Object.keys(next).length ? JSON.stringify(next) : null,
-                          );
-                        }}
-                        placeholder="(uses Color above)"
-                        className="flex-1 font-mono"
-                      />
-                      <input
-                        type="color"
-                        value={normalizeHexForPicker(hex || draft.font_color)}
-                        onChange={(e) => {
-                          const next = { ...parseColorMap(draft.font_color_by_value_json) };
-                          next[colorVal] = e.target.value;
-                          patch('font_color_by_value_json', JSON.stringify(next));
-                        }}
-                        className="h-9 w-9 cursor-pointer rounded border border-gray-200 p-0.5"
-                        title="Pick color"
-                      />
-                      {hex && (
-                        <button
-                          type="button"
-                          onClick={() => {
+              fall back to the global font_color above.
+              FIX 34 — show the section whenever EITHER the product
+              has detectable color values (Shopify variants) OR the
+              field already has saved overrides (so the integrator
+              can edit existing entries even when shopify variants
+              aren't loaded). Plus an "Add color override" button so
+              the integrator can add a row by typing the variant
+              value name themselves — useful when Shopify variants
+              haven't been pushed yet but the variants are configured
+              in the Variants tab. */}
+          {(() => {
+            const colorMap = parseColorMap(draft.font_color_by_value_json);
+            const savedKeys = Object.keys(colorMap);
+            // Merge sources: Shopify-detected color values +
+            // anything that already exists in the field's saved map.
+            // Dedupe case-insensitively.
+            const seen = new Set<string>();
+            const allValues: string[] = [];
+            for (const v of [...availableColorValues, ...savedKeys]) {
+              const key = v.toLowerCase();
+              if (seen.has(key)) continue;
+              seen.add(key);
+              allValues.push(v);
+            }
+            if (allValues.length === 0 && savedKeys.length === 0) {
+              // No Shopify variants AND no saved overrides — surface
+              // a manual "Add color override" affordance so the
+              // integrator isn't locked out.
+              return (
+                <Section title="Text color per variant value">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    No color variants detected on this product yet.
+                    You can still add a color-specific override by
+                    typing the variant value name below (e.g. "Gold"),
+                    then picking the hex.
+                  </p>
+                  <AddColorOverrideRow
+                    onAdd={(name, hex) => {
+                      const next = { ...colorMap, [name]: hex };
+                      patch('font_color_by_value_json', JSON.stringify(next));
+                    }}
+                    defaultHex={draft.font_color}
+                  />
+                </Section>
+              );
+            }
+            return (
+              <Section title="Text color per variant value">
+                {allValues.map((colorVal) => {
+                  const hex = colorMap[colorVal] || '';
+                  return (
+                    <Row key={colorVal} label={`Color when "${colorVal}" is selected`}>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={hex}
+                          onChange={(e) => {
                             const next = { ...parseColorMap(draft.font_color_by_value_json) };
-                            delete next[colorVal];
+                            const v = e.target.value;
+                            if (v) next[colorVal] = v;
+                            else delete next[colorVal];
                             patch(
                               'font_color_by_value_json',
                               Object.keys(next).length ? JSON.stringify(next) : null,
                             );
                           }}
-                          className="text-gray-400 hover:text-rose-700 px-1 text-sm"
-                          title="Reset to default color"
-                          aria-label={`Reset color override for ${colorVal}`}
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  </Row>
-                );
-              })}
-            </Section>
-          )}
+                          placeholder="(uses Color above)"
+                          className="flex-1 font-mono"
+                        />
+                        <input
+                          type="color"
+                          value={normalizeHexForPicker(hex || draft.font_color)}
+                          onChange={(e) => {
+                            const next = { ...parseColorMap(draft.font_color_by_value_json) };
+                            next[colorVal] = e.target.value;
+                            patch('font_color_by_value_json', JSON.stringify(next));
+                          }}
+                          className="h-9 w-9 cursor-pointer rounded border border-gray-200 p-0.5"
+                          title="Pick color"
+                        />
+                        {hex && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = { ...parseColorMap(draft.font_color_by_value_json) };
+                              delete next[colorVal];
+                              patch(
+                                'font_color_by_value_json',
+                                Object.keys(next).length ? JSON.stringify(next) : null,
+                              );
+                            }}
+                            className="text-gray-400 hover:text-rose-700 px-1 text-sm"
+                            title="Reset to default color"
+                            aria-label={`Reset color override for ${colorVal}`}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    </Row>
+                  );
+                })}
+                {/* FIX 34 — let the integrator add an extra override
+                    even when Shopify variants are loaded, in case the
+                    product's color list is incomplete (e.g. a new
+                    variant was just added but not yet pushed). */}
+                <div className="mt-2 pt-2 border-t border-gray-100">
+                  <AddColorOverrideRow
+                    onAdd={(name, hex) => {
+                      const next = { ...colorMap, [name]: hex };
+                      patch('font_color_by_value_json', JSON.stringify(next));
+                    }}
+                    defaultHex={draft.font_color}
+                  />
+                </div>
+              </Section>
+            );
+          })()}
         </>
       )}
 
@@ -723,6 +795,66 @@ function normalizeHexForPicker(raw: string | null | undefined): string {
   if (/^#[0-9A-Fa-f]{5}$/.test(s)) return s + s[s.length - 1];
   if (/^#[0-9A-Fa-f]{7}$/.test(s)) return s.slice(0, 7);
   return '#FFFFFF';
+}
+
+/**
+ * FIX 34 — manual "Add color override" widget. Used when the
+ * product's Shopify variants haven't been loaded yet (so the
+ * automatic per-color row list is empty) OR when the integrator
+ * wants to add a one-off override for a value that isn't in the
+ * detected list. Two inputs (variant value name + hex picker)
+ * and an Add button. Resets after add.
+ */
+function AddColorOverrideRow({
+  onAdd,
+  defaultHex,
+}: {
+  onAdd: (name: string, hex: string) => void;
+  defaultHex: string | null | undefined;
+}) {
+  const [name, setName] = useState('');
+  const [hex, setHex] = useState(normalizeHexForPicker(defaultHex));
+  const canAdd = name.trim().length > 0 && /^#[0-9A-Fa-f]{6}$/.test(hex);
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Variant value (e.g. Gold)"
+        className="flex-1"
+      />
+      <Input
+        value={hex}
+        onChange={(e) => setHex(e.target.value)}
+        placeholder="#FAEEDA"
+        className="w-24 font-mono"
+      />
+      <input
+        type="color"
+        value={normalizeHexForPicker(hex)}
+        onChange={(e) => setHex(e.target.value)}
+        className="h-9 w-9 cursor-pointer rounded border border-gray-200 p-0.5"
+        title="Pick color"
+      />
+      <button
+        type="button"
+        disabled={!canAdd}
+        onClick={() => {
+          onAdd(name.trim(), hex);
+          setName('');
+          setHex(normalizeHexForPicker(defaultHex));
+        }}
+        className={[
+          'px-2 py-1 rounded text-xs font-medium transition-colors',
+          canAdd
+            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+            : 'bg-gray-100 text-gray-400 cursor-not-allowed',
+        ].join(' ')}
+      >
+        Add
+      </button>
+    </div>
+  );
 }
 
 /**

@@ -61,6 +61,12 @@ export interface PreviewField {
    * text color overrides. Looked up case-insensitively against the
    * caller-supplied `currentColorValue` at render time. */
   font_color_by_value_json?: string | null;
+  // FIX 34 — when truthy, the storefront widget uppercases customer
+  // input on the way in AND when posting to the cart. The render
+  // doesn't need to do anything: the value the renderer receives is
+  // already uppercased upstream. We carry the flag here so the type
+  // is consistent across surfaces.
+  uppercase_only?: number | null;
 }
 
 export interface RenderOptions {
@@ -160,6 +166,16 @@ export function autoShrinkFontSize(
 }
 
 function renderTextField(f: PreviewField, value: string, currentColorValue?: string | null): string {
+  // FIX 34 — when the field has uppercase_only, ALL render surfaces
+  // (admin canvas preview, storefront live SVG, production-queue PDF)
+  // should show the value uppercased. The storefront widget also
+  // upstream-uppercases the input + cart property, but doing it here
+  // makes the admin canvas preview respect the setting too even when
+  // the integrator is just looking at the field's default_value
+  // (which may have been entered lowercase in the form).
+  if (Number(f.uppercase_only || 0) === 1 && value) {
+    value = value.toUpperCase();
+  }
   const fontSize = autoShrinkFontSize(value, f.font_size_px || 22, f.width, 12);
   // P25-V4 — per-variant-value color override. When the field has a
   // `font_color_by_value_json` map AND the caller supplied a current
@@ -191,82 +207,55 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
       ? ` letter-spacing="${lsRaw}"`
       : '';
 
-  // FIX 30 v5 — `embrace` is a real CENTER FOLD effect: the text
-  // hinges at its midpoint and the two halves rotate in opposite
-  // directions, like a folded card or an open book seen from above.
+  // FIX 30 v6 — `embrace` is a SMOOTH CONTINUOUS perspective
+  // deformation. The letter (or text) is rendered ONCE inside an SVG
+  // foreignObject with CSS 3D perspective + rotateY, so the glyph
+  // shape stays continuous (no visible split line) and just appears
+  // tilted in 3D — the right side recedes into the page while the
+  // left side stays close to the camera (or vice versa for negative
+  // tilt). This matches what the merchant means by "se déforme à
+  // partir du centre sur elle même".
   //
-  // Multi-letter case ("MD", "DALL", "ANNA"):
-  //   - The text is split at the middle character index.
-  //   - Left half is right-anchored at the bbox centre and rotated
-  //     by -tilt/2 around that centre (it tilts up on the left side).
-  //   - Right half is left-anchored at the bbox centre and rotated
-  //     by +tilt/2 around that centre (it tilts up on the right side).
-  //   - The two halves meet exactly at (cx, cy) so the fold line is
-  //     visible and clean.
+  // Why CSS 3D and not pure SVG: pure SVG only supports affine
+  // (2D) transforms — you can scale, skew, rotate, but not project
+  // a 3D rotation onto 2D as a smooth continuous deformation. The
+  // closest pure-SVG approximations (per-letter matrix or clipped
+  // slices) either look discrete or visibly cut the glyph in half.
+  // CSS 3D + foreignObject gets us a real perspective rotation
+  // applied to whatever font the browser already renders.
   //
-  // Single-letter case ("M", "D"):
-  //   - The letter is rendered TWICE, each copy clipped to one
-  //     vertical half of the bbox, each clipped half rotated in the
-  //     opposite direction. Visually the single glyph appears to
-  //     fold in half on itself — the right side of the letter
-  //     hinges away from the left side.
-  //   - The clipPath is in user-space and uses the field's bbox so
-  //     the fold line stays at cx regardless of the glyph's own
-  //     intrinsic width.
-  //
-  // tilt range: 0..90 useful. 0 = flat (identical to linear).
+  // tilt range: -89..+89. 45° gives a strong but legible 3D look.
+  // 0 = flat (no rotation). The perspective distance is tied to the
+  // field width — closer (smaller value) = stronger 3D effect.
   if (f.curve_mode === 'embrace') {
     const tiltDeg = Number(f.curve_tilt_deg || 0);
-    const halfTilt = tiltDeg / 2;
-    const chars = Array.from(text);
-    const n = chars.length;
-
-    if (n === 0) {
-      return '';
-    }
-
-    // Single character → clipped-fold trick.
-    if (n === 1) {
-      const clipL = `pp-fold-l-${f.id}`;
-      const clipR = `pp-fold-r-${f.id}`;
-      // Generous clip rects (use field width so the rotation doesn't
-      // clip parts of the glyph that still need to render). The
-      // split line is at x=cx.
-      const clipPad = Math.max(f.width, fontSize * 2);
-      return (
-        `<defs>` +
-        `<clipPath id="${clipL}" clipPathUnits="userSpaceOnUse">` +
-        `<rect x="${cx - clipPad}" y="${cy - clipPad}" width="${clipPad}" height="${clipPad * 2}" />` +
-        `</clipPath>` +
-        `<clipPath id="${clipR}" clipPathUnits="userSpaceOnUse">` +
-        `<rect x="${cx}" y="${cy - clipPad}" width="${clipPad}" height="${clipPad * 2}" />` +
-        `</clipPath>` +
-        `</defs>` +
-        `<g transform="rotate(${(-halfTilt).toFixed(2)} ${cx} ${cy})" clip-path="url(#${clipL})">` +
-        `<text x="${cx}" y="${cy}" text-anchor="middle" ` +
-        `font-family="${family}" font-size="${fontSize}" fill="${fill}"${lsAttr}>${text}</text>` +
-        `</g>` +
-        `<g transform="rotate(${halfTilt.toFixed(2)} ${cx} ${cy})" clip-path="url(#${clipR})">` +
-        `<text x="${cx}" y="${cy}" text-anchor="middle" ` +
-        `font-family="${family}" font-size="${fontSize}" fill="${fill}"${lsAttr}>${text}</text>` +
-        `</g>`
-      );
-    }
-
-    // Multi-character → split at midpoint, two rotated text blocks
-    // meeting at (cx, cy).
-    const midIdx = Math.floor(n / 2);
-    const leftText = escapeText(chars.slice(0, midIdx).join(''));
-    const rightText = escapeText(chars.slice(midIdx).join(''));
+    // FIX 30 v6 — aggressive perspective so the 3D tilt is clearly
+    // visible. width × 1.2 means the vanishing point sits roughly
+    // one-and-a-quarter widths in front of the surface — strong
+    // foreshortening without clipping the rotated content.
+    const perspective = Math.max(150, f.width * 1.2);
+    const lsCss = lsRaw != null && Number.isFinite(lsRaw) && lsRaw !== 0
+      ? `letter-spacing:${lsRaw}px;`
+      : '';
+    // Pad the foreignObject horizontally so a rotated block whose
+    // edges spill outside its un-rotated bbox isn't clipped by the
+    // foreignObject viewport. Padding both sides keeps the centre
+    // of the text aligned with the field's centre (cx).
+    const padX = Math.ceil(f.width * 0.6);
+    const fox = f.position_x - padX;
+    const fow = f.width + padX * 2;
     return (
-      `<g transform="rotate(${(-halfTilt).toFixed(2)} ${cx} ${cy})">` +
-      `<text x="${cx}" y="${cy}" text-anchor="end" ` +
-      `font-family="${family}" font-size="${fontSize}" fill="${fill}"${lsAttr}>${leftText}</text>` +
-      `</g>` +
-      `<g transform="rotate(${halfTilt.toFixed(2)} ${cx} ${cy})">` +
-      `<text x="${cx}" y="${cy}" text-anchor="start" ` +
-      `font-family="${family}" font-size="${fontSize}" fill="${fill}"${lsAttr}>${rightText}</text>` +
-      `</g>`
+      `<foreignObject x="${fox}" y="${f.position_y}" width="${fow}" height="${f.height}">` +
+      `<div xmlns="http://www.w3.org/1999/xhtml" ` +
+      `style="perspective:${perspective}px;perspective-origin:center center;` +
+      `width:100%;height:100%;display:flex;align-items:center;justify-content:center;` +
+      `font-family:${family};font-size:${fontSize}px;color:${fill};${lsCss}line-height:1;">` +
+      `<div style="transform:rotateY(${tiltDeg.toFixed(2)}deg);transform-origin:center center;` +
+      `transform-style:preserve-3d;backface-visibility:visible;white-space:nowrap;">` +
+      `${text}` +
+      `</div>` +
+      `</div>` +
+      `</foreignObject>`
     );
   }
 

@@ -174,6 +174,9 @@ export interface PersonalizerField {
    * selected variant value and uses the matching color, falling back
    * to `font_color`. */
   font_color_by_value_json?: string | null;
+  // FIX 34 — force uppercase customer input (text fields only).
+  // 0/null = case preserved as-typed (legacy default).
+  uppercase_only?: number | null;
   /** P25-V4 — customer-facing label shown above the input on the
    * storefront. The existing `label` is reserved for the internal
    * admin name; `customer_label` is what the shopper sees. NULL/empty

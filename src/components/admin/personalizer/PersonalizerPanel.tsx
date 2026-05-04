@@ -536,7 +536,15 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
   };
 
   return (
-    <div className="flex flex-col h-full">
+    // FIX 34 — give the panel a viewport-relative height so the
+    // FieldConfigForm column's `overflow-y-auto` actually engages
+    // (the parent route is page-flow with no height constraint, so
+    // h-full was effectively 0 / content-height and the WHOLE page
+    // scrolled when the right Identity panel got tall — pushing the
+    // canvas out of view). With a fixed viewport height the canvas
+    // column stays pinned while the right column scrolls inside its
+    // own box.
+    <div className="flex flex-col h-[calc(100vh-12rem)] min-h-[600px]">
       <div className="border-b border-gray-200 px-4 py-2 flex items-center justify-between">
         <div className="text-sm font-medium">Personalizer · {tpl.status}</div>
         <div className="flex items-center gap-2">
