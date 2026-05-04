@@ -237,14 +237,37 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
     const lsCss = lsRaw != null && Number.isFinite(lsRaw) && lsRaw !== 0
       ? `letter-spacing:${lsRaw}px;`
       : '';
-    // Pad the foreignObject horizontally so a rotated block whose
-    // edges spill outside its un-rotated bbox isn't clipped by the
-    // foreignObject viewport. Padding both sides keeps the centre
-    // of the text aligned with the field's centre (cx).
-    const padX = Math.ceil(f.width * 0.6);
+    // FIX 37 — reduced horizontal padding (was 0.6 × width). On
+    // products with multiple text fields placed near opposite edges
+    // of the canvas, padding 60 % of width on each side often pushed
+    // the foreignObject's bbox outside the SVG viewBox. WebKit on
+    // iOS silently CLIPS foreignObject elements whose bbox extends
+    // past the viewBox — that's the root cause of "right letter not
+    // rendering on mobile" for engraved rings where Right Letter
+    // sits near x = canvas_width. 0.25 × width is enough to absorb
+    // the rotated text spillover for tilts up to ~45° while keeping
+    // the foreignObject inside any reasonable viewBox.
+    const padX = Math.ceil(f.width * 0.25);
     const fox = f.position_x - padX;
     const fow = f.width + padX * 2;
-    return (
+    // FIX 37 — fallback plain-SVG <text> rendered FIRST (so it sits
+    // BEHIND the foreignObject in paint order). On browsers where
+    // foreignObject + CSS 3D works (desktop, Android Chrome), the
+    // foreignObject covers the plain text exactly. On iOS Safari
+    // where foreignObject + perspective + rotateY frequently fails
+    // to render (long-standing WebKit bug), the plain text remains
+    // visible so the customer still sees the engraving — minus the
+    // 3D tilt effect, which is graceful degradation. The fallback
+    // shares font / size / color / letter-spacing with the
+    // foreignObject so visual continuity is preserved.
+    const align = (f.text_align as string) || 'middle';
+    const anchor = align === 'start' ? 'start' : align === 'end' ? 'end' : 'middle';
+    const tx = anchor === 'middle' ? cx : anchor === 'end' ? f.position_x + f.width : f.position_x;
+    const fallbackText =
+      `<text x="${tx}" y="${cy}" text-anchor="${anchor}" ` +
+      `dominant-baseline="middle" font-family="${family}" ` +
+      `font-size="${fontSize}" fill="${fill}"${lsAttr}>${text}</text>`;
+    const foreignObject =
       `<foreignObject x="${fox}" y="${f.position_y}" width="${fow}" height="${f.height}">` +
       `<div xmlns="http://www.w3.org/1999/xhtml" ` +
       `style="perspective:${perspective}px;perspective-origin:center center;` +
@@ -255,8 +278,8 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
       `${text}` +
       `</div>` +
       `</div>` +
-      `</foreignObject>`
-    );
+      `</foreignObject>`;
+    return fallbackText + foreignObject;
   }
 
   if (f.curve_mode === 'circle' || f.curve_mode === 'arc') {

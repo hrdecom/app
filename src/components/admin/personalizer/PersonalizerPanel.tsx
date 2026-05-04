@@ -567,10 +567,21 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
     }
     return null;
   })();
+  // FIX 37 — color preview wins over the auto-derived signature image
+  // (Shopify's representative variant featured_image), but the EXPLICIT
+  // per-signature override the integrator clicked "Use Shopify image"
+  // for still wins over the color preview. Rationale:
+  //   - variantImageOverrides[sig] = explicit integrator choice for
+  //     this signature, never silently overridden.
+  //   - colorImageForPreview = explicit integrator choice (clicked a
+  //     "Preview color" pill) → wins over auto-derived images.
+  //   - repVariantBySignature[sig].featured_image_url = AUTOMATIC
+  //     fallback Shopify gives us — only used when nothing more
+  //     intentional is available.
   const effectiveBaseImage =
     (activeSignature && variantImageOverrides[activeSignature]) ||
-    (activeSignature && repVariantBySignature[activeSignature]?.featured_image_url) ||
     colorImageForPreview ||
+    (activeSignature && repVariantBySignature[activeSignature]?.featured_image_url) ||
     tpl.base_image_url;
   // P26-26 follow-up — inject the GLOBAL birthstones library into
   // the template the admin canvas sees so the preview renderer can
