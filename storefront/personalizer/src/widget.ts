@@ -75,11 +75,34 @@ function isProblematicForeignObjectBrowser(): boolean {
  * adjacent to the foreignObject (FIX 37), so removing the foreignObject
  * leaves the visible engraving intact — minus the 3D tilt effect that
  * iOS can't render anyway. Idempotent.
+ *
+ * FIX 40 — also apply a 2D `rotate(tiltDeg cx cy)` transform to each
+ * surviving embrace fallback text. The renderer marks them with
+ * data-rp-embrace-* attributes and emits NO transform (so on desktop
+ * the foreignObject overlays them exactly with no doubling). On iOS
+ * the widget reads the attributes and applies the rotation in-place,
+ * giving customers a recognizable tilt that approximates the desktop
+ * 3D rotateY effect for single-character engravings.
  */
 function stripForeignObjects(container: HTMLElement): void {
   if (!container) return;
   const fos = container.querySelectorAll('foreignObject');
   fos.forEach((fo) => fo.parentNode?.removeChild(fo));
+  // FIX 40 — apply the embrace tilt to the now-visible fallback text.
+  const fallbacks = container.querySelectorAll<SVGTextElement>(
+    '[data-rp-embrace-fallback="1"]',
+  );
+  fallbacks.forEach((t) => {
+    const tilt = parseFloat(t.getAttribute('data-rp-embrace-tilt') || '0');
+    if (!Number.isFinite(tilt) || tilt === 0) return;
+    const cx = parseFloat(t.getAttribute('data-rp-embrace-cx') || '0');
+    const cy = parseFloat(t.getAttribute('data-rp-embrace-cy') || '0');
+    // Only set the transform if it isn't already there (idempotent
+    // across the 500 ms rerender loop, which redoes innerHTML so
+    // attributes reset every cycle anyway — but defensive in case
+    // a future caller stops resetting).
+    t.setAttribute('transform', `rotate(${tilt.toFixed(2)} ${cx} ${cy})`);
+  });
 }
 
 function absolutifyUrl(u: string | null | undefined): string {

@@ -253,32 +253,31 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
     // FIX 37 — fallback plain-SVG <text> rendered FIRST (so it sits
     // BEHIND the foreignObject in paint order). On browsers where
     // foreignObject + CSS 3D works (desktop, Android Chrome), the
-    // foreignObject covers the plain text exactly. On iOS Safari
-    // where foreignObject + perspective + rotateY frequently fails
-    // to render (long-standing WebKit bug), the plain text remains
-    // visible so the customer still sees the engraving. The
-    // fallback shares font / size / color / letter-spacing with the
-    // foreignObject so visual continuity is preserved.
-    //
-    // FIX 39 — approximate the 3D rotateY tilt with a 2D rotate
-    // around the bbox center on the fallback text. For SINGLE-
-    // character fields (the typical case for engraved initials
-    // like the user's "Adjustable Initial Ring"), a 2D rotation
-    // around Z produces a near-identical visual to the 3D rotateY
-    // effect — both make the letter appear "tilted on the curved
-    // ring tip". For long text the 2D rotation is visually
-    // different from the 3D foreshortening but still gives a
-    // recognizable embrace lean that's better than flat.
+    // foreignObject covers the plain text EXACTLY at the same
+    // position with the same font/size/color → the customer sees
+    // only the foreignObject's 3D-tilted output, no doubling.
+    // On iOS Safari where foreignObject silently fails, the widget
+    // strips the foreignObject (FIX 38) and the plain text remains
+    // visible. FIX 40 — the widget ALSO applies a 2D rotate to this
+    // surviving text using the data-rp-embrace-tilt attribute below,
+    // so iOS gets the embrace lean too without double-rendering on
+    // desktop. The fallback itself is FLAT (no transform) here so
+    // it overlays the foreignObject exactly when both render.
     const align = (f.text_align as string) || 'middle';
     const anchor = align === 'start' ? 'start' : align === 'end' ? 'end' : 'middle';
     const tx = anchor === 'middle' ? cx : anchor === 'end' ? f.position_x + f.width : f.position_x;
-    const fallbackTransform = tiltDeg !== 0
-      ? ` transform="rotate(${tiltDeg.toFixed(2)} ${cx} ${cy})"`
-      : '';
     const fallbackText =
-      `<text x="${tx}" y="${cy}"${fallbackTransform} text-anchor="${anchor}" ` +
+      `<text x="${tx}" y="${cy}" text-anchor="${anchor}" ` +
       `dominant-baseline="middle" font-family="${family}" ` +
-      `font-size="${fontSize}" fill="${fill}"${lsAttr}>${text}</text>`;
+      `font-size="${fontSize}" fill="${fill}"${lsAttr} ` +
+      // FIX 40 — these data attrs let the iOS widget post-process
+      // find each fallback text and apply the right rotation/pivot
+      // after stripping the foreignObject. Desktop ignores them
+      // entirely.
+      `data-rp-embrace-fallback="1" ` +
+      `data-rp-embrace-tilt="${tiltDeg.toFixed(2)}" ` +
+      `data-rp-embrace-cx="${cx}" ` +
+      `data-rp-embrace-cy="${cy}">${text}</text>`;
     const foreignObject =
       `<foreignObject x="${fox}" y="${f.position_y}" width="${fow}" height="${f.height}">` +
       `<div xmlns="http://www.w3.org/1999/xhtml" ` +
