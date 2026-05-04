@@ -4,8 +4,19 @@ const ALLOWED = [
   'label', 'placeholder', 'default_value', 'required', 'max_chars', 'allow_empty',
   'font_family', 'font_size_px', 'font_color', 'text_align', 'letter_spacing',
   'curve_mode', 'curve_radius_px', 'curve_path_d',
+  // FIX 30 — curve_tilt_deg rotates the arc chord around bbox
+  // center (degrees). Lets the merchant tilt the curve to match
+  // foreshortened ring tips photographed at an angle.
+  'curve_tilt_deg',
   'position_x', 'position_y', 'width', 'height', 'rotation_deg',
   'mask_shape', 'image_max_size_kb', 'layer_z',
+  // P25-6 — cart_label overrides label for the Shopify cart line item.
+  // visible_variant_options is a JSON array of variant option values
+  // (e.g. ["2","3","4"]) — NULL means always visible.
+  'cart_label', 'visible_variant_options',
+  // P25-V4 — per-color text color overrides + customer-facing label +
+  // info-only field flag.
+  'font_color_by_value_json', 'customer_label', 'is_info', 'info_text',
 ];
 
 export async function onRequest(context) {

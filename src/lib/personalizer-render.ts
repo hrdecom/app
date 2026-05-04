@@ -43,6 +43,11 @@ export interface PreviewField {
   curve_mode?: 'linear' | 'arc' | 'circle' | null;
   curve_radius_px?: number | null;
   curve_path_d?: string | null;
+  // FIX 30 — degrees to rotate the entire arc path around the field's
+  // bbox center. Lets the chord be diagonal instead of always
+  // horizontal, so text "wraps" the perspective of rings shown at
+  // an angle. 0 = straight horizontal arc (legacy behaviour).
+  curve_tilt_deg?: number | null;
   position_x: number;
   position_y: number;
   width: number;
@@ -217,11 +222,22 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
       const endX = f.position_x + f.width;
       pathD = `M ${startX} ${cy} A ${a} ${a} 0 0 ${sweep} ${endX} ${cy}`;
     }
+    // FIX 30 — apply curve tilt by rotating the entire <g> wrapper
+    // around the bbox center. We rotate the group rather than baking
+    // the rotation into the path string so the textPath rendering
+    // (font metrics, baseline, letter spacing) stays exactly the
+    // same — the rotation only affects the final visual placement.
+    const tilt = Number(f.curve_tilt_deg || 0);
+    const tiltAttr = tilt
+      ? ` transform="rotate(${tilt} ${cx} ${cy})"`
+      : '';
     return (
       `<defs><path id="${pathId}" d="${pathD}" /></defs>` +
+      `<g${tiltAttr}>` +
       `<text font-family="${family}" font-size="${fontSize}" fill="${fill}"${lsAttr}>` +
       `<textPath href="#${pathId}" startOffset="50%" text-anchor="middle">${text}</textPath>` +
-      `</text>`
+      `</text>` +
+      `</g>`
     );
   }
 

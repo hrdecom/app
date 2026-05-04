@@ -106,7 +106,7 @@ export async function onRequestGet(context) {
     const { results: ovRows } = await env.DB
       .prepare(
         `SELECT field_id, variant_signature, position_x, position_y, width, height,
-                rotation_deg, curve_radius_px, hidden
+                rotation_deg, curve_radius_px, curve_tilt_deg, hidden
            FROM customization_field_variant_overrides
           WHERE field_id IN (${placeholders})`,
       )

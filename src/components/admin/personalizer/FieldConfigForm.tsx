@@ -259,6 +259,29 @@ export function FieldConfigForm({ field, onPatch, availableVariantValues = [], a
                 <Input type="number" value={draft.curve_radius_px || ''} onChange={(e) => patch('curve_radius_px', e.target.value ? parseInt(e.target.value) : null)} />
               </Row>
             )}
+            {/* FIX 30 — Curve tilt: rotates the chord (and the arc with
+                it) in degrees so the text wraps around tilted ring tips
+                seen in 3/4-view product photos. -90..+90 covers every
+                useful angle; 0 = legacy horizontal arc. Only meaningful
+                for arc mode (circle is symmetric and doesn't benefit). */}
+            {draft.curve_mode === 'arc' && (
+              <Row label="Curve tilt (°)">
+                <Input
+                  type="number"
+                  step="1"
+                  min="-90"
+                  max="90"
+                  placeholder="0"
+                  value={draft.curve_tilt_deg ?? ''}
+                  onChange={(e) =>
+                    patch(
+                      'curve_tilt_deg',
+                      e.target.value === '' ? null : parseFloat(e.target.value),
+                    )
+                  }
+                />
+              </Row>
+            )}
           </Section>
 
           {/* P25-V4 — per-color text color overrides. One row per

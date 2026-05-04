@@ -147,6 +147,9 @@ export interface PersonalizerField {
   curve_mode: CurveMode | null;
   curve_radius_px: number | null;
   curve_path_d: string | null;
+  // FIX 30 — degrees to rotate the arc chord (so the curve can match
+  // a foreshortened / tilted ring tip). 0 = horizontal arc (legacy).
+  curve_tilt_deg: number | null;
   position_x: number;
   position_y: number;
   width: number;
@@ -348,6 +351,8 @@ export interface VariantOverride {
   height?: number | null;
   rotation_deg?: number | null;
   curve_radius_px?: number | null;
+  // FIX 30 — per-variant override of the new arc tilt.
+  curve_tilt_deg?: number | null;
   hidden?: number;
 }
 

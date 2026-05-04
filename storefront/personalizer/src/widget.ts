@@ -2370,7 +2370,9 @@ async function mount({ el, productHandle }: MountSpec) {
     let hidden = false;
     if (ovr && typeof ovr === 'object') {
       merged = { ...f };
-      const numericKeys = ['position_x', 'position_y', 'width', 'height', 'rotation_deg', 'curve_radius_px'] as const;
+      // FIX 30 — curve_tilt_deg added so per-variant overrides can also
+      // tweak the new arc tilt.
+      const numericKeys = ['position_x', 'position_y', 'width', 'height', 'rotation_deg', 'curve_radius_px', 'curve_tilt_deg'] as const;
       for (const k of numericKeys) {
         const v = (ovr as any)[k];
         if (v != null && v !== '' && !Number.isNaN(Number(v))) (merged as any)[k] = Number(v);
