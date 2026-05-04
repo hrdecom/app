@@ -191,44 +191,81 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
       ? ` letter-spacing="${lsRaw}"`
       : '';
 
-  // FIX 30 v3 — `embrace` is a TRUE 3D PERSPECTIVE deformation of the
-  // text, not an arc. Built with SVG <foreignObject> + CSS
-  // `perspective` + `rotateY` so the letters appear painted on a 3D
-  // surface tilted into the screen — matches the perspective of a
-  // ring tip in a 3/4 product photo. The single tunable parameter
-  // is `curve_tilt_deg` (rotation around the vertical axis,
-  // -89..+89 useful range; 0 = flat / no perspective).
+  // FIX 30 v4 — `embrace` deforms each LETTER individually via SVG
+  // matrix transforms, not just by placing flat letters along a path
+  // (that's what arc does). The result: the letters at the ends of
+  // the text get progressively skewed and squeezed, producing the
+  // visual illusion of text that folds in 3D — the same kind of
+  // deformation Photoshop's "Warp Text → Perspective" creates.
+  //
+  // Math per character:
+  //   p ∈ [-1, +1]  ← position along the text, -1=left edge, +1=right
+  //   localAngle = p * tilt   ← each char tilts proportionally to its
+  //                              position (left chars tilt one way,
+  //                              right chars tilt the other way)
+  //   scaleX = cos(localAngle)   ← chars at the edges get
+  //                                horizontally squeezed (perspective
+  //                                foreshortening)
+  //   skewY  = sin(localAngle) * 0.4   ← chars at the edges lean
+  //                                       vertically
+  //
+  // The SVG matrix(a b c d e f) we emit per char:
+  //   matrix(scaleX, skewY, 0, 1, charCenterX*(1-scaleX), 0)
+  // The translation in the matrix compensates for the scale so the
+  // letter stays at its intended X centre.
+  //
+  // Single-letter case: the letter still gets a transform; the
+  // global tilt rotates it around its centre, giving a 3D look on
+  // a single glyph too.
   if (f.curve_mode === 'embrace') {
-    const tilt = Number(f.curve_tilt_deg || 0);
-    // Perspective distance — the larger this is, the SUBTLER the 3D
-    // effect at the same rotation angle. Tying it to the field's
-    // own width (×4) keeps the foreshortening proportional whether
-    // the field is small or large.
-    const perspective = Math.max(400, f.width * 4);
-    const lsCss = lsRaw != null && Number.isFinite(lsRaw) && lsRaw !== 0
-      ? `letter-spacing:${lsRaw}px;`
-      : '';
-    // The outer div sets perspective; the inner div is rotated. We
-    // measure with the foreignObject's own width/height so the text
-    // is centered inside the bbox just like the linear/arc paths
-    // place it. xmlns on the inner HTML root is REQUIRED for SVG
-    // foreignObject content to render correctly outside the SVG
-    // namespace.
-    return (
-      `<foreignObject x="${f.position_x}" y="${f.position_y}" ` +
-      `width="${f.width}" height="${f.height}">` +
-      `<div xmlns="http://www.w3.org/1999/xhtml" ` +
-      `style="perspective:${perspective}px;width:100%;height:100%;` +
-      `display:flex;align-items:center;justify-content:center;` +
-      `font-family:${family};font-size:${fontSize}px;color:${fill};${lsCss}` +
-      `line-height:1;">` +
-      `<div style="transform:rotateY(${tilt}deg);transform-origin:center center;` +
-      `white-space:nowrap;backface-visibility:visible;">` +
-      `${text}` +
-      `</div>` +
-      `</div>` +
-      `</foreignObject>`
-    );
+    const tiltDeg = Number(f.curve_tilt_deg || 0);
+    const chars = Array.from(text);
+    const n = chars.length;
+    // Approximate character width — Lato/most sans is roughly 0.55
+    // em wide. We use this only to space chars; the actual visual
+    // width depends on font metrics but this is consistent enough.
+    const charW = fontSize * 0.55;
+    const ls = (lsRaw != null && Number.isFinite(lsRaw) ? lsRaw : 0) || 0;
+    const totalW = n * charW + Math.max(0, n - 1) * ls;
+    const startX = cx - totalW / 2 + charW / 2;
+
+    const charEls = chars.map((ch, i) => {
+      // Position parameter: -1 at the leftmost letter, +1 at the
+      // rightmost. Single letter → p = 0 (no tilt).
+      const p = n > 1 ? (i / (n - 1)) * 2 - 1 : 0;
+      const localAngleDeg = p * tiltDeg;
+      const localAngleRad = (localAngleDeg * Math.PI) / 180;
+      const scaleX = Math.cos(localAngleRad);
+      const skewY = Math.sin(localAngleRad) * 0.4;
+      const charX = startX + i * (charW + ls);
+      // matrix(a b c d e f): a=scaleX, b=skewY, c=0, d=1, e=tx, f=0.
+      // tx compensates for scaleX so the character's visual centre
+      // stays at charX rather than drifting toward x=0.
+      const tx = charX * (1 - scaleX);
+      return (
+        `<text x="${charX}" y="${cy}" ` +
+        `text-anchor="middle" ` +
+        `font-family="${family}" font-size="${fontSize}" fill="${fill}"` +
+        ` transform="matrix(${scaleX.toFixed(4)} ${skewY.toFixed(4)} 0 1 ${tx.toFixed(2)} 0)">` +
+        `${escapeText(ch)}</text>`
+      );
+    });
+
+    // Single letter with non-zero tilt: ALSO apply a true rotation
+    // around the letter centre on top of the matrix, which adds a
+    // perceptible 3D-ish lean to a glyph that has no neighbours to
+    // contrast with.
+    if (n === 1 && tiltDeg !== 0) {
+      // The matrix already produced the squeeze+skew; add a parent
+      // <g> that rotates the whole thing by tiltDeg/2 around the
+      // bbox centre to give the single glyph some visible angle.
+      return (
+        `<g transform="rotate(${(tiltDeg / 2).toFixed(2)} ${cx} ${cy})">` +
+        charEls.join('') +
+        `</g>`
+      );
+    }
+    return charEls.join('');
   }
 
   if (f.curve_mode === 'circle' || f.curve_mode === 'arc') {
