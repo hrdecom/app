@@ -30,7 +30,21 @@ export async function onRequestGet(context) {
   const localeRaw = (url.searchParams.get('locale') || '').trim();
   const locale = localeRaw && localeRaw !== 'en' ? localeRaw : null;
 
-  const tpl = await env.DB
+  // FIX 33 — three-tier handle lookup so the personalizer keeps
+  // working when the merchant has churn between the
+  // shopify_product_handle the template was created with and the
+  // handle Shopify ends up assigning to the live product (handle
+  // changes on title rename, special-character normalization, etc).
+  //
+  //   tier A: exact match on customization_templates.shopify_product_handle
+  //   tier B: match via products.shopify_url ending with /products/<handle>
+  //           (the product table is the source of truth post-push)
+  //   tier C: match via products.title slug ≈ handle (last-resort
+  //           fuzzy match — handles e.g. quoted-character mangling)
+  //
+  // Each tier returns the most recently published template for the
+  // resolved product. Falls through to 404 only when all three miss.
+  let tpl = await env.DB
     .prepare(
       `SELECT * FROM customization_templates
         WHERE shopify_product_handle = ? AND status = 'published'
@@ -38,7 +52,64 @@ export async function onRequestGet(context) {
     )
     .bind(handle)
     .first();
-  if (!tpl) return jsonCors({ found: false }, 404, request);
+
+  if (!tpl) {
+    // tier B — find the products row whose shopify_url contains
+    // /products/<handle>, then look up its template.
+    const productRow = await env.DB
+      .prepare(
+        `SELECT id FROM products
+          WHERE shopify_url LIKE ?
+             OR shopify_admin_url LIKE ?
+          ORDER BY id DESC LIMIT 1`,
+      )
+      .bind(`%/products/${handle}%`, `%/products/${handle}%`)
+      .first()
+      .catch(() => null);
+    if (productRow?.id) {
+      tpl = await env.DB
+        .prepare(
+          `SELECT * FROM customization_templates
+            WHERE product_id = ? AND status = 'published'
+            ORDER BY published_at DESC LIMIT 1`,
+        )
+        .bind(productRow.id)
+        .first();
+      if (tpl) {
+        console.log('[personalizer/template] handle resolved via shopify_url match', { handle, product_id: productRow.id });
+      }
+    }
+  }
+
+  if (!tpl) {
+    // tier C — fuzzy match the handle as a slugified title. Strip
+    // dashes, lowercase, and compare against a similarly normalized
+    // products.title.
+    const slugSpaced = handle.replace(/-/g, ' ').toLowerCase();
+    const productRow = await env.DB
+      .prepare(`SELECT id, title FROM products WHERE LOWER(title) LIKE ? ORDER BY id DESC`)
+      .bind(`%${slugSpaced}%`)
+      .first()
+      .catch(() => null);
+    if (productRow?.id) {
+      tpl = await env.DB
+        .prepare(
+          `SELECT * FROM customization_templates
+            WHERE product_id = ? AND status = 'published'
+            ORDER BY published_at DESC LIMIT 1`,
+        )
+        .bind(productRow.id)
+        .first();
+      if (tpl) {
+        console.log('[personalizer/template] handle resolved via title slug match', { handle, product_id: productRow.id, title: productRow.title });
+      }
+    }
+  }
+
+  if (!tpl) {
+    console.log('[personalizer/template] 404 — no template found for handle', handle);
+    return jsonCors({ found: false, handle }, 404, request);
+  }
 
   // P26-29 — order fields by layer_z DESC (then sort_order, then id)
   // so the storefront form order matches the admin layer list. Admin
