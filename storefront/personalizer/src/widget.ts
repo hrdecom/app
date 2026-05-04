@@ -88,19 +88,21 @@ function stripForeignObjects(container: HTMLElement): void {
   if (!container) return;
   const fos = container.querySelectorAll('foreignObject');
   fos.forEach((fo) => fo.parentNode?.removeChild(fo));
-  // FIX 40 — apply the embrace tilt to the now-visible fallback text.
+  // FIX 40 — apply the embrace tilt to the fallback text.
+  // FIX 41 — also flip visibility="hidden" → "visible" so the
+  // fallback (which is hidden by default to prevent doubling on
+  // desktop where foreignObject renders) actually shows on iOS.
   const fallbacks = container.querySelectorAll<SVGTextElement>(
     '[data-rp-embrace-fallback="1"]',
   );
   fallbacks.forEach((t) => {
+    t.setAttribute('visibility', 'visible');
     const tilt = parseFloat(t.getAttribute('data-rp-embrace-tilt') || '0');
     if (!Number.isFinite(tilt) || tilt === 0) return;
     const cx = parseFloat(t.getAttribute('data-rp-embrace-cx') || '0');
     const cy = parseFloat(t.getAttribute('data-rp-embrace-cy') || '0');
-    // Only set the transform if it isn't already there (idempotent
-    // across the 500 ms rerender loop, which redoes innerHTML so
-    // attributes reset every cycle anyway — but defensive in case
-    // a future caller stops resetting).
+    // Idempotent across the 500 ms rerender loop, which redoes
+    // innerHTML so attributes reset every cycle anyway.
     t.setAttribute('transform', `rotate(${tilt.toFixed(2)} ${cx} ${cy})`);
   });
 }

@@ -250,19 +250,22 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
     const padX = Math.ceil(f.width * 0.25);
     const fox = f.position_x - padX;
     const fow = f.width + padX * 2;
-    // FIX 37 — fallback plain-SVG <text> rendered FIRST (so it sits
-    // BEHIND the foreignObject in paint order). On browsers where
-    // foreignObject + CSS 3D works (desktop, Android Chrome), the
-    // foreignObject covers the plain text EXACTLY at the same
-    // position with the same font/size/color → the customer sees
-    // only the foreignObject's 3D-tilted output, no doubling.
-    // On iOS Safari where foreignObject silently fails, the widget
-    // strips the foreignObject (FIX 38) and the plain text remains
-    // visible. FIX 40 — the widget ALSO applies a 2D rotate to this
-    // surviving text using the data-rp-embrace-tilt attribute below,
-    // so iOS gets the embrace lean too without double-rendering on
-    // desktop. The fallback itself is FLAT (no transform) here so
-    // it overlays the foreignObject exactly when both render.
+    // FIX 37 — fallback plain-SVG <text> emitted ALONGSIDE the
+    // foreignObject. On iOS Safari (and any WebKit browser where
+    // foreignObject + CSS 3D fails), the widget strips the
+    // foreignObject (FIX 38) and reveals this text instead.
+    //
+    // FIX 41 — fallback is `visibility="hidden"` BY DEFAULT. On
+    // desktop browsers where the foreignObject renders correctly,
+    // its 3D-rotated output does NOT pixel-align with the plain
+    // <text> (rotateY shifts the visual horizontally + the inner
+    // div uses HTML font metrics rather than SVG metrics). If the
+    // fallback were visible, the customer would see TWO copies of
+    // the letter slightly offset — the embrace 3D version PLUS the
+    // flat fallback. Hiding by default eliminates that doubling
+    // entirely. The iOS widget post-processor (FIX 40) flips
+    // `visibility` to `visible` and applies the rotation transform
+    // when stripping the foreignObject.
     const align = (f.text_align as string) || 'middle';
     const anchor = align === 'start' ? 'start' : align === 'end' ? 'end' : 'middle';
     const tx = anchor === 'middle' ? cx : anchor === 'end' ? f.position_x + f.width : f.position_x;
@@ -270,10 +273,11 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
       `<text x="${tx}" y="${cy}" text-anchor="${anchor}" ` +
       `dominant-baseline="middle" font-family="${family}" ` +
       `font-size="${fontSize}" fill="${fill}"${lsAttr} ` +
+      // FIX 41 — hidden by default; iOS widget makes it visible.
+      `visibility="hidden" ` +
       // FIX 40 — these data attrs let the iOS widget post-process
       // find each fallback text and apply the right rotation/pivot
-      // after stripping the foreignObject. Desktop ignores them
-      // entirely.
+      // after stripping the foreignObject.
       `data-rp-embrace-fallback="1" ` +
       `data-rp-embrace-tilt="${tiltDeg.toFixed(2)}" ` +
       `data-rp-embrace-cx="${cx}" ` +
