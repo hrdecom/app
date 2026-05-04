@@ -13,6 +13,13 @@ interface Props {
   onDeselect?: () => void;
   /** Commits a field bbox change (drag/resize) when the user releases the mouse. */
   onCommit: (fieldId: number, patch: Partial<PersonalizerField>) => void;
+  /** FIX 35 — currently-previewed color value (e.g. "Gold"). When a
+   * text field has a font_color_by_value_json map containing this key,
+   * the renderer uses that hex INSTEAD of the global font_color, so
+   * the integrator can preview each color's per-variant override take
+   * effect in the canvas. NULL = no override lookup, fall back to the
+   * field's base font_color. */
+  currentColorValue?: string | null;
 }
 
 type DragMode =
@@ -28,6 +35,11 @@ type DragMode =
   /** P25-5 — drag the curve apex handle to live-edit `curve_radius_px`.
    * The pivot is the bbox center; new radius = distance(pointer, pivot). */
   | { kind: 'curve_radius'; fieldId: number; pivotX: number; pivotY: number }
+  /** FIX 30 v6 — embrace mode reuses the curve handle but drags it
+   * HORIZONTALLY to set `curve_tilt_deg` (the 3D perspective angle).
+   * Vertical motion is ignored. Pivot = bbox center; tilt is mapped
+   * linearly from horizontal pointer offset. */
+  | { kind: 'curve_tilt'; fieldId: number; pivotX: number; pivotY: number; halfWidth: number }
   /** P25-V4 — drag the rotation handle to live-edit `rotation_deg`.
    * Pivot = bbox center; new angle = atan2(pointer - pivot) - startOffset. */
   | { kind: 'rotate'; fieldId: number; pivotX: number; pivotY: number; startAngleDeg: number; startRotationDeg: number };
@@ -68,6 +80,7 @@ export function PersonalizerCanvas({
   onSelect,
   onDeselect: _onDeselect, // P25-V2 — kept in props for back-compat; unused now
   onCommit,
+  currentColorValue, // FIX 35 — drives per-color font_color override in preview
 }: Props) {
   const overlayRef = useRef<SVGSVGElement>(null);
 
@@ -82,6 +95,9 @@ export function PersonalizerCanvas({
   // P25-5 — same idea as draftPos but for the live curve radius. Cleared
   // a tick after commit so the next render uses the server-confirmed value.
   const [draftCurve, setDraftCurve] = useState<Record<number, { curve_radius_px: number }>>({});
+  // FIX 30 v6 — local optimistic tilt for the embrace handle drag.
+  // Mirrors draftCurve's lifecycle (commit on pointer up, clear after).
+  const [draftTilt, setDraftTilt] = useState<Record<number, { curve_tilt_deg: number }>>({});
   // P25-V4 — live rotation override during a drag. Cleared on commit so
   // the next render uses the server-confirmed value.
   const [draftRotation, setDraftRotation] = useState<Record<number, { rotation_deg: number }>>({});
@@ -121,6 +137,11 @@ export function PersonalizerCanvas({
           curve_path_d: null,
         };
       }
+      // FIX 30 v6 — apply optimistic embrace tilt so the live preview
+      // tracks the handle drag the same way curve_radius does.
+      if (draftTilt[f.id]) {
+        merged = { ...merged, ...draftTilt[f.id] };
+      }
       if (draftRotation[f.id]) merged = { ...merged, ...draftRotation[f.id] };
       return merged;
     });
@@ -145,10 +166,16 @@ export function PersonalizerCanvas({
       },
       fields: fieldsWithDraft,
       values,
+      // FIX 35 — let the renderer pick a per-color font hex override
+      // when the merchant has configured one for the active preview
+      // color. NULL falls back to the field's base font_color.
+      currentColorValue: currentColorValue || null,
     });
     // P25-V4 — draftRotation in deps so the preview re-renders LIVE during
     // a rotation drag (not just on commit).
-  }, [template, fields, draftPos, draftCurve, draftRotation]);
+    // FIX 35 — currentColorValue triggers re-render when the integrator
+    // switches the preview color pill above the canvas.
+  }, [template, fields, draftPos, draftCurve, draftTilt, draftRotation, currentColorValue]);
 
   function fieldBbox(f: PersonalizerField) {
     const o = draftPos[f.id];
@@ -229,7 +256,20 @@ export function PersonalizerCanvas({
     const b = fieldBbox(f);
     const pivotX = b.x + Math.floor(b.w / 2);
     const pivotY = b.y + b.h + CURVE_HANDLE_OFFSET_PX;
-    setDrag({ kind: 'curve_radius', fieldId: f.id, pivotX, pivotY });
+    // FIX 30 v6 — embrace reuses the same handle but maps drag to
+    // the new curve_tilt_deg parameter (3D perspective angle)
+    // instead of curve_radius_px. Math is in handlePointerMove.
+    if (f.curve_mode === 'embrace') {
+      setDrag({
+        kind: 'curve_tilt',
+        fieldId: f.id,
+        pivotX,
+        pivotY,
+        halfWidth: Math.max(40, Math.floor(b.w / 2)),
+      });
+    } else {
+      setDrag({ kind: 'curve_radius', fieldId: f.id, pivotX, pivotY });
+    }
     (e.target as Element).setPointerCapture?.(e.pointerId);
   }
 
@@ -335,6 +375,19 @@ export function PersonalizerCanvas({
       // chord to fit in the circle — semicircle is the tightest).
       if (Math.abs(r) < halfChord) r = halfChord * Math.sign(r || 1);
       setDraftCurve((prev) => ({ ...prev, [drag.fieldId]: { curve_radius_px: r } }));
+    } else if (drag.kind === 'curve_tilt') {
+      // FIX 30 v6 — map HORIZONTAL pointer offset to a tilt angle.
+      // Drag right of pivot → positive tilt (text rotates so right
+      // side recedes). Drag left → negative tilt. The half-width of
+      // the bbox maps to ±60° so the user gets a strong effect with
+      // a one-bbox-wide drag, while the absolute cap of ±89° keeps
+      // the rotation from going past flat. Vertical motion is
+      // intentionally ignored — embrace has only one axis of
+      // freedom and we don't want diagonal drags to drift.
+      const dx = p.x - drag.pivotX;
+      const norm = dx / drag.halfWidth; // -∞..+∞, 1 ≈ bbox-half-width drag
+      const tiltDeg = clamp(Math.round(norm * 60), -89, 89);
+      setDraftTilt((prev) => ({ ...prev, [drag.fieldId]: { curve_tilt_deg: tiltDeg } }));
     } else if (drag.kind === 'rotate') {
       // P25-V4 — relative rotation. New angle = startRot + (currentMouseAngle - startMouseAngle).
       // Shift = snap to 15° increments for clean angles.
@@ -357,6 +410,19 @@ export function PersonalizerCanvas({
       if (cd) onCommit(fieldId, cd);
       setDrag({ kind: 'none' });
       setTimeout(() => setDraftCurve((prev) => {
+        const next = { ...prev };
+        delete next[fieldId];
+        return next;
+      }), 50);
+      return;
+    }
+    if (drag.kind === 'curve_tilt') {
+      // FIX 30 v6 — commit the optimistic tilt to the server, mirror
+      // of the curve_radius commit above.
+      const td = draftTilt[fieldId];
+      if (td) onCommit(fieldId, td);
+      setDrag({ kind: 'none' });
+      setTimeout(() => setDraftTilt((prev) => {
         const next = { ...prev };
         delete next[fieldId];
         return next;

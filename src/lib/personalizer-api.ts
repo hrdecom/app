@@ -373,10 +373,15 @@ export interface ShopifyVariantInfo {
 
 export async function listTemplateVariants(
   templateId: number,
-): Promise<{ items: ShopifyVariantInfo[]; option_names: string[] }> {
+): Promise<{ items: ShopifyVariantInfo[]; option_names: string[]; color_values?: string[] }> {
   return api.get(`/personalizer/templates/${templateId}/variants`) as Promise<{
     items: ShopifyVariantInfo[];
     option_names: string[];
+    // FIX 35 — distinct color values from Shopify + CRM (deduped,
+    // case-insensitive). Drives the per-color text-color override
+    // section even when Shopify's option name doesn't match the
+    // color heuristic (e.g. "Plating", "Finish").
+    color_values?: string[];
   }>;
 }
 

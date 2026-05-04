@@ -111,6 +111,19 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
   //   base image when the admin picks a non-default variant.
   const [shopifyVariants, setShopifyVariants] = useState<ShopifyVariantInfo[]>([]);
   const [colorOptionNames, setColorOptionNames] = useState<string[]>(DEFAULT_COLOR_OPTION_NAMES);
+  // FIX 35 — distinct color values for THIS product, sourced from the
+  // backend (Shopify variants + CRM product_variants table, deduped).
+  // Used to populate the per-color text-color override section even
+  // when the Shopify product's option name doesn't match our color
+  // heuristic (e.g. "Plating", "Finish") or when variants haven't
+  // been pushed to Shopify yet but ARE configured in the Variants tab.
+  const [colorValues, setColorValues] = useState<string[]>([]);
+  // FIX 35 — which color the canvas should preview right now. Drives
+  // the per-color font_color override in the SVG render so the
+  // integrator can SEE each color's override take effect. Defaults to
+  // the first detected color once colorValues loads. NULL = use the
+  // field's base font_color.
+  const [previewColorValue, setPreviewColorValue] = useState<string | null>(null);
   // P26-26 follow-up — global birthstones library (admin-managed in
   // Personalizer Settings). Loaded once on mount via getSettings()
   // and passed to FieldConfigForm so the birthstone field's
@@ -167,7 +180,7 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
       // variants + per-field overrides in parallel — independent calls.
       const [settings, variantsResp, fieldOverridesResults] = await Promise.all([
         getSettings().catch(() => null),
-        listTemplateVariants(created.id).catch(() => ({ items: [] as ShopifyVariantInfo[], option_names: [] })),
+        listTemplateVariants(created.id).catch(() => ({ items: [] as ShopifyVariantInfo[], option_names: [], color_values: [] as string[] })),
         Promise.all((fresh.fields || []).map(async (f) => [f.id, await listFieldOverrides(f.id).catch(() => [])] as const)),
       ]);
       if (settings?.color_option_names_json) {
@@ -184,6 +197,14 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
       // for entries the admin hasn't uploaded yet).
       setBirthstoneLibrary(parseBirthstones(settings?.birthstones_json ?? null));
       setShopifyVariants(variantsResp.items || []);
+      // FIX 35 — colorValues from the backend (Shopify + CRM merge).
+      // Drives the per-color override section AND the canvas preview's
+      // color switcher. Default the preview color to the first one so
+      // the integrator immediately sees a per-color override take
+      // effect instead of the global font_color.
+      const cv = (variantsResp as { color_values?: string[] }).color_values || [];
+      setColorValues(cv);
+      setPreviewColorValue((prev) => prev || (cv[0] ?? null));
       const map: Record<number, Record<string, VariantOverride>> = {};
       for (const [fid, list] of fieldOverridesResults) {
         const sigMap: Record<string, VariantOverride> = {};
@@ -748,9 +769,41 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
               isFirstVariant={isFirstSig}
             />
           )}
+          {/* FIX 35 — color switcher above the canvas. Lets the
+              integrator preview each color's per-variant override take
+              effect (the SVG renderer respects font_color_by_value_json
+              when currentColorValue is supplied). Hidden when the
+              product has fewer than 2 colors — there's nothing to
+              switch between. */}
+          {colorValues.length > 1 && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Preview color:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {colorValues.map((cv) => {
+                  const active = (previewColorValue || '').toLowerCase() === cv.toLowerCase();
+                  return (
+                    <button
+                      key={cv}
+                      type="button"
+                      onClick={() => setPreviewColorValue(cv)}
+                      className={[
+                        'px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors',
+                        active
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400',
+                      ].join(' ')}
+                    >
+                      {cv}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <PersonalizerCanvas
             template={effectiveTemplate}
             fields={effectiveFields}
+            currentColorValue={previewColorValue}
             selectedFieldId={selectedFieldId}
             onSelect={setSelectedFieldId}
             onDeselect={() => setSelectedFieldId(null)}
@@ -844,29 +897,15 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
               }
               return out;
             })()}
-            // P25-V4 — distinct COLOR option values across the product's
-            // variants. Mirrors availableVariantValues above but KEEPS
-            // color names (instead of excluding them) so the per-color
-            // text-color section can offer one row per color the
-            // product actually ships in.
-            availableColorValues={(() => {
-              const colorSet = new Set(colorOptionNames.map((s) => s.toLowerCase()));
-              const out: string[] = [];
-              const seen = new Set<string>();
-              for (const v of shopifyVariants) {
-                for (let i = 0; i < (v.option_names || []).length; i++) {
-                  const name = String(v.option_names[i] || '');
-                  const value = String(v.options[i] || '');
-                  if (!name || !value) continue;
-                  if (!colorSet.has(name.toLowerCase())) continue;
-                  const k = value.toLowerCase();
-                  if (seen.has(k)) continue;
-                  seen.add(k);
-                  out.push(value);
-                }
-              }
-              return out;
-            })()}
+            // FIX 35 — distinct COLOR option values for this product.
+            // Sourced from /api/personalizer/templates/:id/variants which
+            // merges Shopify variants (when an option name matches our
+            // color heuristic) with the CRM's product_variants.color
+            // column (always populated by the integrator before push).
+            // Replaces the prior client-side computation that only
+            // worked when Shopify's option name happened to match
+            // "Color" / "Couleur" / etc.
+            availableColorValues={colorValues}
             // P26-26 follow-up — birthstones library is GLOBAL
             // (admin-managed in Personalizer Settings). Loaded once
             // on mount via getSettings() into birthstoneLibrary
