@@ -1282,6 +1282,21 @@ function applyVariantVisibility() {
     }
 
     row.style.display = visible ? '' : 'none';
+    // FIX 31 v3 — log every hide decision so the merchant can debug
+    // straight from devtools when fields don't appear. Throttled per
+    // row via __rpHiddenLogged so we don't spam the console on every
+    // variant change.
+    if (!visible && !(row as any).__rpHiddenLogged) {
+      console.warn(
+        '[rp-personalizer] hiding row',
+        row.getAttribute('data-rp-field-id'),
+        'allowed=', allowed,
+        'currentNonColorOpts=', opts,
+        'allAvailable=', Array.from(allAvailable),
+      );
+      (row as any).__rpHiddenLogged = true;
+    }
+    if (visible) (row as any).__rpHiddenLogged = false;
     // Disable inputs in hidden rows so they're not POSTed to /cart/add
     // — otherwise an empty "Pendant 2" property leaks into single-pendant
     // orders and clutters the line item.
@@ -2662,6 +2677,11 @@ async function mount({ el, productHandle }: MountSpec) {
     const row = document.createElement('div');
     row.className = 'rp-pz-row';
     row.setAttribute('data-rp-field-id', String(f.id));
+    // FIX 31 v3 — explicit display:'' so nothing inherited / cascaded
+    // from the theme can hide the row by default. applyVariantVisibility
+    // is the only thing allowed to flip this off, and only when the
+    // field has an active variant constraint that fails the check.
+    row.style.display = '';
     // P25-6 — tag every row with its allow-list so the variant
     // watcher can show/hide it without rebuilding the DOM.
     const allowed = parseVisibleVariants(f.visible_variant_options);
