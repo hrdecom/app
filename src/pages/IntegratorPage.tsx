@@ -86,11 +86,25 @@ export default function IntegratorPage() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const scope: any = isAdmin ? {} : { assigned_to: 'me' };
+      // FIX 32 — "Done" no longer scopes by `assigned_to=me` and no
+      // longer pins the status to `pushed_to_shopify` only. Both of
+      // those changes were causing shipped products to vanish from
+      // the integrator's Done tab the moment an ads-creator clicked
+      // "Work on it" (which re-assigns the product AND moves the
+      // status to `ads_in_progress`). We now query by `pushed_by=me`
+      // (= integrator did the push, sourced from workflow_events on
+      // the backend) and accept every post-push status. To Do / In
+      // Progress keep the assigned_to=me scope because those are
+      // active-work buckets.
+      const activeScope: any = isAdmin ? {} : { assigned_to: 'me' };
+      const doneScope: any = isAdmin ? {} : { pushed_by: 'me' };
       const [t, p, d] = await Promise.all([
-        listProducts({ status: 'validated_todo', ...scope }),
-        listProducts({ status: 'in_progress', ...scope }),
-        listProducts({ status: 'pushed_to_shopify', ...scope }),
+        listProducts({ status: 'validated_todo', ...activeScope }),
+        listProducts({ status: 'in_progress', ...activeScope }),
+        listProducts({
+          status: 'pushed_to_shopify,ads_in_progress,ads_ready,published',
+          ...doneScope,
+        }),
       ]);
       setTodo(t.items);
       setInProgress(p.items);

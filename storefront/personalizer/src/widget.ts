@@ -1215,6 +1215,19 @@ function readCurrentVariantOptions(): string[] {
 }
 
 /**
+ * FIX 31 — module-level cache of color option names so the top-level
+ * applyVariantVisibility() can strip color values out of the variant
+ * options before the field-visibility intersection check. Without this
+ * stripping, a product whose ONLY option is Color (Gold/Silver/...)
+ * sees `readCurrentVariantOptions()` return ["Gold"] — and any field
+ * with a non-empty visible_variant_options (e.g. ["1 Pendant"] left
+ * over from a previous variant scheme) never matches → fields hide
+ * permanently. Mount() updates this on each install so the latest
+ * payload's color list wins.
+ */
+let activeColorOptionNamesLower: string[] = [];
+
+/**
  * P25-6 — walk every `[data-rp-allowed-variants]` row and toggle
  * `style.display` based on the current variant selection. Idempotent
  * and cheap (typically <10 rows), so we can fire it from change
@@ -1222,11 +1235,42 @@ function readCurrentVariantOptions(): string[] {
  * don't dispatch standard events.
  */
 function applyVariantVisibility() {
-  const opts = readCurrentVariantOptions();
+  // FIX 31 — strip color option values BEFORE the visibility check.
+  // readCurrentVariantOptions() includes EVERY selected option value
+  // (Color + Pendants + Size + ...) but field-level visibility filters
+  // are designed for non-color options ("show this field only when
+  // Pendant=2"). When the product's ONLY option is Color, every
+  // restricted field would silently hide because there's nothing
+  // left to match against. Filtering color out first means:
+  //   - color-only product → variantsAfter = []  → treat fields as
+  //     "no variant constraints possible" → always visible
+  //   - product with Color + Pendants → variantsAfter = ["1"] → check
+  //     against allow-list as before
+  const allOpts = readCurrentVariantOptions();
+  // We can't perfectly map a value back to its option name (the values
+  // we collect are flat), so we approximate: if the value exactly
+  // matches one of the *known* color VALUES we'd typically see (Gold,
+  // Silver, Rose Gold, etc.), drop it. That set is too small to be
+  // robust, so we also use a heuristic: if the field's allow-list
+  // doesn't contain the value AT ALL, it can't be the constraint
+  // we're enforcing — so the value being color or non-color doesn't
+  // matter to that field's visibility. The simplest safe rule: if
+  // the dropdown/radio's NAME contains a known color-option-name,
+  // skip its value. We re-walk the DOM to get the value→option-name
+  // pairing.
+  const colorValues = collectColorOptionValuesLower();
+  const opts = allOpts.filter((v) => !colorValues.has(v.toLowerCase()));
+
   document.querySelectorAll<HTMLElement>('[data-rp-allowed-variants]').forEach((row) => {
     const allowed: string[] | null = (row as any).__rpAllowedVariants ?? null;
     if (!allowed) return;
-    const visible = fieldVisibleForVariant(allowed, opts);
+    // FIX 31 — when the post-color-strip list is empty there are no
+    // non-color variant axes on this product. Showing the field
+    // unconditionally is the right behaviour: the merchant's allow-list
+    // must be a leftover from a previous variant scheme (e.g. "Pendant"
+    // option that no longer exists) and we shouldn't punish them by
+    // hiding the field forever.
+    const visible = opts.length === 0 ? true : fieldVisibleForVariant(allowed, opts);
     row.style.display = visible ? '' : 'none';
     // Disable inputs in hidden rows so they're not POSTed to /cart/add
     // — otherwise an empty "Pendant 2" property leaks into single-pendant
@@ -1235,6 +1279,54 @@ function applyVariantVisibility() {
       inp.disabled = !visible;
     });
   });
+}
+
+/**
+ * FIX 31 — collect the SET of currently-selected option values whose
+ * option-NAME matches a known color option (Color/Couleur/Métal/...).
+ * Used by applyVariantVisibility to strip them before the field
+ * visibility check. Lowercase, trimmed.
+ */
+function collectColorOptionValuesLower(): Set<string> {
+  const out = new Set<string>();
+  if (activeColorOptionNamesLower.length === 0) return out;
+  const isColorName = (name: string) =>
+    activeColorOptionNamesLower.some((c) => name.toLowerCase().includes(c));
+
+  // Per-option selects: <select name="options[Color]">
+  document.querySelectorAll<HTMLSelectElement>('select[name^="options["]').forEach((sel) => {
+    const m = sel.name.match(/options\[(.+?)\]/);
+    if (!m || !isColorName(m[1])) return;
+    const opt = sel.options[sel.selectedIndex];
+    if (opt && opt.value) out.add(opt.value.toLowerCase().trim());
+  });
+  // Checked color radios: <input type="radio" name="options[Color]" value="Gold" checked>
+  document.querySelectorAll<HTMLInputElement>('input[type="radio"][name^="options["]:checked').forEach((inp) => {
+    const m = inp.name.match(/options\[(.+?)\]/);
+    if (!m || !isColorName(m[1])) return;
+    if (inp.value) out.add(inp.value.toLowerCase().trim());
+  });
+  // window.product / ShopifyAnalytics: cross-reference option names
+  try {
+    const w = window as any;
+    const prod = w.product || w.meta?.product || w.ShopifyAnalytics?.meta?.product;
+    const optionNames: string[] | undefined = prod?.options?.map?.((o: any) => typeof o === 'string' ? o : o?.name);
+    const variantId = w.ShopifyAnalytics?.meta?.selectedVariantId || prod?.selectedVariantId;
+    const variants = prod?.variants;
+    if (Array.isArray(optionNames) && Array.isArray(variants) && variantId) {
+      const v = variants.find((x: any) => String(x.id) === String(variantId));
+      if (v) {
+        ['option1', 'option2', 'option3'].forEach((k, i) => {
+          const name = optionNames[i];
+          const value = v[k];
+          if (name && value && isColorName(String(name))) {
+            out.add(String(value).toLowerCase().trim());
+          }
+        });
+      }
+    }
+  } catch { /* defensive */ }
+  return out;
 }
 
 /**
@@ -1542,6 +1634,14 @@ async function mount({ el, productHandle }: MountSpec) {
   const colorOptionNames: string[] = Array.isArray(payload.color_option_names)
     ? payload.color_option_names.map((s: any) => String(s))
     : DEFAULT_COLOR_OPTION_NAMES.slice();
+  // FIX 31 — publish the lowercase color option names to the module
+  // scope so the top-level applyVariantVisibility() can strip color
+  // values out of the variant options before the field-visibility
+  // intersection check (color-only products would otherwise hide
+  // every restricted field forever).
+  activeColorOptionNamesLower = colorOptionNames
+    .map((s) => String(s).toLowerCase().trim())
+    .filter(Boolean);
 
   // Active signature — recomputed on every variant change. Drives
   // both the field-override merge and the storefront image swap.
