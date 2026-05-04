@@ -40,6 +40,48 @@ const API_BASE = detectApiBase();
  * a different origin (riccardiparis.com), so those paths must be
  * absolutified before they're used in <image href> tags.
  */
+/**
+ * FIX 38 — detect browsers where <foreignObject> + CSS 3D fails.
+ * Returns true for iOS Safari (and any iOS-WebKit-derived browser)
+ * because all iOS browsers share Apple's WebKit engine on iPhone /
+ * iPad and inherit its long-standing foreignObject + perspective
+ * rendering bugs. The check covers:
+ *   - Real iOS devices (iPhone, iPad, iPod)
+ *   - iPadOS 13+ on iPad which reports as MacIntel + maxTouchPoints>0
+ *
+ * Cached because it never changes within a session.
+ */
+let _problematicFOCache: boolean | null = null;
+function isProblematicForeignObjectBrowser(): boolean {
+  if (_problematicFOCache !== null) return _problematicFOCache;
+  try {
+    const ua = String(navigator.userAgent || '');
+    const isiOSDevice = /iP(ad|hone|od)/.test(ua);
+    // iPadOS 13+ masquerades as macOS in UA. Distinguish from real
+    // macOS via touch support — desktop Macs don't expose touch.
+    const isiPadOS = /Macintosh/.test(ua)
+      && typeof navigator.maxTouchPoints === 'number'
+      && navigator.maxTouchPoints > 1;
+    _problematicFOCache = isiOSDevice || isiPadOS;
+  } catch {
+    _problematicFOCache = false;
+  }
+  return _problematicFOCache;
+}
+
+/**
+ * FIX 38 — remove every <foreignObject> from the given SVG container.
+ * The personalizer renderer always emits a plain SVG <text> fallback
+ * adjacent to the foreignObject (FIX 37), so removing the foreignObject
+ * leaves the visible engraving intact — minus the 3D tilt effect that
+ * iOS can't render anyway. Idempotent.
+ */
+function stripForeignObjects(container: HTMLElement): void {
+  if (!container) return;
+  const fos = container.querySelectorAll('foreignObject');
+  fos.forEach((fo) => fo.parentNode?.removeChild(fo));
+}
+
 function absolutifyUrl(u: string | null | undefined): string {
   if (!u) return '';
   const s = String(u).trim();
@@ -2552,6 +2594,21 @@ async function mount({ el, productHandle }: MountSpec) {
       // any caller that bypasses effectiveField (none today).
       currentColorValue: activeColorValue,
     });
+    // FIX 38 — iOS Safari has a long-standing bug where
+    // <foreignObject> containing CSS perspective + rotateY (used by
+    // embrace mode for the 3D tilt effect) silently fails to render
+    // its inner content. Worse, the foreignObject element STILL
+    // occupies its bbox in the SVG paint order, occluding the plain
+    // SVG <text> fallback we emit underneath it (FIX 37) — so the
+    // customer sees a blank white rectangle where the engraving
+    // should be. Strip foreignObject elements at runtime on iOS so
+    // the fallback text becomes the actual engraving rendering.
+    // Desktop / Android Chrome keep the foreignObject and get the
+    // intended 3D embrace effect.
+    if (isProblematicForeignObjectBrowser()) {
+      stripForeignObjects(belowOverlay);
+      stripForeignObjects(aboveOverlay);
+    }
   }
 
   /**
