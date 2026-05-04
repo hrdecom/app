@@ -191,7 +191,47 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
       ? ` letter-spacing="${lsRaw}"`
       : '';
 
-  if (f.curve_mode === 'circle' || f.curve_mode === 'arc' || f.curve_mode === 'embrace') {
+  // FIX 30 v3 — `embrace` is a TRUE 3D PERSPECTIVE deformation of the
+  // text, not an arc. Built with SVG <foreignObject> + CSS
+  // `perspective` + `rotateY` so the letters appear painted on a 3D
+  // surface tilted into the screen — matches the perspective of a
+  // ring tip in a 3/4 product photo. The single tunable parameter
+  // is `curve_tilt_deg` (rotation around the vertical axis,
+  // -89..+89 useful range; 0 = flat / no perspective).
+  if (f.curve_mode === 'embrace') {
+    const tilt = Number(f.curve_tilt_deg || 0);
+    // Perspective distance — the larger this is, the SUBTLER the 3D
+    // effect at the same rotation angle. Tying it to the field's
+    // own width (×4) keeps the foreshortening proportional whether
+    // the field is small or large.
+    const perspective = Math.max(400, f.width * 4);
+    const lsCss = lsRaw != null && Number.isFinite(lsRaw) && lsRaw !== 0
+      ? `letter-spacing:${lsRaw}px;`
+      : '';
+    // The outer div sets perspective; the inner div is rotated. We
+    // measure with the foreignObject's own width/height so the text
+    // is centered inside the bbox just like the linear/arc paths
+    // place it. xmlns on the inner HTML root is REQUIRED for SVG
+    // foreignObject content to render correctly outside the SVG
+    // namespace.
+    return (
+      `<foreignObject x="${f.position_x}" y="${f.position_y}" ` +
+      `width="${f.width}" height="${f.height}">` +
+      `<div xmlns="http://www.w3.org/1999/xhtml" ` +
+      `style="perspective:${perspective}px;width:100%;height:100%;` +
+      `display:flex;align-items:center;justify-content:center;` +
+      `font-family:${family};font-size:${fontSize}px;color:${fill};${lsCss}` +
+      `line-height:1;">` +
+      `<div style="transform:rotateY(${tilt}deg);transform-origin:center center;` +
+      `white-space:nowrap;backface-visibility:visible;">` +
+      `${text}` +
+      `</div>` +
+      `</div>` +
+      `</foreignObject>`
+    );
+  }
+
+  if (f.curve_mode === 'circle' || f.curve_mode === 'arc') {
     const pathId = `pp-${f.id}`;
     let pathD: string;
     if (f.curve_path_d) {
@@ -225,21 +265,14 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
       const endX = f.position_x + f.width;
       pathD = `M ${startX} ${cy} A ${a} ${a} 0 0 ${sweep} ${endX} ${cy}`;
     }
-    // FIX 30 v2 — tilt is exclusive to the new `embrace` mode. Arc
-    // stays exactly as the merchant calibrated it (no rotation, no
-    // visible behaviour change). Embrace = arc + chord rotation.
-    const tilt =
-      f.curve_mode === 'embrace' ? Number(f.curve_tilt_deg || 0) : 0;
-    const tiltAttr = tilt
-      ? ` transform="rotate(${tilt} ${cx} ${cy})"`
-      : '';
+    // FIX 30 v3 — arc & circle restored to their original render
+    // (no <g> wrapper, no tilt). Embrace handles its own deformation
+    // earlier in this function via foreignObject + CSS perspective.
     return (
       `<defs><path id="${pathId}" d="${pathD}" /></defs>` +
-      `<g${tiltAttr}>` +
       `<text font-family="${family}" font-size="${fontSize}" fill="${fill}"${lsAttr}>` +
       `<textPath href="#${pathId}" startOffset="50%" text-anchor="middle">${text}</textPath>` +
-      `</text>` +
-      `</g>`
+      `</text>`
     );
   }
 

@@ -1235,42 +1235,52 @@ let activeColorOptionNamesLower: string[] = [];
  * don't dispatch standard events.
  */
 function applyVariantVisibility() {
-  // FIX 31 — strip color option values BEFORE the visibility check.
-  // readCurrentVariantOptions() includes EVERY selected option value
-  // (Color + Pendants + Size + ...) but field-level visibility filters
-  // are designed for non-color options ("show this field only when
-  // Pendant=2"). When the product's ONLY option is Color, every
-  // restricted field would silently hide because there's nothing
-  // left to match against. Filtering color out first means:
-  //   - color-only product → variantsAfter = []  → treat fields as
-  //     "no variant constraints possible" → always visible
-  //   - product with Color + Pendants → variantsAfter = ["1"] → check
-  //     against allow-list as before
+  // FIX 31 v2 — three-tier visibility check (any tier passing = show):
+  //   1. NO non-color options on the product → show all (color-only
+  //      products and option-less products both fall here).
+  //   2. Field's allow-list doesn't intersect ANY value the product
+  //      currently exposes (across all variants on the page, not
+  //      just the selected one) → treat the constraint as STALE
+  //      (left over from a previous variant scheme like "Pendant")
+  //      and show the field. Without this, the merchant has to
+  //      manually re-edit every field whenever they restructure
+  //      variants — the most painful failure mode in the wild.
+  //   3. Otherwise apply the original intersection check against
+  //      the currently-selected non-color options.
   const allOpts = readCurrentVariantOptions();
-  // We can't perfectly map a value back to its option name (the values
-  // we collect are flat), so we approximate: if the value exactly
-  // matches one of the *known* color VALUES we'd typically see (Gold,
-  // Silver, Rose Gold, etc.), drop it. That set is too small to be
-  // robust, so we also use a heuristic: if the field's allow-list
-  // doesn't contain the value AT ALL, it can't be the constraint
-  // we're enforcing — so the value being color or non-color doesn't
-  // matter to that field's visibility. The simplest safe rule: if
-  // the dropdown/radio's NAME contains a known color-option-name,
-  // skip its value. We re-walk the DOM to get the value→option-name
-  // pairing.
   const colorValues = collectColorOptionValuesLower();
   const opts = allOpts.filter((v) => !colorValues.has(v.toLowerCase()));
+  const allAvailable = collectAllAvailableOptionValuesLower();
 
   document.querySelectorAll<HTMLElement>('[data-rp-allowed-variants]').forEach((row) => {
     const allowed: string[] | null = (row as any).__rpAllowedVariants ?? null;
     if (!allowed) return;
-    // FIX 31 — when the post-color-strip list is empty there are no
-    // non-color variant axes on this product. Showing the field
-    // unconditionally is the right behaviour: the merchant's allow-list
-    // must be a leftover from a previous variant scheme (e.g. "Pendant"
-    // option that no longer exists) and we shouldn't punish them by
-    // hiding the field forever.
-    const visible = opts.length === 0 ? true : fieldVisibleForVariant(allowed, opts);
+
+    // Tier 1: no non-color variant axes → no possible constraint
+    let visible: boolean;
+    if (opts.length === 0) {
+      visible = true;
+    } else {
+      // Tier 2: stale constraint?
+      const intersectsAvailable = allowed.some(
+        (a) => allAvailable.has(a.toLowerCase()),
+      );
+      if (!intersectsAvailable) {
+        if (!(row as any).__rpStaleWarned) {
+          console.warn(
+            '[rp-personalizer] field has stale visible_variant_options ' +
+            '(none of these match any current product option), showing anyway:',
+            allowed,
+          );
+          (row as any).__rpStaleWarned = true;
+        }
+        visible = true;
+      } else {
+        // Tier 3: standard intersection
+        visible = fieldVisibleForVariant(allowed, opts);
+      }
+    }
+
     row.style.display = visible ? '' : 'none';
     // Disable inputs in hidden rows so they're not POSTed to /cart/add
     // — otherwise an empty "Pendant 2" property leaks into single-pendant
@@ -1279,6 +1289,47 @@ function applyVariantVisibility() {
       inp.disabled = !visible;
     });
   });
+}
+
+/**
+ * FIX 31 v2 — collect every option VALUE the product currently exposes
+ * (across all variants, not just the selected one). Used to detect
+ * "stale" visible_variant_options that no longer match any real
+ * variant value (typical after a variant scheme change). Lowercased,
+ * trimmed.
+ */
+function collectAllAvailableOptionValuesLower(): Set<string> {
+  const out = new Set<string>();
+  // Per-option <select> dropdowns: walk every <option>, not just the
+  // selected one.
+  document.querySelectorAll<HTMLSelectElement>('select[name^="options["]').forEach((sel) => {
+    Array.from(sel.options).forEach((o) => {
+      if (o.value) out.add(o.value.toLowerCase().trim());
+      const txt = (o.textContent || '').trim();
+      if (txt) out.add(txt.toLowerCase());
+    });
+  });
+  // Radio inputs (the unchecked ones too).
+  document.querySelectorAll<HTMLInputElement>('input[type="radio"][name^="options["]').forEach((inp) => {
+    if (inp.value) out.add(inp.value.toLowerCase().trim());
+  });
+  // window.product / Shopify analytics — pull from variants array.
+  try {
+    const w = window as any;
+    const variants =
+      w.product?.variants ||
+      w.meta?.product?.variants ||
+      w.ShopifyAnalytics?.meta?.product?.variants ||
+      null;
+    if (Array.isArray(variants)) {
+      variants.forEach((v: any) => {
+        ['option1', 'option2', 'option3'].forEach((k) => {
+          if (v[k]) out.add(String(v[k]).toLowerCase().trim());
+        });
+      });
+    }
+  } catch { /* defensive */ }
+  return out;
 }
 
 /**
