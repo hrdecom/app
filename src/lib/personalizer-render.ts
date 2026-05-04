@@ -256,15 +256,27 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
     // foreignObject covers the plain text exactly. On iOS Safari
     // where foreignObject + perspective + rotateY frequently fails
     // to render (long-standing WebKit bug), the plain text remains
-    // visible so the customer still sees the engraving — minus the
-    // 3D tilt effect, which is graceful degradation. The fallback
-    // shares font / size / color / letter-spacing with the
+    // visible so the customer still sees the engraving. The
+    // fallback shares font / size / color / letter-spacing with the
     // foreignObject so visual continuity is preserved.
+    //
+    // FIX 39 — approximate the 3D rotateY tilt with a 2D rotate
+    // around the bbox center on the fallback text. For SINGLE-
+    // character fields (the typical case for engraved initials
+    // like the user's "Adjustable Initial Ring"), a 2D rotation
+    // around Z produces a near-identical visual to the 3D rotateY
+    // effect — both make the letter appear "tilted on the curved
+    // ring tip". For long text the 2D rotation is visually
+    // different from the 3D foreshortening but still gives a
+    // recognizable embrace lean that's better than flat.
     const align = (f.text_align as string) || 'middle';
     const anchor = align === 'start' ? 'start' : align === 'end' ? 'end' : 'middle';
     const tx = anchor === 'middle' ? cx : anchor === 'end' ? f.position_x + f.width : f.position_x;
+    const fallbackTransform = tiltDeg !== 0
+      ? ` transform="rotate(${tiltDeg.toFixed(2)} ${cx} ${cy})"`
+      : '';
     const fallbackText =
-      `<text x="${tx}" y="${cy}" text-anchor="${anchor}" ` +
+      `<text x="${tx}" y="${cy}"${fallbackTransform} text-anchor="${anchor}" ` +
       `dominant-baseline="middle" font-family="${family}" ` +
       `font-size="${fontSize}" fill="${fill}"${lsAttr}>${text}</text>`;
     const foreignObject =
