@@ -269,9 +269,24 @@ function renderTextField(f: PreviewField, value: string, currentColorValue?: str
     const align = (f.text_align as string) || 'middle';
     const anchor = align === 'start' ? 'start' : align === 'end' ? 'end' : 'middle';
     const tx = anchor === 'middle' ? cx : anchor === 'end' ? f.position_x + f.width : f.position_x;
+    // FIX 44 — vertically center using a manual y offset instead of
+    // dominant-baseline="middle". The foreignObject path uses
+    // CSS flexbox `align-items: center` to vertically center the
+    // text within the bbox, which puts the BASELINE roughly at
+    // bbox_center + fontSize × 0.3 (because most of a font's
+    // line-box sits above the baseline). dominant-baseline="middle"
+    // in SVG aligns the geometric middle of the lowercase x to the
+    // y attribute, leaving capital letters appearing too HIGH —
+    // which is exactly what the user reported on iOS where this
+    // fallback is visible. By dropping dominant-baseline and
+    // shifting y down by 0.32 × fontSize (empirical match for
+    // typical Latin fonts), the SVG fallback's baseline lands at
+    // the same y-position as the foreignObject's, so iOS sees the
+    // letter at the same vertical position as desktop.
+    const baselineY = cy + Math.round(fontSize * 0.32);
     const fallbackText =
-      `<text x="${tx}" y="${cy}" text-anchor="${anchor}" ` +
-      `dominant-baseline="middle" font-family="${family}" ` +
+      `<text x="${tx}" y="${baselineY}" text-anchor="${anchor}" ` +
+      `font-family="${family}" ` +
       `font-size="${fontSize}" fill="${fill}"${lsAttr} ` +
       // FIX 41 — hidden by default; iOS widget makes it visible.
       `visibility="hidden" ` +
