@@ -97,13 +97,17 @@ function stripForeignObjects(container: HTMLElement): void {
   );
   fallbacks.forEach((t) => {
     t.setAttribute('visibility', 'visible');
-    const tilt = parseFloat(t.getAttribute('data-rp-embrace-tilt') || '0');
-    if (!Number.isFinite(tilt) || tilt === 0) return;
-    const cx = parseFloat(t.getAttribute('data-rp-embrace-cx') || '0');
-    const cy = parseFloat(t.getAttribute('data-rp-embrace-cy') || '0');
-    // Idempotent across the 500 ms rerender loop, which redoes
-    // innerHTML so attributes reset every cycle anyway.
-    t.setAttribute('transform', `rotate(${tilt.toFixed(2)} ${cx} ${cy})`);
+    // FIX 43 — diagnostic: emit NO transform on the fallback text
+    // so the letter appears in its base bbox position, with only
+    // the field's outer `rotation_deg` <g> wrapper applied (which
+    // is the same on desktop and mobile). If the letter STILL
+    // looks rotated on mobile after this, the rotation comes from
+    // the field's rotation_deg property — same on desktop, just
+    // partially masked there by the foreignObject 3D perspective.
+    // If the letter looks STRAIGHT on mobile after this, FIX 42's
+    // scale was the culprit and we need to revisit the
+    // approximation.
+    t.removeAttribute('transform');
   });
 }
 
