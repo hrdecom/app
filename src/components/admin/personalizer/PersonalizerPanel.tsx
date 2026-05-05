@@ -551,17 +551,52 @@ export function PersonalizerPanel({ productId, baseImageUrl, shopifyHandle }: Pr
   // featured_image_url > template base. This makes "use Shopify variant
   // image" the DEFAULT behaviour without requiring a save per variant.
   // FIX 36 — when the integrator clicks a "Preview color" pill, swap
-  // the canvas image to that color's variant image (sourced from the
-  // CRM's product_variants.image_id, with Shopify featured_image as
-  // fallback). Lookup is case-insensitive. Color-image override takes
-  // priority over signature-image override only when no signature
-  // override is in play (signatures are color-stripped, so they're
-  // orthogonal to color in concept; in practice signature overrides
-  // are rare, so the color image will win the vast majority of the
-  // time on color-only products).
+  // the canvas image to that color's variant image.
+  //
+  // FIX 45 — for products with non-color dimensions (e.g. Cascading
+  // Hearts: 1/2/3 Pendants), look up the Shopify variant that
+  // matches BOTH the active signature AND the preview color. Without
+  // this, a "1 Pendant" + "Silver" preview would show the FIRST
+  // Silver variant Shopify exposes (which might be "2 Pendants
+  // Silver"), confusing the integrator. The 3-tier fallback:
+  //   1. Exact match: shopify variant where non-color options ===
+  //      activeSignature AND color option === previewColorValue
+  //   2. Color-only match: any variant of this color (CRM map)
+  //   3. NULL → upstream falls back to signature's auto-image then
+  //      template base
+  // IMPORTANT: this only changes the IMAGE shown in the canvas, not
+  // the layer placements. Layers stay tied to activeSignature.
   const colorImageForPreview = (() => {
     if (!previewColorValue) return null;
     const needle = previewColorValue.toLowerCase();
+    // Tier 1 — exact (signature + color) match against shopifyVariants.
+    if (activeSignature !== undefined) {
+      const colorSet = new Set(colorOptionNames.map((s) => s.toLowerCase()));
+      for (const v of shopifyVariants) {
+        if (!v.featured_image_url) continue;
+        // Compute this variant's non-color signature and color value.
+        let variantColor = '';
+        const sigParts: string[] = [];
+        for (let i = 0; i < (v.option_names || []).length; i++) {
+          const name = String(v.option_names[i] || '');
+          const value = String(v.options[i] || '');
+          if (!name || !value) continue;
+          if (colorSet.has(name.toLowerCase())) {
+            variantColor = value;
+          } else {
+            sigParts.push(value);
+          }
+        }
+        const sig = sigParts.join(' / ');
+        if (sig === activeSignature && variantColor.toLowerCase() === needle) {
+          return v.featured_image_url;
+        }
+      }
+    }
+    // Tier 2 — color-only match (CRM map keyed by color, first variant
+    // of that color). Used when no Shopify variant matches the active
+    // signature for this color (rare) OR when Shopify variants haven't
+    // loaded yet.
     for (const [k, v] of Object.entries(colorImages)) {
       if (k.toLowerCase() === needle) return v;
     }
